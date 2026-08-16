@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+jinja2
+python-multipart
+pandas
+openpyxl
+psycopg2-binary
+cloudinary
