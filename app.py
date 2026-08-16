@@ -22,12 +22,14 @@ app = FastAPI(title="Enterprise Skill Matrix & Assessment System")
 # مسار القوالب المتوافق مع بيئة Vercel
 BASE_DIR = Path(__file__).resolve().parent
 
-# إعداد Jinja2 بدون تخزين مؤقت لتجنب مشكلة unhashable type في Vercel
+# إعداد Jinja2 بدون تخزين مؤقت - الحل النهائي لمشكلة Vercel
+# باستخدام cache_size=0 و bytecode_cache=None
 jinja_env = Environment(
     loader=FileSystemLoader(str(BASE_DIR / "templates")),
     autoescape=select_autoescape(['html', 'xml']),
     enable_async=True,
-    cache_size=0  # تعطيل التخزين المؤقت تماماً
+    cache_size=0,  # تعطيل التخزين المؤقت تماماً
+    auto_reload=True  # إعادة تحميل القوالب في كل طلب
 )
 templates = Jinja2Templates(env=jinja_env)
 
@@ -201,7 +203,42 @@ async def serve_home(request: Request):
         init_db_tables()
     except Exception:
         pass
-    return templates.TemplateResponse("index.html", {"request": request})
+    # استخدام get_template مباشرة مع معالجة الخطأ
+    try:
+        return templates.TemplateResponse("index.html", {"request": request})
+    except AttributeError as e:
+        # حل بديل إذا فشل template
+        from fastapi.responses import HTMLResponse
+        html_content = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>نظام تقييم المهارات</title>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                body { font-family: Arial, sans-serif; text-align: center; padding: 50px; direction: rtl; }
+                .container { max-width: 800px; margin: 0 auto; }
+                .error { color: #d32f2f; padding: 20px; background: #ffebee; border-radius: 8px; }
+                .info { color: #1976d2; padding: 20px; background: #e3f2fd; border-radius: 8px; margin-top: 20px; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>نظام تقييم المهارات</h1>
+                <div class="error">
+                    <p>⚠️ حدث خطأ في تحميل القالب الرئيسي</p>
+                    <p>يرجى التأكد من وجود ملف <code>templates/index.html</code></p>
+                </div>
+                <div class="info">
+                    <p>✅ النظام يعمل بشكل أساسي</p>
+                    <p><a href="/api/health">فحص حالة النظام</a></p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        return HTMLResponse(content=html_content, status_code=200)
 
 
 # --- المصادقة والأدمن ---
