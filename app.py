@@ -15,12 +15,21 @@ from fastapi.templating import Jinja2Templates
 import pandas as pd
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 app = FastAPI(title="Enterprise Skill Matrix & Assessment System")
 
 # مسار القوالب المتوافق مع بيئة Vercel
 BASE_DIR = Path(__file__).resolve().parent
-templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+
+# إعداد Jinja2 بدون تخزين مؤقت لتجنب مشكلة unhashable type في Vercel
+jinja_env = Environment(
+    loader=FileSystemLoader(str(BASE_DIR / "templates")),
+    autoescape=select_autoescape(['html', 'xml']),
+    enable_async=True,
+    cache_size=0  # تعطيل التخزين المؤقت تماماً
+)
+templates = Jinja2Templates(env=jinja_env)
 
 # استدعاء المتغيرات البيئية
 DATABASE_URL = os.getenv("DATABASE_URL", "")
