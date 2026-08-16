@@ -42,7 +42,7 @@ def get_db():
         db_url = DATABASE_URL
         if "sslmode=" not in db_url:
             db_url += "?sslmode=require" if "?" not in db_url else "&sslmode=require"
-        conn = psycopg2.connect(db_url)
+        conn = psycopg2.connect(db_url, connect_timeout=10)
         return conn, True
     else:
         import sqlite3
@@ -51,7 +51,8 @@ def get_db():
         return conn, False
 
 
-def init_db():
+def init_db_tables():
+    """دالة لإنشاء الجداول عند أول طلب فقط وليس عند إقلاع الكود لمنع انهيار السيرفر"""
     try:
         conn, is_pg = get_db()
         c = conn.cursor()
@@ -161,12 +162,7 @@ def init_db():
         conn.commit()
         conn.close()
     except Exception as e:
-        print(f"Database Init Exception: {e}")
-
-
-@app.on_event("startup")
-async def on_startup():
-    init_db()
+        print(f"Lazy Database Init Exception: {e}")
 
 
 def get_level(percentage: float) -> str:
@@ -180,8 +176,22 @@ def get_level(percentage: float) -> str:
         return "المستوى 4 (خبير)"
 
 
+@app.get("/api/health")
+async def health_check():
+    try:
+        conn, is_pg = get_db()
+        conn.close()
+        return {"status": "ok", "db_connected": True, "type": "Supabase PostgreSQL" if is_pg else "SQLite"}
+    except Exception as e:
+        return {"status": "error", "db_connected": False, "message": str(e)}
+
+
 @app.get("/", response_class=HTMLResponse)
 async def serve_home(request: Request):
+    try:
+        init_db_tables()
+    except Exception:
+        pass
     return templates.TemplateResponse("index.html", {"request": request})
 
 
@@ -345,7 +355,7 @@ async def change_password(
     return {"status": "success", "message": "تم تغيير كلمة المرور بنجاح."}
 
 
-# --- إدارة معرض الصور (Cloudinary Integration) ---
+# --- إدارة معرض الصور ---
 @app.post("/api/admin/upload-multiple-images")
 async def upload_multiple_images(files: List[UploadFile] = File(...)):
     conn, is_pg = get_db()
@@ -360,9 +370,7 @@ async def upload_multiple_images(files: List[UploadFile] = File(...)):
             )
             file_url = upload_res.get("secure_url")
         else:
-            file_url = (
-                f"https://via.placeholder.com/300?text={file.filename}"
-            )
+            file_url = f"https://via.placeholder.com/300?text={file.filename}"
 
         q_ins = (
             "INSERT INTO media_gallery (filename, file_url) VALUES (%s, %s)"
@@ -382,8 +390,7 @@ async def get_gallery():
     conn, _ = get_db()
     c = conn.cursor()
     c.execute(
-        "SELECT id, filename, file_url, uploaded_at FROM media_gallery ORDER BY"
-        " id DESC"
+        "SELECT id, filename, file_url, uploaded_at FROM media_gallery ORDER BY id DESC"
     )
     rows = c.fetchall()
     conn.close()
@@ -399,8 +406,7 @@ async def get_all_users():
     conn, _ = get_db()
     c = conn.cursor()
     c.execute(
-        "SELECT sap_id, name, role, department, password FROM users ORDER BY"
-        " sap_id ASC"
+        "SELECT sap_id, name, role, department, password FROM users ORDER BY sap_id ASC"
     )
     users = [
         {
@@ -616,14 +622,13 @@ async def allow_retake(exam_id: int, sap_id: str = Form(...)):
     c = conn.cursor()
     if is_pg:
         q = (
-            "INSERT INTO retake_permissions (exam_id, sap_id, allowed) VALUES"
-            " (%s, %s, 1) ON CONFLICT(exam_id, sap_id) DO UPDATE SET allowed ="
-            " 1"
+            "INSERT INTO retake_permissions (exam_id, sap_id, allowed) VALUES (%s, %s, 1)"
+            " ON CONFLICT(exam_id, sap_id) DO UPDATE SET allowed = 1"
         )
     else:
         q = (
-            "INSERT INTO retake_permissions (exam_id, sap_id, allowed) VALUES"
-            " (?, ?, 1) ON CONFLICT(exam_id, sap_id) DO UPDATE SET allowed = 1"
+            "INSERT INTO retake_permissions (exam_id, sap_id, allowed) VALUES (?, ?, 1)"
+            " ON CONFLICT(exam_id, sap_id) DO UPDATE SET allowed = 1"
         )
     c.execute(q, (exam_id, sap_id.strip()))
     conn.commit()
@@ -713,14 +718,9 @@ async def upload_excel(
             correct_option = str(row["الإجابة الصحيحة"]).strip()
 
             ins_q = (
-                "INSERT INTO questions (exam_id, branch, question, image_url,"
-                " options, correct_option) VALUES (%s, %s, %s, %s, %s, %s)"
+                "INSERT INTO questions (exam_id, branch, question, image_url, options, correct_option) VALUES (%s, %s, %s, %s, %s, %s)"
                 if is_pg
-                else (
-                    "INSERT INTO questions (exam_id, branch, question,"
-                    " image_url, options, correct_option) VALUES (?, ?, ?, ?,"
-                    " ?, ?)"
-                )
+                else "INSERT INTO questions (exam_id, branch, question, image_url, options, correct_option) VALUES (?, ?, ?, ?, ?, ?)"
             )
             c.execute(
                 ins_q,
@@ -738,10 +738,7 @@ async def upload_excel(
         conn.close()
         return {
             "status": "success",
-            "message": (
-                f"تم حفظ الامتحان '{exam_name}' بـ {len(df)} سؤال ومدة"
-                f" {duration} دقيقة."
-            ),
+            "message": f"تم حفظ الامتحان '{exam_name}' بـ {len(df)} سؤال ومدة {duration} دقيقة.",
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -754,8 +751,7 @@ async def list_exams(
     conn, is_pg = get_db()
     c = conn.cursor()
     c.execute(
-        "SELECT id, name, duration_minutes, departments, is_active, valid_until"
-        " FROM exams"
+        "SELECT id, name, duration_minutes, departments, is_active, valid_until FROM exams"
     )
     rows = c.fetchall()
 
@@ -770,26 +766,18 @@ async def list_exams(
 
         if sap_id:
             q_cnt = (
-                "SELECT COUNT(id) FROM submissions WHERE exam_id = %s AND"
-                " sap_id = %s"
+                "SELECT COUNT(id) FROM submissions WHERE exam_id = %s AND sap_id = %s"
                 if is_pg
-                else (
-                    "SELECT COUNT(id) FROM submissions WHERE exam_id = ? AND"
-                    " sap_id = ?"
-                )
+                else "SELECT COUNT(id) FROM submissions WHERE exam_id = ? AND sap_id = ?"
             )
             c.execute(q_cnt, (exam_id, sap_id.strip()))
             if c.fetchone()[0] > 0:
                 already_submitted = True
 
             q_perm = (
-                "SELECT allowed FROM retake_permissions WHERE exam_id = %s AND"
-                " sap_id = %s"
+                "SELECT allowed FROM retake_permissions WHERE exam_id = %s AND sap_id = %s"
                 if is_pg
-                else (
-                    "SELECT allowed FROM retake_permissions WHERE exam_id = ?"
-                    " AND sap_id = ?"
-                )
+                else "SELECT allowed FROM retake_permissions WHERE exam_id = ? AND sap_id = ?"
             )
             c.execute(q_perm, (exam_id, sap_id.strip()))
             perm = c.fetchone()
@@ -827,25 +815,17 @@ async def preview_exam(exam_id: int):
     conn, is_pg = get_db()
     c = conn.cursor()
     q_exam = (
-        "SELECT name, duration_minutes, departments, is_active, valid_until"
-        " FROM exams WHERE id = %s"
+        "SELECT name, duration_minutes, departments, is_active, valid_until FROM exams WHERE id = %s"
         if is_pg
-        else (
-            "SELECT name, duration_minutes, departments, is_active, valid_until"
-            " FROM exams WHERE id = ?"
-        )
+        else "SELECT name, duration_minutes, departments, is_active, valid_until FROM exams WHERE id = ?"
     )
     c.execute(q_exam, (exam_id,))
     exam = c.fetchone()
 
     q_qs = (
-        "SELECT id, branch, question, image_url, options, correct_option FROM"
-        " questions WHERE exam_id = %s"
+        "SELECT id, branch, question, image_url, options, correct_option FROM questions WHERE exam_id = %s"
         if is_pg
-        else (
-            "SELECT id, branch, question, image_url, options, correct_option"
-            " FROM questions WHERE exam_id = ?"
-        )
+        else "SELECT id, branch, question, image_url, options, correct_option FROM questions WHERE exam_id = ?"
     )
     c.execute(q_qs, (exam_id,))
     questions = [
@@ -886,13 +866,9 @@ async def update_question(
     c = conn.cursor()
     options = [opt1.strip(), opt2.strip(), opt3.strip(), opt4.strip()]
     q = (
-        "UPDATE questions SET branch = %s, question = %s, image_url = %s,"
-        " options = %s, correct_option = %s WHERE id = %s"
+        "UPDATE questions SET branch = %s, question = %s, image_url = %s, options = %s, correct_option = %s WHERE id = %s"
         if is_pg
-        else (
-            "UPDATE questions SET branch = ?, question = ?, image_url = ?,"
-            " options = ?, correct_option = ? WHERE id = ?"
-        )
+        else "UPDATE questions SET branch = ?, question = ?, image_url = ?, options = ?, correct_option = ? WHERE id = ?"
     )
     c.execute(
         q,
@@ -915,13 +891,9 @@ async def get_exam_questions(exam_id: int, sap_id: Optional[str] = None):
     conn, is_pg = get_db()
     c = conn.cursor()
     q_exam = (
-        "SELECT duration_minutes, is_active, valid_until FROM exams WHERE id ="
-        " %s"
+        "SELECT duration_minutes, is_active, valid_until FROM exams WHERE id = %s"
         if is_pg
-        else (
-            "SELECT duration_minutes, is_active, valid_until FROM exams WHERE"
-            " id = ?"
-        )
+        else "SELECT duration_minutes, is_active, valid_until FROM exams WHERE id = ?"
     )
     c.execute(q_exam, (exam_id,))
     exam = c.fetchone()
@@ -940,24 +912,16 @@ async def get_exam_questions(exam_id: int, sap_id: Optional[str] = None):
 
     if sap_id:
         q_cnt = (
-            "SELECT COUNT(id) FROM submissions WHERE exam_id = %s AND sap_id ="
-            " %s"
+            "SELECT COUNT(id) FROM submissions WHERE exam_id = %s AND sap_id = %s"
             if is_pg
-            else (
-                "SELECT COUNT(id) FROM submissions WHERE exam_id = ? AND sap_id"
-                " = ?"
-            )
+            else "SELECT COUNT(id) FROM submissions WHERE exam_id = ? AND sap_id = ?"
         )
         c.execute(q_cnt, (exam_id, sap_id.strip()))
         if c.fetchone()[0] > 0:
             q_perm = (
-                "SELECT allowed FROM retake_permissions WHERE exam_id = %s AND"
-                " sap_id = %s"
+                "SELECT allowed FROM retake_permissions WHERE exam_id = %s AND sap_id = %s"
                 if is_pg
-                else (
-                    "SELECT allowed FROM retake_permissions WHERE exam_id = ?"
-                    " AND sap_id = ?"
-                )
+                else "SELECT allowed FROM retake_permissions WHERE exam_id = ? AND sap_id = ?"
             )
             c.execute(q_perm, (exam_id, sap_id.strip()))
             perm = c.fetchone()
@@ -969,13 +933,9 @@ async def get_exam_questions(exam_id: int, sap_id: Optional[str] = None):
                 )
 
     q_qs = (
-        "SELECT id, branch, question, image_url, options FROM questions WHERE"
-        " exam_id = %s"
+        "SELECT id, branch, question, image_url, options FROM questions WHERE exam_id = %s"
         if is_pg
-        else (
-            "SELECT id, branch, question, image_url, options FROM questions"
-            " WHERE exam_id = ?"
-        )
+        else "SELECT id, branch, question, image_url, options FROM questions WHERE exam_id = ?"
     )
     c.execute(q_qs, (exam_id,))
     questions = [
@@ -1062,13 +1022,9 @@ async def submit_exam(exam_id: int, payload: Dict[str, object]):
     )
 
     q_ret = (
-        "UPDATE retake_permissions SET allowed = 0 WHERE exam_id = %s AND"
-        " sap_id = %s"
+        "UPDATE retake_permissions SET allowed = 0 WHERE exam_id = %s AND sap_id = %s"
         if is_pg
-        else (
-            "UPDATE retake_permissions SET allowed = 0 WHERE exam_id = ? AND"
-            " sap_id = ?"
-        )
+        else "UPDATE retake_permissions SET allowed = 0 WHERE exam_id = ? AND sap_id = ?"
     )
     c.execute(q_ret, (exam_id, sap_id))
 
@@ -1210,9 +1166,7 @@ async def export_results(exam_id: int):
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         ),
         headers={
-            "Content-Disposition": (
-                f"attachment; filename=results_exam_{exam_id}.xlsx"
-            )
+            "Content-Disposition": f"attachment; filename=results_exam_{exam_id}.xlsx"
         },
     )
 
