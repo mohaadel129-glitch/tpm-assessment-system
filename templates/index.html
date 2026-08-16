@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>منصة التقييم والامتحانات وإدارة الكفاءات الفنية</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style> 
+        body { font-family: 'Cairo', sans-serif; }
+        @media print {
+            body * { visibility: hidden; }
+            #print-area, #print-area * { visibility: visible; }
+            #print-area { position: absolute; left: 0; top: 0; width: 100%; }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen">
+
+    <!-- شريط التنقل العلوي -->
+    <nav class="bg-slate-900 text-white shadow-lg sticky top-0 z-50 no-print">
+        <div class="max-w-6xl mx-auto px-4 py-3.5 flex justify-between items-center">
+            <div class="flex items-center space-x-3 space-x-reverse">
+                <span class="text-xl font-extrabold tracking-wide text-indigo-400">TPM Assessment System</span>
+                <span id="session-badge" class="hidden text-xs bg-slate-800 text-slate-300 px-2.5 py-1 rounded-full border border-slate-700"></span>
+            </div>
+            <div class="flex items-center space-x-2 space-x-reverse" id="nav-buttons">
+                <button onclick="switchView('view-login-user')" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs md:text-sm font-bold">دخول الأفراد</button>
+                <button onclick="switchView('view-login-admin')" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs md:text-sm font-bold border border-slate-700">دخول الإدارة</button>
+                <button onclick="switchView('view-leaderboards')" class="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-xs md:text-sm font-bold">لوحة الشرف</button>
+                <button id="logout-btn" onclick="logout()" class="hidden px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-xs md:text-sm font-bold">خروج</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-4xl mx-auto p-4 md:p-6">
+
+        <!-- 1. تسجيل دخول الأفراد -->
+        <div id="view-login-user" class="view-panel max-w-md mx-auto bg-white p-8 rounded-2xl shadow-sm border border-slate-200 mt-8">
+            <h2 class="text-2xl font-bold text-slate-800 mb-6 text-center">تسجيل دخول الممتحن</h2>
+            <form onsubmit="handleUserLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">رقم الساب (SAP ID)</label>
+                    <input type="text" id="user-login-sap" required class="w-full px-4 py-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" placeholder="مثال: 1001">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">كلمة المرور</label>
+                    <input type="password" id="user-login-pass" required class="w-full px-4 py-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" placeholder="••••••">
+                </div>
+                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition">تسجيل الدخول</button>
+            </form>
+            <div class="mt-4 text-center">
+                <button onclick="requestPasswordResetModal()" class="text-xs text-indigo-600 hover:underline font-bold">نسيت كلمة المرور؟ (طلب استعادة من الإدارة)</button>
+            </div>
+        </div>
+
+        <!-- 2. تسجيل دخول الإدارة -->
+        <div id="view-login-admin" class="view-panel hidden max-w-md mx-auto bg-white p-8 rounded-2xl shadow-sm border border-slate-200 mt-8">
+            <h2 class="text-2xl font-bold text-slate-800 mb-6 text-center">بوابة الإدارة المركزية</h2>
+            <form onsubmit="handleAdminLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">رقم الساب (SAP ID)</label>
+                    <input type="text" id="admin-login-sap" required class="w-full px-4 py-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" placeholder="ADMIN01">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">ايميل الشركة</label>
+                    <input type="email" id="admin-login-email" required class="w-full px-4 py-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" placeholder="admin@company.com">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">كلمة المرور</label>
+                    <input type="password" id="admin-login-pass" required class="w-full px-4 py-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Admin@2026">
+                </div>
+                <button type="submit" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-xl transition">دخول الإدارة</button>
+            </form>
+        </div>
+
+        <!-- 3. لوحة تحكم المستخدم (الامتحانات + سجل النتائج) -->
+        <div id="view-user-dashboard" class="view-panel hidden space-y-6">
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h3 class="text-xl font-bold text-slate-800" id="dash-user-name"></h3>
+                    <div class="flex items-center gap-2 mt-1 flex-wrap">
+                        <span class="text-xs bg-slate-100 text-slate-600 px-2.5 py-0.5 rounded font-mono" id="dash-user-sap"></span>
+                        <span class="text-xs bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded font-bold" id="dash-user-role"></span>
+                        <span class="text-xs bg-emerald-50 text-emerald-700 px-2.5 py-0.5 rounded font-bold" id="dash-user-dept"></span>
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="toggleUserHistory()" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-xl font-bold transition">📊 سجل نتائجي السابقة</button>
+                    <button onclick="togglePasswordModal()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl font-bold transition">🔒 تغيير كلمة المرور</button>
+                </div>
+            </div>
+
+            <!-- سجل نتائج المتدرب السابقة -->
+            <div id="user-history-card" class="hidden bg-white p-6 rounded-2xl border border-indigo-100 shadow-sm space-y-4">
+                <div class="flex justify-between items-center border-b pb-2">
+                    <h4 class="font-bold text-slate-800 text-base">سجل اختباراتك ونتائجك السابقة</h4>
+                    <button onclick="toggleUserHistory()" class="text-xs text-rose-600 font-bold">إغلاق ✕</button>
+                </div>
+                <div id="user-history-list" class="space-y-3"></div>
+            </div>
+
+            <div id="change-pass-card" class="hidden bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-3">
+                <h4 class="text-sm font-bold text-slate-800">تحديث كلمة المرور</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <input type="password" id="chg-old-pass" placeholder="كلمة المرور الحالية" class="px-3 py-2 border rounded-xl text-sm outline-none">
+                    <input type="password" id="chg-new-pass" placeholder="كلمة المرور الجديدة" class="px-3 py-2 border rounded-xl text-sm outline-none">
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="submitChangePassword()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-xl text-xs font-bold">تحديث</button>
+                    <button onclick="togglePasswordModal()" class="bg-slate-300 text-slate-700 px-3 py-1.5 rounded-xl text-xs font-bold">إلغاء</button>
+                </div>
+                <p id="chg-pass-msg" class="text-xs font-semibold"></p>
+            </div>
+
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <h4 class="font-bold text-slate-700">الامتحانات المتاحة لإدارتك:</h4>
+                <div id="user-exams-cards-container" class="space-y-3"></div>
+            </div>
+        </div>
+
+        <!-- 4. شاشة خوض الامتحان -->
+        <div id="view-exam-active" class="view-panel hidden space-y-6">
+            <div class="bg-indigo-900 text-white p-4 rounded-2xl flex justify-between items-center sticky top-16 z-40 shadow-md">
+                <div>
+                    <span class="text-xs text-indigo-300 block">الوقت المتبقي</span>
+                    <span id="exam-timer" class="text-2xl font-black text-amber-400">00:00</span>
+                </div>
+                <div class="text-left">
+                    <span id="active-exam-title" class="font-bold block"></span>
+                    <span id="active-user-title" class="text-xs text-indigo-200"></span>
+                </div>
+            </div>
+            <form id="active-quiz-form" class="space-y-6"></form>
+            <button onclick="submitExamAnswers(false)" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl shadow-lg">تسليم الإجابات وإنهاء الامتحان</button>
+        </div>
+
+        <!-- 5. شاشة النتيجة الفورية -->
+        <div id="view-exam-result" class="view-panel hidden bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-6 text-center">
+            <h3 class="text-2xl font-bold text-slate-800">نتيجة الاختبار</h3>
+            <p id="res-user-name" class="font-semibold text-slate-600"></p>
+            <div class="grid grid-cols-2 gap-4 max-w-md mx-auto">
+                <div class="p-4 bg-slate-50 border rounded-2xl">
+                    <span class="block text-xs font-bold text-slate-500 mb-1">النسبة الكلية</span>
+                    <span id="res-pct" class="text-3xl font-extrabold text-indigo-600"></span>
+                </div>
+                <div class="p-4 bg-slate-50 border rounded-2xl">
+                    <span class="block text-xs font-bold text-slate-500 mb-1">المستوى الكلي</span>
+                    <span id="res-level" class="text-lg font-bold text-emerald-600"></span>
+                </div>
+            </div>
+            <div class="text-right space-y-3">
+                <h4 class="font-bold text-slate-700 border-b pb-2">تقييم الفروع التخصصية:</h4>
+                <div id="res-branches-container" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+            </div>
+            <button onclick="switchView('view-user-dashboard')" class="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold">العودة للرئيسية</button>
+        </div>
+
+        <!-- 6. لوحة تحكم الإدارة الكاملة -->
+        <div id="view-admin-dashboard" class="view-panel hidden space-y-8">
+            
+            <!-- أ. إعدادات وتعديل بيانات الأدمن -->
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <h3 class="text-lg font-bold text-slate-800 border-b pb-2">⚙ تعديل بيانات حساب الأدمن المركزي</h3>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <input type="text" id="adm-set-sap" placeholder="رقم SAP" class="px-3 py-2 border rounded-xl text-xs outline-none">
+                    <input type="text" id="adm-set-name" placeholder="اسم الأدمن" class="px-3 py-2 border rounded-xl text-xs outline-none">
+                    <input type="email" id="adm-set-email" placeholder="البريد الإلكتروني" class="px-3 py-2 border rounded-xl text-xs outline-none">
+                    <input type="password" id="adm-set-pass" placeholder="كلمة المرور الجديدة (اختياري)" class="px-3 py-2 border rounded-xl text-xs outline-none">
+                </div>
+                <button onclick="saveAdminSettings()" class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-xl text-xs font-bold">حفظ تعديل بيانات الإدارة</button>
+            </div>
+
+            <!-- ب. طلبات استعادة كلمة المرور -->
+            <div class="bg-amber-50 p-6 rounded-2xl border border-amber-200 shadow-sm space-y-3">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-sm font-bold text-amber-900">🔔 إشعارات طلبات استعادة كلمة المرور</h3>
+                    <button onclick="loadResetRequests()" class="text-xs bg-amber-200 text-amber-900 px-2 py-1 rounded-lg font-bold">تحديث الإشعارات</button>
+                </div>
+                <div id="reset-requests-list" class="space-y-2 text-xs"></div>
+            </div>
+
+            <!-- ج. معرض الصور ورفع صور متعددة -->
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <div class="flex justify-between items-center border-b pb-2">
+                    <h3 class="text-lg font-bold text-slate-800">🖼 معرض الصور والوسائط</h3>
+                    <span class="text-xs text-slate-500">يمكنك رفع عدة صور معاً واستخدام أي منها للأسئلة</span>
+                </div>
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                    <input type="file" id="adm-multi-images" accept="image/*" multiple class="text-xs text-slate-500 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:bg-slate-200">
+                    <button onclick="uploadMultipleImages()" class="bg-slate-800 hover:bg-slate-700 text-white text-xs px-4 py-2 rounded-xl font-bold">رفع كافة الصور المحددة للمعرض</button>
+                </div>
+                <div id="adm-gallery-container" class="grid grid-cols-2 md:grid-cols-4 gap-3 max-h-56 overflow-y-auto p-2"></div>
+            </div>
+
+            <!-- د. إنشاء ورفع دورة وتحديد الصلاحية -->
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <h3 class="text-lg font-bold text-slate-800 border-b pb-2">📝 إنشاء دورة وتحديد الصلاحية والإدارات</h3>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">اسم الامتحان</label>
+                        <input type="text" id="adm-exam-name" class="w-full px-3 py-2 border rounded-xl text-xs" placeholder="فحص الهيدروليك والاسطمبات">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">المدة (بالدقائق)</label>
+                        <input type="number" id="adm-exam-duration" value="30" class="w-full px-3 py-2 border rounded-xl text-xs">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">تاريخ ووقت انتهاء الصلاحية</label>
+                        <input type="datetime-local" id="adm-exam-validity" class="w-full px-3 py-2 border rounded-xl text-xs">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">شيت الأسئلة (.xlsx)</label>
+                        <input type="file" id="adm-excel-file" accept=".xlsx, .xls" class="w-full text-xs text-slate-500 file:py-1.5 file:px-2 file:rounded-xl file:border-0 file:bg-indigo-50 file:text-indigo-700">
+                    </div>
+                </div>
+
+                <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                    <label class="block text-xs font-bold text-slate-700">تخصيص الامتحان للإدارات:</label>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                        <label class="flex items-center gap-1.5"><input type="checkbox" name="dept_target" value="الكل" checked> الكل</label>
+                        <label class="flex items-center gap-1.5"><input type="checkbox" name="dept_target" value="الإنتاج"> الإنتاج</label>
+                        <label class="flex items-center gap-1.5"><input type="checkbox" name="dept_target" value="الصيانة الميكانيكية"> الصيانة الميكانيكية</label>
+                        <label class="flex items-center gap-1.5"><input type="checkbox" name="dept_target" value="صيانة الاسطمبات"> صيانة الاسطمبات</label>
+                        <label class="flex items-center gap-1.5"><input type="checkbox" name="dept_target" value="الصيانة الكهربائية"> الصيانة الكهربائية</label>
+                        <label class="flex items-center gap-1.5"><input type="checkbox" name="dept_target" value="الجودة"> الجودة</label>
+                        <label class="flex items-center gap-1.5"><input type="checkbox" name="dept_target" value="السلامة والصحة المهنية"> السلامة والصحة</label>
+                    </div>
+                </div>
+                <button onclick="uploadExamExcel()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl font-bold text-xs">حفظ ونشر الامتحان</button>
+            </div>
+
+            <!-- هـ. إدارة وتجديد الصلاحية وتعديل الأسئلة والطباعة A4 -->
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <div class="flex flex-col md:flex-row justify-between md:items-center gap-4">
+                    <h3 class="text-lg font-bold text-slate-800">🔍 معاينة وتعديل وتجديد صلاحية الامتحانات</h3>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <select id="adm-preview-select" onchange="previewSelectedExam()" class="border px-3 py-2 rounded-xl text-xs bg-slate-50 outline-none"></select>
+                        <button onclick="printExamA4(false)" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl text-xs font-bold">🖨 طباعة فارغ (A4)</button>
+                        <button onclick="printExamA4(true)" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-xl text-xs font-bold">🖨 طباعة نموذج الإجابة (A4)</button>
+                        <button onclick="downloadAdminResults()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs font-bold">تصدير Excel</button>
+                    </div>
+                </div>
+
+                <div id="adm-exam-control-bar" class="hidden p-4 bg-slate-50 border rounded-xl space-y-3">
+                    <h4 class="text-xs font-bold text-slate-700">تجديد صلاحية وحالة الامتحان:</h4>
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <label class="flex items-center gap-1.5 text-xs font-bold">
+                            <input type="checkbox" id="adm-curr-active" class="w-4 h-4 text-indigo-600"> تفعيل الامتحان لدخول المتدربين
+                        </label>
+                        <div class="flex items-center gap-1 text-xs">
+                            <span>الصلاحية حتى:</span>
+                            <input type="datetime-local" id="adm-curr-validity" class="border rounded px-2 py-1 text-xs bg-white">
+                        </div>
+                        <button onclick="saveExamValidityChanges()" class="bg-slate-800 hover:bg-slate-700 text-white px-3 py-1 rounded text-xs font-bold">حفظ الصلاحية والحالة</button>
+                    </div>
+                </div>
+
+                <div id="adm-preview-container" class="hidden space-y-4 pt-4 border-t"></div>
+            </div>
+
+            <!-- و. إدارة المستخدمين وأذونات الإعادة -->
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
+                <div class="flex justify-between items-center border-b pb-3">
+                    <h3 class="text-lg font-bold text-slate-800">👥 إدارة المشتركين وأذونات إعادة الامتحان</h3>
+                    <a href="/api/admin/download-users-template" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-xl font-bold">📥 تنزيل قالب شيت المستخدمين</a>
+                </div>
+
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                    <h4 class="text-xs font-bold text-slate-700">إضافة مستخدم فردي:</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+                        <input type="text" id="adm-u-sap" placeholder="رقم SAP" class="px-3 py-2 border rounded-xl text-xs bg-white">
+                        <input type="text" id="adm-u-name" placeholder="الاسم ثلاثي" class="px-3 py-2 border rounded-xl text-xs bg-white">
+                        <input type="text" id="adm-u-role" placeholder="الدور (مثال: فني)" class="px-3 py-2 border rounded-xl text-xs bg-white">
+                        <input type="text" id="adm-u-dept" placeholder="الإدارة" class="px-3 py-2 border rounded-xl text-xs bg-white">
+                        <input type="text" id="adm-u-pass" placeholder="كلمة المرور" class="px-3 py-2 border rounded-xl text-xs bg-white">
+                    </div>
+                    <button onclick="addSingleUser()" class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-xl font-bold text-xs">حفظ المستخدم</button>
+                </div>
+
+                <div class="overflow-x-auto max-h-64">
+                    <table class="w-full text-right border-collapse text-xs">
+                        <thead class="bg-slate-100 text-slate-600 sticky top-0">
+                            <tr>
+                                <th class="p-2.5">SAP ID</th>
+                                <th class="p-2.5">الاسم</th>
+                                <th class="p-2.5">الدور</th>
+                                <th class="p-2.5">الإدارة</th>
+                                <th class="p-2.5">كلمة المرور</th>
+                                <th class="p-2.5 text-center">إعادة الامتحان</th>
+                                <th class="p-2.5 text-center">حذف</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adm-users-table-body" class="divide-y"></tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- 7. لوحات الشرف والترتيب -->
+        <div id="view-leaderboards" class="view-panel hidden space-y-6">
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <div class="flex flex-col md:flex-row justify-between md:items-center gap-4 border-b pb-4">
+                    <h3 class="text-xl font-bold text-slate-800">🏆 لوحة الشرف وترتيب الكفاءات</h3>
+                    <div class="flex items-center gap-2">
+                        <button onclick="loadGeneralLeaderboard()" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 text-white">الترتيب التراكمي العام</button>
+                        <select id="lb-exam-select" onchange="loadExamLeaderboard()" class="border px-3 py-1.5 rounded-xl text-xs bg-slate-50 outline-none"></select>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-right border-collapse">
+                        <thead id="lb-head" class="bg-slate-50 text-slate-600 text-xs"></thead>
+                        <tbody id="lb-body" class="text-sm divide-y"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- نافذة اختيار صورة من المعرض -->
+    <div id="image-picker-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-2xl w-full p-6 space-y-4 max-h-[85vh] flex flex-col">
+            <div class="flex justify-between items-center border-b pb-2">
+                <h3 class="font-bold text-slate-800 text-base">اختر صورة من المعرض لهذا السؤال</h3>
+                <button onclick="closeImagePicker()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+            </div>
+            <div id="modal-gallery-grid" class="grid grid-cols-3 md:grid-cols-4 gap-3 overflow-y-auto flex-1 p-2"></div>
+        </div>
+    </div>
+
+    <div id="print-area" class="hidden p-8 bg-white text-black text-sm"></div>
+
+    <script>
+        let currentUser = null;
+        let activeQuestions = [];
+        let currentExamId = null;
+        let timerInterval = null;
+        let activeTargetQuestionId = null;
+        let galleryImages = [];
+
+        function switchView(viewId) {
+            document.querySelectorAll('.view-panel').forEach(el => el.classList.add('hidden'));
+            document.getElementById(viewId).classList.remove('hidden');
+            if (viewId === 'view-leaderboards') {
+                loadLeaderboardExams();
+                loadGeneralLeaderboard();
+            }
+        }
+
+        function setSession(user, role) {
+            currentUser = user;
+            const badge = document.getElementById('session-badge');
+            const logoutBtn = document.getElementById('logout-btn');
+            badge.classList.remove('hidden');
+            logoutBtn.classList.remove('hidden');
+            badge.innerText = role === 'admin' ? `الإدارة (${user.name})` : `${user.name} - ${user.department}`;
+        }
+
+        function logout() {
+            currentUser = null;
+            clearInterval(timerInterval);
+            document.getElementById('session-badge').classList.add('hidden');
+            document.getElementById('logout-btn').classList.add('hidden');
+            switchView('view-login-user');
+        }
+
+        // --- Auth Handlers ---
+        async function handleUserLogin(e) {
+            e.preventDefault();
+            const sap = document.getElementById('user-login-sap').value;
+            const pass = document.getElementById('user-login-pass').value;
+            const fd = new FormData();
+            fd.append('sap_id', sap);
+            fd.append('password', pass);
+
+            try {
+                const res = await fetch('/api/auth/user-login', { method: 'POST', body: fd });
+                const data = await res.json();
+                if (res.ok) {
+                    setSession(data, 'user');
+                    document.getElementById('dash-user-name').innerText = data.name;
+                    document.getElementById('dash-user-sap').innerText = `SAP: ${data.sap_id}`;
+                    document.getElementById('dash-user-role').innerText = data.role;
+                    document.getElementById('dash-user-dept').innerText = `الإدارة: ${data.department}`;
+                    loadUserExamsList();
+                    switchView('view-user-dashboard');
+                } else {
+                    alert(data.detail);
+                }
+            } catch (err) {
+                alert("تعذر الاتصال بالسيرفر!");
+            }
+        }
+
+        async function requestPasswordResetModal() {
+            const sap = prompt("أدخل رقم الساب (SAP ID) الخاص بك لطلب استعادة كلمة المرور:");
+            if (!sap) return;
+            const fd = new FormData();
+            fd.append('sap_id', sap);
+            const res = await fetch('/api/auth/request-reset', { method: 'POST', body: fd });
+            const data = await res.json();
+            alert(data.message || data.detail);
+        }
+
+        async function handleAdminLogin(e) {
+            e.preventDefault();
+            try {
+                const fd = new FormData();
+                fd.append('sap_id', document.getElementById('admin-login-sap').value);
+                fd.append('email', document.getElementById('admin-login-email').value);
+                fd.append('password', document.getElementById('admin-login-pass').value);
+
+                const res = await fetch('/api/auth/admin-login', { method: 'POST', body: fd });
+                const data = await res.json();
+                if (res.ok) {
+                    setSession(data, 'admin');
+                    switchView('view-admin-dashboard');
+                    loadAdminProfileData().catch(e => console.error(e));
+                    loadResetRequests().catch(e => console.error(e));
+                    loadAdminGallery().catch(e => console.error(e));
+                    loadAdminUsers().catch(e => console.error(e));
+                    loadAdminExamList().catch(e => console.error(e));
+                } else {
+                    alert(data.detail || "بيانات الدخول غير صحيحة.");
+                }
+            } catch (err) {
+                alert("تعذر الاتصال بالسيرفر!");
+            }
+        }
+
+        async function loadAdminProfileData() {
+            const res = await fetch('/api/admin/profile');
+            const data = await res.json();
+            document.getElementById('adm-set-sap').value = data.sap_id;
+            document.getElementById('adm-set-name').value = data.name;
+            document.getElementById('adm-set-email').value = data.email;
+        }
+
+        async function saveAdminSettings() {
+            const fd = new FormData();
+            fd.append('sap_id', document.getElementById('adm-set-sap').value);
+            fd.append('name', document.getElementById('adm-set-name').value);
+            fd.append('email', document.getElementById('adm-set-email').value);
+            const pass = document.getElementById('adm-set-pass').value;
+            if (pass) fd.append('password', pass);
+
+            const res = await fetch('/api/admin/profile/update', { method: 'POST', body: fd });
+            const data = await res.json();
+            alert(data.message);
+        }
+
+        async function loadResetRequests() {
+            const res = await fetch('/api/admin/reset-requests');
+            const reqs = await res.json();
+            const cont = document.getElementById('reset-requests-list');
+            if (reqs.length === 0) {
+                cont.innerHTML = '<p class="text-slate-500">لا توجد طلبات معلقة حالياً.</p>';
+                return;
+            }
+            cont.innerHTML = reqs.map(r => `
+                <div class="p-3 bg-white border border-amber-200 rounded-xl flex justify-between items-center">
+                    <div>
+                        <span class="font-bold text-slate-800">${r.name}</span> (SAP: ${r.sap_id}) - إدارة: ${r.department}
+                        <div class="text-indigo-600 font-mono font-bold mt-0.5">كلمة المرور الحالية: ${r.current_password}</div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="resolveReset('${r.request_id}', '${r.sap_id}')" class="bg-emerald-600 text-white px-3 py-1 rounded-lg text-xs font-bold">تم إبلاغه / إنهاء</button>
+                        <button onclick="setNewPassModal('${r.request_id}', '${r.sap_id}')" class="bg-indigo-600 text-white px-3 py-1 rounded-lg text-xs font-bold">تعيين كلمة جديدة</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function resolveReset(reqId, sapId, newPass = '') {
+            const fd = new FormData();
+            fd.append('request_id', reqId);
+            fd.append('sap_id', sapId);
+            if (newPass) fd.append('new_password', newPass);
+            await fetch('/api/admin/reset-password-action', { method: 'POST', body: fd });
+            loadResetRequests();
+            loadAdminUsers();
+        }
+
+        function setNewPassModal(reqId, sapId) {
+            const p = prompt("أدخل كلمة المرور الجديدة لهذا المستخدم:");
+            if (p) resolveReset(reqId, sapId, p);
+        }
+
+        // --- User Dashboard & History ---
+        function togglePasswordModal() {
+            const el = document.getElementById('change-pass-card');
+            el.classList.toggle('hidden');
+            document.getElementById('chg-pass-msg').innerText = '';
+        }
+
+        async function submitChangePassword() {
+            const oldPass = document.getElementById('chg-old-pass').value;
+            const newPass = document.getElementById('chg-new-pass').value;
+            const msg = document.getElementById('chg-pass-msg');
+            if (!oldPass || !newPass) return alert("يرجى ملء جميع الحقول.");
+
+            const fd = new FormData();
+            fd.append('sap_id', currentUser.sap_id);
+            fd.append('old_password', oldPass);
+            fd.append('new_password', newPass);
+
+            const res = await fetch('/api/auth/change-password', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (res.ok) {
+                msg.className = "text-xs font-semibold text-emerald-600";
+                msg.innerText = data.message;
+                setTimeout(() => togglePasswordModal(), 1500);
+            } else {
+                msg.className = "text-xs font-semibold text-rose-600";
+                msg.innerText = data.detail;
+            }
+        }
+
+        async function loadUserExamsList() {
+            const res = await fetch(`/api/exams?department=${encodeURIComponent(currentUser.department)}&sap_id=${encodeURIComponent(currentUser.sap_id)}`);
+            const exams = await res.json();
+            const cont = document.getElementById('user-exams-cards-container');
+            
+            if (exams.length === 0) {
+                cont.innerHTML = '<p class="text-slate-500 text-sm">لا توجد اختبارات مخصصة لإدارتك حالياً.</p>';
+                return;
+            }
+
+            cont.innerHTML = exams.map(e => `
+                <div class="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col md:flex-row justify-between md:items-center gap-3">
+                    <div>
+                        <h5 class="font-bold text-slate-800 text-base">${e.name}</h5>
+                        <div class="flex items-center gap-2 text-xs text-slate-500 mt-1">
+                            <span>⏱ المدة: ${e.duration} دقيقة</span>
+                            <span>📅 الصلاحية: ${e.valid_until ? e.valid_until.replace('T', ' ') : 'دائمة'}</span>
+                        </div>
+                    </div>
+                    <div>
+                        ${e.can_enter ? `
+                            <button onclick="startExamSession(${e.id}, '${e.name}')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition">بدء الامتحان الآن</button>
+                        ` : `
+                            <span class="text-xs font-bold px-3 py-1.5 rounded-xl ${e.already_submitted ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'}">
+                                ${e.already_submitted ? 'تم إنهاء الاختبار مسبقاً (يتطلب إذن الإدارة للإعادة)' : (e.is_expired ? 'انتهت صلاحية الاختبار' : 'معطل مؤقتاً')}
+                            </span>
+                        `}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function toggleUserHistory() {
+            const card = document.getElementById('user-history-card');
+            card.classList.toggle('hidden');
+            if (!card.classList.contains('hidden')) {
+                const res = await fetch(`/api/user/${currentUser.sap_id}/history`);
+                const list = await res.json();
+                const cont = document.getElementById('user-history-list');
+                if (list.length === 0) {
+                    cont.innerHTML = '<p class="text-slate-500 text-xs">لم تقم بخوض أي اختبارات حتى الآن.</p>';
+                    return;
+                }
+                cont.innerHTML = list.map(h => `
+                    <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
+                        <div class="flex justify-between items-center">
+                            <span class="font-bold text-slate-800 text-sm">${h.exam_name}</span>
+                            <span class="text-slate-400">${h.date}</span>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <span>الدرجة: <strong>${h.score}</strong></span>
+                            <span>النسبة: <strong class="text-indigo-600">${h.percentage}</strong></span>
+                            <span>المستوى: <strong class="text-emerald-700">${h.overall_level}</strong></span>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        async function startExamSession(examId, examName) {
+            currentExamId = examId;
+            const res = await fetch(`/api/exams/${currentExamId}/questions?sap_id=${encodeURIComponent(currentUser.sap_id)}`);
+            const data = await res.json();
+            if (!res.ok) return alert(data.detail);
+
+            activeQuestions = data.questions;
+            if (activeQuestions.length === 0) return alert("لا توجد أسئلة مضافة لهذا الامتحان.");
+
+            document.getElementById('active-exam-title').innerText = examName;
+            document.getElementById('active-user-title').innerText = `${currentUser.name} (${currentUser.department})`;
+
+            const form = document.getElementById('active-quiz-form');
+            form.innerHTML = activeQuestions.map((q, idx) => `
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 space-y-3">
+                    <div class="flex justify-between items-center text-xs font-bold text-slate-500">
+                        <span class="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-md">فرع: ${q.branch}</span>
+                        <span>سؤال ${idx + 1} من ${activeQuestions.length}</span>
+                    </div>
+                    <p class="font-bold text-slate-800 text-base md:text-lg">${q.question}</p>
+                    ${q.image_url ? `<img src="${q.image_url}" class="max-h-60 rounded-xl mx-auto border object-contain">` : ''}
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 pt-2">
+                        ${q.options.map(opt => `
+                            <label class="flex items-center space-x-3 space-x-reverse p-3 rounded-xl border border-slate-100 hover:bg-slate-50 cursor-pointer transition">
+                                <input type="radio" name="q_${q.id}" value="${opt}" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm font-medium text-slate-700 mr-2">${opt}</span>
+                            </label>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+
+            let timeLeft = data.duration * 60;
+            clearInterval(timerInterval);
+            const timerEl = document.getElementById('exam-timer');
+            timerInterval = setInterval(() => {
+                const mins = Math.floor(timeLeft / 60);
+                const secs = timeLeft % 60;
+                timerEl.innerText = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    alert("انتهى وقت الامتحان! سيتم تسليم الإجابات تلقائياً.");
+                    submitExamAnswers(true);
+                }
+                timeLeft--;
+            }, 1000);
+
+            switchView('view-exam-active');
+        }
+
+        async function submitExamAnswers(auto = false) {
+            if (!auto && !confirm("هل أنت متأكد من تسليم الإجابات؟ لن تتمكن من دخول الامتحان مجدداً إلا بإذن الإدارة.")) return;
+            clearInterval(timerInterval);
+
+            const answers = {};
+            activeQuestions.forEach(q => {
+                const sel = document.querySelector(`input[name="q_${q.id}"]:checked`);
+                if (sel) answers[q.id] = sel.value;
+            });
+
+            const res = await fetch(`/api/exams/${currentExamId}/submit`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sap_id: currentUser.sap_id,
+                    user_name: currentUser.name,
+                    answers: answers
+                })
+            });
+            const data = await res.json();
+
+            document.getElementById('res-user-name').innerText = `${data.user_name} (${currentUser.department}) - SAP: ${currentUser.sap_id}`;
+            document.getElementById('res-pct').innerText = `${data.total_pct}%`;
+            document.getElementById('res-level').innerText = data.overall_level;
+
+            const bCont = document.getElementById('res-branches-container');
+            bCont.innerHTML = Object.entries(data.branch_results).map(([branch, b]) => `
+                <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="font-bold text-slate-700 text-sm">${branch}</span>
+                        <span class="text-xs font-extrabold text-indigo-600">${b.percentage}% (${b.score}/${b.total})</span>
+                    </div>
+                    <span class="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">${b.level}</span>
+                </div>
+            `).join('');
+
+            switchView('view-exam-result');
+        }
+
+        // --- Gallery & Image Handling ---
+        async function uploadMultipleImages() {
+            const input = document.getElementById('adm-multi-images');
+            if (!input.files || input.files.length === 0) return alert("اختر صورة واحدة على الأقل.");
+            const fd = new FormData();
+            for (let f of input.files) {
+                fd.append('files', f);
+            }
+            const res = await fetch('/api/admin/upload-multiple-images', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (res.ok) {
+                alert(`تم رفع ${data.images.length} صورة بنجاح إلى المعرض!`);
+                loadAdminGallery();
+                input.value = '';
+            }
+        }
+
+        async function loadAdminGallery() {
+            const res = await fetch('/api/admin/gallery');
+            galleryImages = await res.json();
+            const cont = document.getElementById('adm-gallery-container');
+            cont.innerHTML = galleryImages.map(img => `
+                <div class="p-2 border rounded-xl bg-slate-50 text-center space-y-1 text-xs">
+                    <img src="${img.url}" class="h-20 w-full object-cover rounded-lg border">
+                    <div class="truncate text-[10px] text-slate-500">${img.filename}</div>
+                    <button onclick="copyToClipboard('${img.url}')" class="text-indigo-600 font-bold hover:underline">نسخ الرابط</button>
+                </div>
+            `).join('');
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text);
+            alert("تم نسخ رابط الصورة!");
+        }
+
+        function openImagePicker(qId) {
+            activeTargetQuestionId = qId;
+            const grid = document.getElementById('modal-gallery-grid');
+            grid.innerHTML = galleryImages.map(img => `
+                <div onclick="selectImageForQuestion('${img.url}')" class="p-2 border rounded-xl hover:border-indigo-600 cursor-pointer bg-slate-50 text-center text-xs space-y-1">
+                    <img src="${img.url}" class="h-20 w-full object-cover rounded-lg">
+                    <span class="truncate block text-[10px]">${img.filename}</span>
+                </div>
+            `).join('');
+            document.getElementById('image-picker-modal').classList.remove('hidden');
+        }
+
+        function closeImagePicker() {
+            document.getElementById('image-picker-modal').classList.add('hidden');
+        }
+
+        function selectImageForQuestion(url) {
+            if (activeTargetQuestionId) {
+                document.getElementById(`edit-img-${activeTargetQuestionId}`).value = url;
+            }
+            closeImagePicker();
+        }
+
+        // --- Admin Exam & Validity Management ---
+        async function uploadExamExcel() {
+            const name = document.getElementById('adm-exam-name').value.trim();
+            const duration = document.getElementById('adm-exam-duration').value;
+            const validity = document.getElementById('adm-exam-validity').value;
+            const file = document.getElementById('adm-excel-file').files[0];
+            if (!name || !file) return alert("يرجى كتابة اسم الامتحان واختيار الملف.");
+
+            const selectedDepts = Array.from(document.querySelectorAll('input[name="dept_target"]:checked')).map(cb => cb.value);
+
+            const fd = new FormData();
+            fd.append('exam_name', name);
+            fd.append('duration', duration);
+            fd.append('valid_until', validity);
+            fd.append('departments', JSON.stringify(selectedDepts));
+            fd.append('file', file);
+
+            const res = await fetch('/api/admin/upload-excel', { method: 'POST', body: fd });
+            const data = await res.json();
+            alert(data.message || data.detail);
+            if (res.ok) loadAdminExamList();
+        }
+
+        async function loadAdminExamList() {
+            const res = await fetch('/api/exams');
+            const exams = await res.json();
+            const sel = document.getElementById('adm-preview-select');
+            sel.innerHTML = exams.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
+            if (exams.length > 0) previewSelectedExam();
+        }
+
+        async function previewSelectedExam() {
+            const examId = document.getElementById('adm-preview-select').value;
+            if (!examId) return;
+            const res = await fetch(`/api/admin/exams/${examId}/preview`);
+            const data = await res.json();
+
+            const controlBar = document.getElementById('adm-exam-control-bar');
+            controlBar.classList.remove('hidden');
+            document.getElementById('adm-curr-active').checked = data.is_active;
+            document.getElementById('adm-curr-validity').value = data.valid_until || '';
+
+            const cont = document.getElementById('adm-preview-container');
+            cont.classList.remove('hidden');
+            cont.innerHTML = `
+                <div class="bg-indigo-50 p-4 rounded-xl font-bold text-indigo-900 mb-2 flex justify-between items-center text-xs">
+                    <span>معاينة: ${data.exam_name} (${data.questions.length} سؤال)</span>
+                </div>
+                ${data.questions.map((q, idx) => `
+                    <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 text-sm space-y-3" id="q-card-${q.id}">
+                        <div class="flex justify-between items-center">
+                            <span class="font-bold text-slate-800">س ${idx+1}</span>
+                            <button onclick="saveQuestionEdit(${q.id})" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-lg text-xs font-bold">حفظ تعديلات السؤال</button>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <div>
+                                <label class="text-xs text-slate-500 font-bold block mb-1">الفرع</label>
+                                <input type="text" id="edit-branch-${q.id}" value="${q.branch}" class="w-full px-2 py-1 border rounded bg-white text-xs">
+                            </div>
+                            <div>
+                                <label class="text-xs text-slate-500 font-bold block mb-1">صورة السؤال</label>
+                                <div class="flex gap-1">
+                                    <input type="text" id="edit-img-${q.id}" value="${q.image_url || ''}" class="w-full px-2 py-1 border rounded bg-white text-xs">
+                                    <button onclick="openImagePicker(${q.id})" class="bg-indigo-600 text-white px-2 py-1 rounded text-xs">من المعرض</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-500 font-bold block mb-1">نص السؤال</label>
+                            <textarea id="edit-text-${q.id}" class="w-full px-2 py-1 border rounded bg-white text-xs">${q.question}</textarea>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            ${q.options.map((opt, oIdx) => `
+                                <div>
+                                    <label class="text-xs text-slate-500 block">اختيار ${oIdx+1}</label>
+                                    <input type="text" id="edit-opt-${q.id}-${oIdx+1}" value="${opt}" class="w-full px-2 py-1 border rounded bg-white text-xs">
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-emerald-700 block mb-1">الإجابة الصحيحة:</label>
+                            <input type="text" id="edit-correct-${q.id}" value="${q.correct_option}" class="w-full px-2 py-1 border rounded bg-emerald-50 text-xs font-bold">
+                        </div>
+                    </div>
+                `).join('')}
+            `;
+        }
+
+        async function saveExamValidityChanges() {
+            const examId = document.getElementById('adm-preview-select').value;
+            const isActive = document.getElementById('adm-curr-active').checked ? 1 : 0;
+            const validity = document.getElementById('adm-curr-validity').value;
+
+            const fd = new FormData();
+            fd.append('is_active', isActive);
+            fd.append('valid_until', validity);
+
+            const res = await fetch(`/api/admin/exams/${examId}/update-validity`, { method: 'POST', body: fd });
+            const data = await res.json();
+            alert(data.message);
+        }
+
+        async function saveQuestionEdit(qId) {
+            const fd = new FormData();
+            fd.append('q_id', qId);
+            fd.append('branch', document.getElementById(`edit-branch-${qId}`).value);
+            fd.append('question', document.getElementById(`edit-text-${qId}`).value);
+            fd.append('image_url', document.getElementById(`edit-img-${qId}`).value);
+            fd.append('opt1', document.getElementById(`edit-opt-${qId}-1`).value);
+            fd.append('opt2', document.getElementById(`edit-opt-${qId}-2`).value);
+            fd.append('opt3', document.getElementById(`edit-opt-${qId}-3`).value);
+            fd.append('opt4', document.getElementById(`edit-opt-${qId}-4`).value);
+            fd.append('correct_option', document.getElementById(`edit-correct-${qId}`).value);
+
+            const res = await fetch('/api/admin/questions/update', { method: 'POST', body: fd });
+            const data = await res.json();
+            alert(data.message);
+        }
+
+        async function allowUserRetake(sapId) {
+            const examId = document.getElementById('adm-preview-select').value;
+            if (!examId) return alert("اختر امتحاناً أولاً.");
+
+            const fd = new FormData();
+            fd.append('sap_id', sapId);
+
+            const res = await fetch(`/api/admin/exams/${examId}/allow-retake`, { method: 'POST', body: fd });
+            const data = await res.json();
+            alert(data.message);
+        }
+
+        // --- Admin Users Load ---
+        async function loadAdminUsers() {
+            const res = await fetch('/api/admin/users');
+            const users = await res.json();
+            const tbody = document.getElementById('adm-users-table-body');
+            tbody.innerHTML = users.map(u => `
+                <tr class="hover:bg-slate-50">
+                    <td class="p-2.5 font-mono">${u.sap_id}</td>
+                    <td class="p-2.5 font-bold">${u.name}</td>
+                    <td class="p-2.5 text-slate-600">${u.role}</td>
+                    <td class="p-2.5 text-slate-600">${u.department}</td>
+                    <td class="p-2.5 font-mono text-indigo-600 font-bold">${u.password}</td>
+                    <td class="p-2.5 text-center">
+                        <button onclick="allowUserRetake('${u.sap_id}')" class="bg-amber-100 text-amber-900 px-2 py-1 rounded text-[11px] font-bold hover:bg-amber-200">السماح بالإعادة</button>
+                    </td>
+                    <td class="p-2.5 text-center">
+                        <button onclick="deleteUser('${u.sap_id}')" class="text-rose-600 hover:text-rose-800 font-bold">حذف</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function addSingleUser() {
+            const sap = document.getElementById('adm-u-sap').value.trim();
+            const name = document.getElementById('adm-u-name').value.trim();
+            const role = document.getElementById('adm-u-role').value.trim();
+            const dept = document.getElementById('adm-u-dept').value.trim();
+            const pass = document.getElementById('adm-u-pass').value.trim();
+            if (!sap || !name || !pass) return alert("يرجى ملء كافة الحقول.");
+
+            const fd = new FormData();
+            fd.append('sap_id', sap);
+            fd.append('name', name);
+            fd.append('role', role || 'فني');
+            fd.append('department', dept || 'عام');
+            fd.append('password', pass);
+
+            const res = await fetch('/api/admin/add-user', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (res.ok) {
+                alert(data.message);
+                loadAdminUsers();
+                document.getElementById('adm-u-sap').value = '';
+                document.getElementById('adm-u-name').value = '';
+                document.getElementById('adm-u-role').value = '';
+                document.getElementById('adm-u-dept').value = '';
+                document.getElementById('adm-u-pass').value = '';
+            }
+        }
+
+        async function deleteUser(sapId) {
+            if (!confirm(`هل أنت متأكد من حذف المستخدم رقم ${sapId}؟`)) return;
+            await fetch(`/api/admin/delete-user/${sapId}`, { method: 'DELETE' });
+            loadAdminUsers();
+        }
+
+        // --- Print A4 Engine ---
+        async function printExamA4(isAnswerKey = false) {
+            const examId = document.getElementById('adm-preview-select').value;
+            if (!examId) return alert("اختر امتحاناً أولاً.");
+
+            const res = await fetch(`/api/admin/exams/${examId}/preview`);
+            const data = await res.json();
+
+            const pArea = document.getElementById('print-area');
+            pArea.innerHTML = `
+                <div style="border-bottom: 2px solid #000; padding-bottom: 12px; margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <h2 style="font-size: 20px; font-weight: bold; margin: 0;">اختبار تقييم المهارات والكفاءات الفنية</h2>
+                            <p style="font-size: 14px; margin: 4px 0 0 0;">اسم الدورة / الامتحان: <strong>${data.exam_name}</strong></p>
+                        </div>
+                        <div style="text-align: left; font-size: 12px;">
+                            ${isAnswerKey ? '<strong style="color: #7e22ce; font-size: 16px;">[ نموذج الإجابة الرسمي ]</strong><br>' : ''}
+                            الزمن: ${data.duration} دقيقة<br>
+                            عدد الأسئلة: ${data.questions.length}
+                        </div>
+                    </div>
+                    ${!isAnswerKey ? `
+                        <div style="margin-top: 15px; display: flex; gap: 20px; font-size: 13px;">
+                            <span>اسم المتدرب: ............................................................</span>
+                            <span>رقم SAP: ..........................</span>
+                            <span>الإدارة: ..........................</span>
+                        </div>
+                    ` : ''}
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 18px;">
+                    ${data.questions.map((q, idx) => `
+                        <div style="border: 1px solid #ccc; padding: 12px; border-radius: 8px; page-break-inside: avoid;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                                <strong style="font-size: 14px;">س ${idx + 1}: ${q.question}</strong>
+                                <span style="font-size: 11px; background: #eee; padding: 2px 6px; border-radius: 4px;">الفرع: ${q.branch}</span>
+                            </div>
+                            ${q.image_url ? `<img src="${q.image_url}" style="max-height: 140px; margin: 6px auto; display: block; border: 1px solid #ddd;">` : ''}
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; font-size: 13px;">
+                                ${q.options.map(opt => `
+                                    <div style="padding: 6px; border: 1px solid ${isAnswerKey && opt === q.correct_option ? '#16a34a' : '#ddd'}; background: ${isAnswerKey && opt === q.correct_option ? '#dcfce7' : '#fff'}; border-radius: 4px;">
+                                        [ &nbsp; ] ${opt} ${isAnswerKey && opt === q.correct_option ? '<strong>(الإجابة الصحيحة ✔)</strong>' : ''}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+
+            pArea.classList.remove('hidden');
+            window.print();
+            pArea.classList.add('hidden');
+        }
+
+        function downloadAdminResults() {
+            const examId = document.getElementById('adm-preview-select').value;
+            if (!examId) return alert("اختر امتحاناً أولاً.");
+            window.location.href = `/api/admin/export-results/${examId}`;
+        }
+
+        // --- Leaderboards ---
+        async function loadLeaderboardExams() {
+            const res = await fetch('/api/exams');
+            const exams = await res.json();
+            const sel = document.getElementById('lb-exam-select');
+            sel.innerHTML = `<option value="">-- اختر دورة لعرض ترتيبها --</option>` + exams.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
+        }
+
+        async function loadGeneralLeaderboard() {
+            const res = await fetch('/api/leaderboard/general');
+            const data = await res.json();
+            document.getElementById('lb-head').innerHTML = `
+                <tr>
+                    <th class="p-3">الترتيب</th>
+                    <th class="p-3">رقم SAP</th>
+                    <th class="p-3">اسم المشترك</th>
+                    <th class="p-3">الإدارة</th>
+                    <th class="p-3">الدور</th>
+                    <th class="p-3">متوسط التقييم</th>
+                    <th class="p-3">المستوى التراكمي</th>
+                    <th class="p-3">الدورات المكتملة</th>
+                </tr>
+            `;
+            document.getElementById('lb-body').innerHTML = data.map(r => `
+                <tr class="hover:bg-slate-50">
+                    <td class="p-3 font-bold text-indigo-600">#${r.rank}</td>
+                    <td class="p-3 font-mono text-slate-500">${r.sap_id}</td>
+                    <td class="p-3 font-semibold">${r.name}</td>
+                    <td class="p-3 text-slate-600">${r.department}</td>
+                    <td class="p-3 text-slate-600">${r.role}</td>
+                    <td class="p-3 font-bold text-indigo-600">${r.avg_pct}</td>
+                    <td class="p-3"><span class="text-xs bg-slate-100 px-2 py-1 rounded font-semibold">${r.overall_level}</span></td>
+                    <td class="p-3 font-bold">${r.exams_count}</td>
+                </tr>
+            `).join('');
+        }
+
+        async function loadExamLeaderboard() {
+            const examId = document.getElementById('lb-exam-select').value;
+            if (!examId) return loadGeneralLeaderboard();
+            const res = await fetch(`/api/leaderboard/exam/${examId}`);
+            const data = await res.json();
+            document.getElementById('lb-head').innerHTML = `
+                <tr>
+                    <th class="p-3">الترتيب</th>
+                    <th class="p-3">رقم SAP</th>
+                    <th class="p-3">اسم المشترك</th>
+                    <th class="p-3">الإدارة</th>
+                    <th class="p-3">الدور</th>
+                    <th class="p-3">الدرجة</th>
+                    <th class="p-3">النسبة</th>
+                    <th class="p-3">المستوى</th>
+                    <th class="p-3">التاريخ</th>
+                </tr>
+            `;
+            document.getElementById('lb-body').innerHTML = data.map(r => `
+                <tr class="hover:bg-slate-50">
+                    <td class="p-3 font-bold text-indigo-600">#${r.rank}</td>
+                    <td class="p-3 font-mono text-slate-500">${r.sap_id}</td>
+                    <td class="p-3 font-semibold">${r.name}</td>
+                    <td class="p-3 text-slate-600">${r.department}</td>
+                    <td class="p-3 text-slate-600">${r.role}</td>
+                    <td class="p-3">${r.score}</td>
+                    <td class="p-3 font-bold text-indigo-600">${r.pct}</td>
+                    <td class="p-3"><span class="text-xs bg-slate-100 px-2 py-1 rounded font-semibold">${r.level}</span></td>
+                    <td class="p-3 text-xs text-slate-400">${r.date}</td>
+                </tr>
+            `).join('');
+        }
+    </script>
+</body>
+</html>
