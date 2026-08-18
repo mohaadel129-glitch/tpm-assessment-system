@@ -358,6 +358,15 @@
                     <button onclick="addSingleUser()" class="bg-gradient-to-r from-slate-700 to-slate-900 hover:from-slate-800 hover:to-black text-white px-4 py-2 rounded-xl font-bold text-xs">حفظ المستخدم</button>
                 </div>
 
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                    <h4 class="text-xs font-bold text-slate-700">📤 استيراد المشتركين من شيت إكسل (دفعة واحدة):</h4>
+                    <p class="text-[11px] text-slate-500">نزّل القالب أولاً من الزر أعلى الصفحة، املأ الأعمدة (الاسم / رقم الساب / الباسورد / الدور / الإدارة) ثم ارفع الملف هنا. لو رقم الساب موجود بالفعل هيتم تحديث بياناته تلقائيًا.</p>
+                    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                        <input type="file" id="adm-users-excel-file" accept=".xlsx,.xls" class="flex-1 px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                        <button onclick="uploadUsersExcel()" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs whitespace-nowrap">رفع واستيراد الملف</button>
+                    </div>
+                </div>
+
                 <div class="overflow-x-auto max-h-64">
                     <table class="w-full text-right border-collapse text-xs">
                         <thead class="bg-slate-50/95 backdrop-blur text-slate-500 text-[11px] uppercase tracking-wider sticky top-0 border-b-2 border-slate-200">
@@ -1098,6 +1107,32 @@
                 document.getElementById('adm-u-dept').value = '';
                 document.getElementById('adm-u-pass').value = '';
             }
+        }
+
+        async function uploadUsersExcel() {
+            const fileInput = document.getElementById('adm-users-excel-file');
+            const file = fileInput.files[0];
+            if (!file) return alert("يرجى اختيار ملف إكسل أولاً.");
+
+            const fd = new FormData();
+            fd.append('file', file);
+
+            let res;
+            try {
+                res = await fetch('/api/admin/upload-users-excel', { method: 'POST', body: fd });
+            } catch (e) {
+                alert("تعذّر الاتصال بالسيرفر أثناء رفع الملف.");
+                return;
+            }
+            if (!res.ok) {
+                alert("فشل استيراد الملف: " + await extractErrorMessage(res));
+                return;
+            }
+            const data = await res.json();
+            alert(data.message || "تم استيراد المشتركين بنجاح.");
+            fileInput.value = '';
+            loadAdminUsers();
+            loadDeptTargetCheckboxes().catch(e => console.error(e));
         }
 
         async function deleteUser(sapId) {
