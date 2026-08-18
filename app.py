@@ -71,13 +71,18 @@ def init_db_tables():
             password TEXT NOT NULL
         )""")
 
-        if is_pg:
-            c.execute("""INSERT INTO admin_settings (id, sap_id, name, email, password)
-                         VALUES (1, 'ADMIN01', 'مدير النظام', 'admin@company.com', 'Admin@2026')
-                         ON CONFLICT (id) DO NOTHING""")
-        else:
-            c.execute("""INSERT OR IGNORE INTO admin_settings (id, sap_id, name, email, password)
-                         VALUES (1, 'ADMIN01', 'مدير النظام', 'admin@company.com', 'Admin@2026')""")
+        # ملاحظة: إنشاء أدمن افتراضي أول مرة فقط (لو الجدول فاضي تمامًا) — بدون قيم مكتوبة في الكود
+        c.execute("SELECT COUNT(*) FROM admin_settings WHERE id = 1")
+        if c.fetchone()[0] == 0:
+            import secrets
+            temp_password = secrets.token_urlsafe(9)
+            q_admin = (
+                "INSERT INTO admin_settings (id, sap_id, name, email, password) VALUES (1, %s, %s, %s, %s)"
+                if is_pg
+                else "INSERT INTO admin_settings (id, sap_id, name, email, password) VALUES (1, ?, ?, ?, ?)"
+            )
+            c.execute(q_admin, ("ADMIN01", "مدير النظام", "admin@company.com", temp_password))
+            print(f"[SETUP] تم إنشاء حساب أدمن مبدئي - الباسورد المؤقت: {temp_password}")
 
         # 2. جدول المستخدمين
         c.execute("""CREATE TABLE IF NOT EXISTS users (
@@ -115,8 +120,20 @@ def init_db_tables():
             id {id_type},
             filename TEXT NOT NULL,
             file_url TEXT NOT NULL,
+            public_id TEXT,
             uploaded_at TIMESTAMP DEFAULT {ts_default}
         )""")
+        # ترحيل: إضافة عمود public_id لو الجدول كان موجود من قبل بدونه
+        try:
+            if is_pg:
+                c.execute("ALTER TABLE media_gallery ADD COLUMN IF NOT EXISTS public_id TEXT")
+            else:
+                c.execute("PRAGMA table_info(media_gallery)")
+                cols = [r[1] for r in c.fetchall()]
+                if "public_id" not in cols:
+                    c.execute("ALTER TABLE media_gallery ADD COLUMN public_id TEXT")
+        except Exception:
+            pass
 
         # 6. طلبات استعادة كلمة المرور
         c.execute(f"""CREATE TABLE IF NOT EXISTS reset_requests (
@@ -151,13 +168,7 @@ def init_db_tables():
             UNIQUE(exam_id, sap_id)
         )""")
 
-        if is_pg:
-            c.execute("""INSERT INTO users (sap_id, name, password, role, department) 
-                         VALUES ('1001', 'محمد عادل', '123456', 'مهندس صيانة', 'صيانة الاسطمبات')
-                         ON CONFLICT (sap_id) DO NOTHING""")
-        else:
-            c.execute("""INSERT OR IGNORE INTO users (sap_id, name, password, role, department) 
-                         VALUES ('1001', 'محمد عادل', '123456', 'مهندس صيانة', 'صيانة الاسطمبات')""")
+        # ملاحظة: تم حذف الإدراج التلقائي لمستخدم تجريبي هنا نهائيًا لمنع رجوعه بعد الحذف
 
         conn.commit()
         conn.close()
@@ -364,25 +375,60 @@ async def upload_multiple_images(files: List[UploadFile] = File(...)):
 
     for file in files:
         contents = await file.read()
+        public_id = None
         if CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY:
             upload_res = cloudinary.uploader.upload(
                 contents, folder="exam_system"
             )
             file_url = upload_res.get("secure_url")
+            public_id = upload_res.get("public_id")
         else:
             file_url = f"https://via.placeholder.com/300?text={file.filename}"
 
         q_ins = (
-            "INSERT INTO media_gallery (filename, file_url) VALUES (%s, %s)"
+            "INSERT INTO media_gallery (filename, file_url, public_id) VALUES (%s, %s, %s)"
             if is_pg
-            else "INSERT INTO media_gallery (filename, file_url) VALUES (?, ?)"
+            else "INSERT INTO media_gallery (filename, file_url, public_id) VALUES (?, ?, ?)"
         )
-        c.execute(q_ins, (file.filename, file_url))
+        c.execute(q_ins, (file.filename, file_url, public_id))
         uploaded_urls.append({"name": file.filename, "url": file_url})
 
     conn.commit()
     conn.close()
     return {"status": "success", "images": uploaded_urls}
+
+
+@app.delete("/api/admin/gallery/{image_id}")
+async def delete_gallery_image(image_id: int):
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q_sel = (
+        "SELECT public_id FROM media_gallery WHERE id = %s"
+        if is_pg
+        else "SELECT public_id FROM media_gallery WHERE id = ?"
+    )
+    c.execute(q_sel, (image_id,))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="الصورة غير موجودة.")
+
+    public_id = row[0]
+    if public_id and CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY:
+        try:
+            cloudinary.uploader.destroy(public_id)
+        except Exception:
+            pass  # الصورة ممكن تكون اتمسحت من Cloudinary من قبل، نكمل نمسح السطر من قاعدة البيانات على أي حال
+
+    q_del = (
+        "DELETE FROM media_gallery WHERE id = %s"
+        if is_pg
+        else "DELETE FROM media_gallery WHERE id = ?"
+    )
+    c.execute(q_del, (image_id,))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": "تم حذف الصورة بنجاح."}
 
 
 @app.get("/api/admin/gallery")
@@ -401,6 +447,19 @@ async def get_gallery():
 
 
 # --- إدارة المستخدمين ---
+@app.get("/api/admin/departments")
+async def get_registered_departments():
+    """يرجّع قائمة الإدارات الفعلية المسجّلة عند المستخدمين (بدون تكرار)."""
+    conn, _ = get_db()
+    c = conn.cursor()
+    c.execute(
+        "SELECT DISTINCT department FROM users WHERE department IS NOT NULL AND department != '' ORDER BY department ASC"
+    )
+    departments = [r[0] for r in c.fetchall()]
+    conn.close()
+    return {"departments": departments}
+
+
 @app.get("/api/admin/users")
 async def get_all_users():
     conn, _ = get_db()
