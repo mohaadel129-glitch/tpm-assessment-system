@@ -332,11 +332,38 @@
                             <span>الصلاحية حتى:</span>
                             <input type="datetime-local" id="adm-curr-validity" class="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
                         </div>
+                        <label class="flex items-center gap-1.5 text-xs font-bold text-amber-800">
+                            <input type="checkbox" id="adm-curr-hide-lb" class="w-4 h-4 text-amber-600"> تعليق ظهور نتائج هذا الامتحان في لوحة الشرف
+                        </label>
                         <button onclick="saveExamValidityChanges()" class="bg-gradient-to-r from-slate-700 to-slate-900 hover:from-slate-800 hover:to-black text-white px-3 py-1 rounded text-xs font-bold">حفظ الصلاحية والحالة</button>
+                        <button onclick="deleteCurrentExam()" class="bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-700 hover:to-red-800 text-white px-3 py-1 rounded text-xs font-bold">🗑 حذف الامتحان نهائيًا</button>
                     </div>
                 </div>
 
                 <div id="adm-preview-container" class="hidden space-y-4 pt-4 border-t"></div>
+
+                <!-- إدارة نتائج المتدربين للامتحان المختار -->
+                <div id="adm-submissions-section" class="hidden space-y-3 pt-4 border-t">
+                    <h4 class="text-sm font-bold text-slate-800">📋 إدارة نتائج المتدربين لهذا الامتحان</h4>
+                    <p class="text-[11px] text-slate-500">تقدر تعلّق ظهور نتيجة فرد معين في لوحة الشرف بدون حذفها، أو تحذفها نهائيًا.</p>
+                    <div class="overflow-x-auto max-h-80">
+                        <table class="w-full text-right border-collapse text-xs">
+                            <thead class="bg-slate-50/95 backdrop-blur text-slate-500 text-[11px] uppercase tracking-wider sticky top-0 border-b-2 border-slate-200">
+                                <tr>
+                                    <th class="p-2.5">SAP ID</th>
+                                    <th class="p-2.5">الاسم</th>
+                                    <th class="p-2.5">الدرجة</th>
+                                    <th class="p-2.5">النسبة</th>
+                                    <th class="p-2.5">التاريخ</th>
+                                    <th class="p-2.5 text-center">الحالة</th>
+                                    <th class="p-2.5 text-center">تعليق/إظهار</th>
+                                    <th class="p-2.5 text-center">حذف</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adm-submissions-table-body" class="divide-y"></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
 
             <!-- و. إدارة المستخدمين وأذونات الإعادة -->
@@ -950,6 +977,9 @@
             controlBar.classList.remove('hidden');
             document.getElementById('adm-curr-active').checked = data.is_active;
             document.getElementById('adm-curr-validity').value = data.valid_until || '';
+            document.getElementById('adm-curr-hide-lb').checked = !!data.hide_leaderboard;
+
+            loadExamSubmissionsForAdmin(examId);
 
             const cont = document.getElementById('adm-preview-container');
             cont.classList.remove('hidden');
@@ -1001,14 +1031,123 @@
             const examId = document.getElementById('adm-preview-select').value;
             const isActive = document.getElementById('adm-curr-active').checked ? 1 : 0;
             const validity = document.getElementById('adm-curr-validity').value;
+            const hideLb = document.getElementById('adm-curr-hide-lb').checked ? 1 : 0;
 
             const fd = new FormData();
             fd.append('is_active', isActive);
             fd.append('valid_until', validity);
+            fd.append('hide_leaderboard', hideLb);
 
-            const res = await fetch(`/api/admin/exams/${examId}/update-validity`, { method: 'POST', body: fd });
+            let res;
+            try {
+                res = await fetch(`/api/admin/exams/${examId}/update-validity`, { method: 'POST', body: fd });
+            } catch (e) {
+                alert("تعذّر الاتصال بالسيرفر أثناء حفظ التغييرات.");
+                return;
+            }
+            if (!res.ok) {
+                alert("فشل حفظ التغييرات: " + await extractErrorMessage(res));
+                return;
+            }
             const data = await res.json();
             alert(data.message);
+        }
+
+        async function deleteCurrentExam() {
+            const sel = document.getElementById('adm-preview-select');
+            const examId = sel.value;
+            if (!examId) return;
+            const examName = sel.options[sel.selectedIndex]?.text || '';
+            if (!confirm(`هل أنت متأكد من حذف امتحان "${examName}" نهائيًا؟ سيتم حذف كل أسئلته ونتائج المتدربين فيه ولا يمكن التراجع عن هذا الإجراء.`)) return;
+
+            let res;
+            try {
+                res = await fetch(`/api/admin/exams/${examId}`, { method: 'DELETE' });
+            } catch (e) {
+                alert("تعذّر الاتصال بالسيرفر أثناء حذف الامتحان.");
+                return;
+            }
+            if (!res.ok) {
+                alert("فشل حذف الامتحان: " + await extractErrorMessage(res));
+                return;
+            }
+            const data = await res.json();
+            alert(data.message || "تم حذف الامتحان بنجاح.");
+            document.getElementById('adm-exam-control-bar').classList.add('hidden');
+            document.getElementById('adm-preview-container').classList.add('hidden');
+            document.getElementById('adm-submissions-section').classList.add('hidden');
+            loadAdminExamList();
+        }
+
+        async function loadExamSubmissionsForAdmin(examId) {
+            const section = document.getElementById('adm-submissions-section');
+            const tbody = document.getElementById('adm-submissions-table-body');
+            try {
+                const res = await fetch(`/api/admin/exams/${examId}/submissions`);
+                if (!res.ok) {
+                    section.classList.add('hidden');
+                    return;
+                }
+                const subs = await res.json();
+                section.classList.remove('hidden');
+                if (subs.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-slate-400">لا توجد نتائج بعد لهذا الامتحان.</td></tr>`;
+                    return;
+                }
+                tbody.innerHTML = subs.map(s => `
+                    <tr class="hover:bg-slate-50 ${s.hidden ? 'opacity-50' : ''}">
+                        <td class="p-2.5 font-mono">${s.sap_id}</td>
+                        <td class="p-2.5 font-bold">${s.name}</td>
+                        <td class="p-2.5">${s.score}</td>
+                        <td class="p-2.5">${s.pct}</td>
+                        <td class="p-2.5 text-slate-500">${s.date}</td>
+                        <td class="p-2.5 text-center">
+                            ${s.hidden ? '<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[11px] font-bold">معلّقة</span>' : '<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[11px] font-bold">ظاهرة</span>'}
+                        </td>
+                        <td class="p-2.5 text-center">
+                            <button onclick="toggleSubmissionHidden(${s.submission_id}, ${s.hidden ? 0 : 1}, '${examId}')" class="bg-amber-100 text-amber-900 px-2 py-1 rounded text-[11px] font-bold hover:bg-amber-200">${s.hidden ? 'إظهار' : 'تعليق'}</button>
+                        </td>
+                        <td class="p-2.5 text-center">
+                            <button onclick="deleteSubmission(${s.submission_id}, '${examId}')" class="text-rose-600 hover:text-rose-800 font-bold">حذف</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                section.classList.add('hidden');
+            }
+        }
+
+        async function toggleSubmissionHidden(subId, newHidden, examId) {
+            const fd = new FormData();
+            fd.append('hidden', newHidden);
+            let res;
+            try {
+                res = await fetch(`/api/admin/submissions/${subId}/toggle-hidden`, { method: 'POST', body: fd });
+            } catch (e) {
+                alert("تعذّر الاتصال بالسيرفر.");
+                return;
+            }
+            if (!res.ok) {
+                alert("فشل تحديث حالة النتيجة: " + await extractErrorMessage(res));
+                return;
+            }
+            loadExamSubmissionsForAdmin(examId);
+        }
+
+        async function deleteSubmission(subId, examId) {
+            if (!confirm("هل أنت متأكد من حذف هذه النتيجة نهائيًا؟")) return;
+            let res;
+            try {
+                res = await fetch(`/api/admin/submissions/${subId}`, { method: 'DELETE' });
+            } catch (e) {
+                alert("تعذّر الاتصال بالسيرفر.");
+                return;
+            }
+            if (!res.ok) {
+                alert("فشل حذف النتيجة: " + await extractErrorMessage(res));
+                return;
+            }
+            loadExamSubmissionsForAdmin(examId);
         }
 
         async function saveQuestionEdit(qId) {
