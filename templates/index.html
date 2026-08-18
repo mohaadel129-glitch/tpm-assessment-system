@@ -302,14 +302,9 @@
 
                 <div class="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/70 space-y-1">
                     <label class="block text-xs font-bold text-slate-700">تخصيص الامتحان للإدارات:</label>
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                    <div id="adm-dept-target-container" class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                         <label class="flex items-center gap-1.5"><input type="checkbox" name="dept_target" value="الكل" checked> الكل</label>
-                        <label class="flex items-center gap-1.5"><input type="checkbox" name="dept_target" value="الإنتاج"> الإنتاج</label>
-                        <label class="flex items-center gap-1.5"><input type="checkbox" name="dept_target" value="الصيانة الميكانيكية"> الصيانة الميكانيكية</label>
-                        <label class="flex items-center gap-1.5"><input type="checkbox" name="dept_target" value="صيانة الاسطمبات"> صيانة الاسطمبات</label>
-                        <label class="flex items-center gap-1.5"><input type="checkbox" name="dept_target" value="الصيانة الكهربائية"> الصيانة الكهربائية</label>
-                        <label class="flex items-center gap-1.5"><input type="checkbox" name="dept_target" value="الجودة"> الجودة</label>
-                        <label class="flex items-center gap-1.5"><input type="checkbox" name="dept_target" value="السلامة والصحة المهنية"> السلامة والصحة</label>
+                        <span class="text-slate-400 col-span-3">جاري تحميل الإدارات...</span>
                     </div>
                 </div>
                 <button onclick="uploadExamExcel()" class="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white px-6 py-2.5 rounded-xl font-bold text-xs transition-all shadow-md shadow-indigo-200 hover:-translate-y-0.5">حفظ ونشر الامتحان</button>
@@ -524,6 +519,7 @@
                     loadAdminGallery().catch(e => console.error(e));
                     loadAdminUsers().catch(e => console.error(e));
                     loadAdminExamList().catch(e => console.error(e));
+                    loadDeptTargetCheckboxes().catch(e => console.error(e));
                 } else {
                     alert(data.detail || "بيانات الدخول غير صحيحة.");
                 }
@@ -768,6 +764,21 @@
             switchView('view-exam-result');
         }
 
+        // --- مساعد عام: يعرض رسالة الخطأ الحقيقية من السيرفر بدل الفشل الصامت ---
+        async function extractErrorMessage(res) {
+            try {
+                const data = await res.clone().json();
+                return data.detail || data.message || `خطأ (${res.status})`;
+            } catch (e) {
+                try {
+                    const text = await res.text();
+                    return text && text.length < 300 ? text : `خطأ في السيرفر (${res.status})`;
+                } catch (e2) {
+                    return `خطأ غير معروف (${res.status})`;
+                }
+            }
+        }
+
         // --- Gallery & Image Handling ---
         async function uploadMultipleImages() {
             const input = document.getElementById('adm-multi-images');
@@ -776,26 +787,55 @@
             for (let f of input.files) {
                 fd.append('files', f);
             }
-            const res = await fetch('/api/admin/upload-multiple-images', { method: 'POST', body: fd });
-            const data = await res.json();
-            if (res.ok) {
+            try {
+                const res = await fetch('/api/admin/upload-multiple-images', { method: 'POST', body: fd });
+                if (!res.ok) {
+                    alert("فشل رفع الصور: " + await extractErrorMessage(res));
+                    return;
+                }
+                const data = await res.json();
                 alert(`تم رفع ${data.images.length} صورة بنجاح إلى المعرض!`);
                 loadAdminGallery();
                 input.value = '';
+            } catch (e) {
+                alert("تعذّر الاتصال بالسيرفر أثناء رفع الصور. تأكد من اتصالك بالإنترنت وحاول تاني.");
             }
         }
 
         async function loadAdminGallery() {
-            const res = await fetch('/api/admin/gallery');
-            galleryImages = await res.json();
-            const cont = document.getElementById('adm-gallery-container');
-            cont.innerHTML = galleryImages.map(img => `
-                <div class="p-2 border border-slate-200 rounded-xl bg-slate-50 text-center space-y-1 text-xs hover:shadow-md transition-shadow">
-                    <img src="${img.url}" class="h-20 w-full object-cover rounded-lg border">
-                    <div class="truncate text-[10px] text-slate-500">${img.filename}</div>
-                    <button onclick="copyToClipboard('${img.url}')" class="text-indigo-600 font-bold hover:underline">نسخ الرابط</button>
-                </div>
-            `).join('');
+            try {
+                const res = await fetch('/api/admin/gallery');
+                if (!res.ok) {
+                    alert("فشل تحميل المعرض: " + await extractErrorMessage(res));
+                    return;
+                }
+                galleryImages = await res.json();
+                const cont = document.getElementById('adm-gallery-container');
+                cont.innerHTML = galleryImages.map(img => `
+                    <div class="p-2 border border-slate-200 rounded-xl bg-slate-50 text-center space-y-1 text-xs hover:shadow-md transition-shadow relative">
+                        <button onclick="deleteGalleryImage(${img.id})" title="حذف الصورة" class="absolute top-1 left-1 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold leading-none">✕</button>
+                        <img src="${img.url}" class="h-20 w-full object-cover rounded-lg border">
+                        <div class="truncate text-[10px] text-slate-500">${img.filename}</div>
+                        <button onclick="copyToClipboard('${img.url}')" class="text-indigo-600 font-bold hover:underline">نسخ الرابط</button>
+                    </div>
+                `).join('');
+            } catch (e) {
+                alert("تعذّر الاتصال بالسيرفر أثناء تحميل المعرض.");
+            }
+        }
+
+        async function deleteGalleryImage(imageId) {
+            if (!confirm("متأكد إنك عايز تحذف الصورة دي نهائيًا؟")) return;
+            try {
+                const res = await fetch(`/api/admin/gallery/${imageId}`, { method: 'DELETE' });
+                if (!res.ok) {
+                    alert("فشل حذف الصورة: " + await extractErrorMessage(res));
+                    return;
+                }
+                loadAdminGallery();
+            } catch (e) {
+                alert("تعذّر الاتصال بالسيرفر أثناء حذف الصورة.");
+            }
         }
 
         function copyToClipboard(text) {
@@ -827,6 +867,32 @@
         }
 
         // --- Admin Exam & Validity Management ---
+        async function loadDeptTargetCheckboxes() {
+            const cont = document.getElementById('adm-dept-target-container');
+            try {
+                const res = await fetch('/api/admin/departments');
+                if (!res.ok) {
+                    cont.innerHTML = `<label class="flex items-center gap-1.5"><input type="checkbox" name="dept_target" value="الكل" checked> الكل</label>
+                        <span class="text-rose-500 col-span-3">تعذّر تحميل الإدارات: ${await extractErrorMessage(res)}</span>`;
+                    return;
+                }
+                const data = await res.json();
+                const depts = data.departments || [];
+                let html = `<label class="flex items-center gap-1.5"><input type="checkbox" name="dept_target" value="الكل" checked> الكل</label>`;
+                if (depts.length === 0) {
+                    html += `<span class="text-slate-400 col-span-3">لا يوجد مستخدمين مسجّلين بإدارات بعد.</span>`;
+                } else {
+                    for (const d of depts) {
+                        html += `<label class="flex items-center gap-1.5"><input type="checkbox" name="dept_target" value="${d}"> ${d}</label>`;
+                    }
+                }
+                cont.innerHTML = html;
+            } catch (e) {
+                cont.innerHTML = `<label class="flex items-center gap-1.5"><input type="checkbox" name="dept_target" value="الكل" checked> الكل</label>
+                    <span class="text-rose-500 col-span-3">تعذّر الاتصال بالسيرفر لتحميل الإدارات.</span>`;
+            }
+        }
+
         async function uploadExamExcel() {
             const name = document.getElementById('adm-exam-name').value.trim();
             const duration = document.getElementById('adm-exam-duration').value;
@@ -843,10 +909,18 @@
             fd.append('departments', JSON.stringify(selectedDepts));
             fd.append('file', file);
 
-            const res = await fetch('/api/admin/upload-excel', { method: 'POST', body: fd });
-            const data = await res.json();
-            alert(data.message || data.detail);
-            if (res.ok) loadAdminExamList();
+            try {
+                const res = await fetch('/api/admin/upload-excel', { method: 'POST', body: fd });
+                if (!res.ok) {
+                    alert("فشل رفع الامتحان: " + await extractErrorMessage(res));
+                    return;
+                }
+                const data = await res.json();
+                alert(data.message || "تم رفع الامتحان بنجاح.");
+                loadAdminExamList();
+            } catch (e) {
+                alert("تعذّر الاتصال بالسيرفر أثناء رفع الامتحان.");
+            }
         }
 
         async function loadAdminExamList() {
@@ -940,9 +1014,17 @@
             fd.append('opt4', document.getElementById(`edit-opt-${qId}-4`).value);
             fd.append('correct_option', document.getElementById(`edit-correct-${qId}`).value);
 
-            const res = await fetch('/api/admin/questions/update', { method: 'POST', body: fd });
-            const data = await res.json();
-            alert(data.message);
+            try {
+                const res = await fetch('/api/admin/questions/update', { method: 'POST', body: fd });
+                if (!res.ok) {
+                    alert("فشل حفظ السؤال: " + await extractErrorMessage(res));
+                    return;
+                }
+                const data = await res.json();
+                alert(data.message || "تم الحفظ بنجاح.");
+            } catch (e) {
+                alert("تعذّر الاتصال بالسيرفر أثناء حفظ السؤال.");
+            }
         }
 
         async function allowUserRetake(sapId) {
@@ -994,11 +1076,22 @@
             fd.append('department', dept || 'عام');
             fd.append('password', pass);
 
-            const res = await fetch('/api/admin/add-user', { method: 'POST', body: fd });
+            let res;
+            try {
+                res = await fetch('/api/admin/add-user', { method: 'POST', body: fd });
+            } catch (e) {
+                alert("تعذّر الاتصال بالسيرفر أثناء إضافة المستخدم.");
+                return;
+            }
+            if (!res.ok) {
+                alert("فشل إضافة المستخدم: " + await extractErrorMessage(res));
+                return;
+            }
             const data = await res.json();
             if (res.ok) {
                 alert(data.message);
                 loadAdminUsers();
+                loadDeptTargetCheckboxes().catch(e => console.error(e));
                 document.getElementById('adm-u-sap').value = '';
                 document.getElementById('adm-u-name').value = '';
                 document.getElementById('adm-u-role').value = '';
