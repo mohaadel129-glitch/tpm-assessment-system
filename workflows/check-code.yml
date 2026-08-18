@@ -1,0 +1,53 @@
+name: Check Code Before Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check-syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check app.py syntax
+        run: |
+          python -m py_compile app.py
+          echo "app.py: syntax OK"
+
+      - name: Check app.py isn't suspiciously truncated
+        run: |
+          LINES=$(wc -l < app.py)
+          echo "app.py has $LINES lines"
+          if [ "$LINES" -lt 500 ]; then
+            echo "::error::app.py has only $LINES lines — looks truncated (expected 500+). Blocking deploy."
+            exit 1
+          fi
+
+      - name: Check api/index.py syntax
+        run: python -m py_compile api/index.py
+
+      - name: Check templates/index.html braces are balanced
+        run: |
+          python3 - <<'EOF'
+          import re, sys
+          content = open("templates/index.html", encoding="utf-8").read()
+          scripts = re.findall(r"<script>(.*?)</script>", content, re.S)
+          ok = True
+          for i, s in enumerate(scripts):
+              o, c = s.count("{"), s.count("}")
+              print(f"script block {i}: {{ = {o}, }} = {c}")
+              if o != c:
+                  ok = False
+          if not ok:
+              print("::error::Unbalanced braces detected in <script> block — likely truncated/broken JS.")
+              sys.exit(1)
+          EOF
