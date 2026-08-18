@@ -168,6 +168,30 @@ def init_db_tables():
             UNIQUE(exam_id, sap_id)
         )""")
 
+        # ترحيل: إضافة عمود hidden لجدول النتائج (تعليق ظهور نتيجة فرد معين في لوحة الشرف)
+        try:
+            if is_pg:
+                c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS hidden INTEGER DEFAULT 0")
+            else:
+                c.execute("PRAGMA table_info(submissions)")
+                cols = [r[1] for r in c.fetchall()]
+                if "hidden" not in cols:
+                    c.execute("ALTER TABLE submissions ADD COLUMN hidden INTEGER DEFAULT 0")
+        except Exception:
+            pass
+
+        # ترحيل: إضافة عمود hide_leaderboard لجدول الامتحانات (تعليق ظهور نتائج الامتحان بالكامل في لوحة الشرف)
+        try:
+            if is_pg:
+                c.execute("ALTER TABLE exams ADD COLUMN IF NOT EXISTS hide_leaderboard INTEGER DEFAULT 0")
+            else:
+                c.execute("PRAGMA table_info(exams)")
+                cols = [r[1] for r in c.fetchall()]
+                if "hide_leaderboard" not in cols:
+                    c.execute("ALTER TABLE exams ADD COLUMN hide_leaderboard INTEGER DEFAULT 0")
+        except Exception:
+            pass
+
         # ملاحظة: تم حذف الإدراج التلقائي لمستخدم تجريبي هنا نهائيًا لمنع رجوعه بعد الحذف
 
         conn.commit()
@@ -661,18 +685,53 @@ async def update_exam_validity(
     exam_id: int,
     is_active: int = Form(...),
     valid_until: Optional[str] = Form(None),
+    hide_leaderboard: int = Form(0),
 ):
     conn, is_pg = get_db()
     c = conn.cursor()
     q = (
-        "UPDATE exams SET is_active = %s, valid_until = %s WHERE id = %s"
+        "UPDATE exams SET is_active = %s, valid_until = %s, hide_leaderboard = %s WHERE id = %s"
         if is_pg
-        else "UPDATE exams SET is_active = ?, valid_until = ? WHERE id = ?"
+        else "UPDATE exams SET is_active = ?, valid_until = ?, hide_leaderboard = ? WHERE id = ?"
     )
-    c.execute(q, (is_active, valid_until if valid_until else None, exam_id))
+    c.execute(q, (is_active, valid_until if valid_until else None, hide_leaderboard, exam_id))
     conn.commit()
     conn.close()
     return {"status": "success", "message": "تم تحديث صلاحية الامتحان."}
+
+
+@app.delete("/api/admin/exams/{exam_id}")
+async def delete_exam(exam_id: int):
+    """حذف امتحان بالكامل مع كل أسئلته ونتائجه وأذونات الإعادة الخاصة به."""
+    conn, is_pg = get_db()
+    c = conn.cursor()
+
+    q_exam_sel = (
+        "SELECT name FROM exams WHERE id = %s" if is_pg else "SELECT name FROM exams WHERE id = ?"
+    )
+    c.execute(q_exam_sel, (exam_id,))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="الامتحان غير موجود.")
+    exam_name = row[0]
+
+    for table in ("questions", "submissions", "retake_permissions"):
+        q_del = (
+            f"DELETE FROM {table} WHERE exam_id = %s"
+            if is_pg
+            else f"DELETE FROM {table} WHERE exam_id = ?"
+        )
+        c.execute(q_del, (exam_id,))
+
+    q_del_exam = (
+        "DELETE FROM exams WHERE id = %s" if is_pg else "DELETE FROM exams WHERE id = ?"
+    )
+    c.execute(q_del_exam, (exam_id,))
+
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": f"تم حذف امتحان \"{exam_name}\" وكل بياناته بنجاح."}
 
 
 @app.post("/api/admin/exams/{exam_id}/allow-retake")
@@ -874,9 +933,9 @@ async def preview_exam(exam_id: int):
     conn, is_pg = get_db()
     c = conn.cursor()
     q_exam = (
-        "SELECT name, duration_minutes, departments, is_active, valid_until FROM exams WHERE id = %s"
+        "SELECT name, duration_minutes, departments, is_active, valid_until, hide_leaderboard FROM exams WHERE id = %s"
         if is_pg
-        else "SELECT name, duration_minutes, departments, is_active, valid_until FROM exams WHERE id = ?"
+        else "SELECT name, duration_minutes, departments, is_active, valid_until, hide_leaderboard FROM exams WHERE id = ?"
     )
     c.execute(q_exam, (exam_id,))
     exam = c.fetchone()
@@ -905,6 +964,7 @@ async def preview_exam(exam_id: int):
         "departments": json.loads(exam[2]) if exam[2] else [],
         "is_active": bool(exam[3]),
         "valid_until": exam[4],
+        "hide_leaderboard": bool(exam[5]) if exam[5] is not None else False,
         "questions": questions,
     }
 
@@ -1100,6 +1160,71 @@ async def submit_exam(exam_id: int, payload: Dict[str, object]):
     }
 
 
+@app.get("/api/admin/exams/{exam_id}/submissions")
+async def get_exam_submissions_admin(exam_id: int):
+    """قائمة كل نتائج المتدربين لامتحان معين، لإدارتها من لوحة الأدمن (تشمل النتائج المُعلّقة)."""
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q = (
+        """SELECT s.id, s.sap_id, s.user_name, s.total_score, s.total_questions, s.total_pct, s.overall_level, s.submitted_at, s.hidden
+           FROM submissions s WHERE s.exam_id = %s ORDER BY s.total_pct DESC, s.submitted_at ASC"""
+        if is_pg
+        else """SELECT s.id, s.sap_id, s.user_name, s.total_score, s.total_questions, s.total_pct, s.overall_level, s.submitted_at, s.hidden
+           FROM submissions s WHERE s.exam_id = ? ORDER BY s.total_pct DESC, s.submitted_at ASC"""
+    )
+    c.execute(q, (exam_id,))
+    rows = c.fetchall()
+    conn.close()
+    return [
+        {
+            "submission_id": r[0],
+            "sap_id": r[1],
+            "name": r[2],
+            "score": f"{r[3]}/{r[4]}",
+            "pct": f"{r[5]:.1f}%",
+            "level": r[6],
+            "date": str(r[7]),
+            "hidden": bool(r[8]),
+        }
+        for r in rows
+    ]
+
+
+@app.post("/api/admin/submissions/{submission_id}/toggle-hidden")
+async def toggle_submission_hidden(submission_id: int, hidden: int = Form(...)):
+    """تعليق (إخفاء) أو إظهار نتيجة فرد معين في لوحة الشرف بدون حذفها."""
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q = (
+        "UPDATE submissions SET hidden = %s WHERE id = %s"
+        if is_pg
+        else "UPDATE submissions SET hidden = ? WHERE id = ?"
+    )
+    c.execute(q, (hidden, submission_id))
+    conn.commit()
+    conn.close()
+    return {
+        "status": "success",
+        "message": "تم إخفاء النتيجة من لوحة الشرف." if hidden else "تم إظهار النتيجة في لوحة الشرف.",
+    }
+
+
+@app.delete("/api/admin/submissions/{submission_id}")
+async def delete_submission(submission_id: int):
+    """حذف نتيجة فرد معين نهائيًا."""
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q = (
+        "DELETE FROM submissions WHERE id = %s"
+        if is_pg
+        else "DELETE FROM submissions WHERE id = ?"
+    )
+    c.execute(q, (submission_id,))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": "تم حذف النتيجة بنجاح."}
+
+
 @app.get("/api/user/{sap_id}/history")
 async def get_user_history(sap_id: str):
     conn, is_pg = get_db()
@@ -1135,10 +1260,18 @@ async def get_exam_leaderboard(exam_id: int):
     c = conn.cursor()
     q = (
         """SELECT s.sap_id, s.user_name, u.role, u.department, s.total_score, s.total_questions, s.total_pct, s.overall_level, s.submitted_at 
-           FROM submissions s LEFT JOIN users u ON s.sap_id = u.sap_id WHERE s.exam_id = %s ORDER BY s.total_pct DESC, s.submitted_at ASC"""
+           FROM submissions s 
+           LEFT JOIN users u ON s.sap_id = u.sap_id 
+           LEFT JOIN exams e ON s.exam_id = e.id
+           WHERE s.exam_id = %s AND COALESCE(s.hidden, 0) = 0 AND COALESCE(e.hide_leaderboard, 0) = 0
+           ORDER BY s.total_pct DESC, s.submitted_at ASC"""
         if is_pg
         else """SELECT s.sap_id, s.user_name, u.role, u.department, s.total_score, s.total_questions, s.total_pct, s.overall_level, s.submitted_at 
-           FROM submissions s LEFT JOIN users u ON s.sap_id = u.sap_id WHERE s.exam_id = ? ORDER BY s.total_pct DESC, s.submitted_at ASC"""
+           FROM submissions s 
+           LEFT JOIN users u ON s.sap_id = u.sap_id 
+           LEFT JOIN exams e ON s.exam_id = e.id
+           WHERE s.exam_id = ? AND COALESCE(s.hidden, 0) = 0 AND COALESCE(e.hide_leaderboard, 0) = 0
+           ORDER BY s.total_pct DESC, s.submitted_at ASC"""
     )
     c.execute(q, (exam_id,))
     rows = c.fetchall()
@@ -1164,7 +1297,11 @@ async def get_general_leaderboard():
     conn, _ = get_db()
     c = conn.cursor()
     c.execute("""SELECT s.sap_id, s.user_name, u.role, u.department, AVG(s.total_pct) as avg_pct, COUNT(s.id) as exams_count
-                 FROM submissions s LEFT JOIN users u ON s.sap_id = u.sap_id GROUP BY s.sap_id, s.user_name, u.role, u.department ORDER BY avg_pct DESC, exams_count DESC""")
+                 FROM submissions s 
+                 LEFT JOIN users u ON s.sap_id = u.sap_id 
+                 LEFT JOIN exams e ON s.exam_id = e.id
+                 WHERE COALESCE(s.hidden, 0) = 0 AND COALESCE(e.hide_leaderboard, 0) = 0
+                 GROUP BY s.sap_id, s.user_name, u.role, u.department ORDER BY avg_pct DESC, exams_count DESC""")
     rows = c.fetchall()
     conn.close()
     return [
