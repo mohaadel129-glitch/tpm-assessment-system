@@ -1,6 +1,7 @@
 import io
 import json
 import os
+import random
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -17,6 +18,10 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 
 app = FastAPI(title="Enterprise Skill Matrix & Assessment System")
+
+# مفاتيح الصلاحيات المتاحة لحسابات الأدمن الفرعية (المديرين العاديين)
+# الأدمن المركزي (admin_settings) يملك كل الصلاحيات دائمًا تلقائيًا
+ADMIN_PERMISSION_KEYS = ["resets", "gallery", "create", "manage", "users", "teams"]
 
 # مسار القوالب المتوافق مع بيئة Vercel
 BASE_DIR = Path(__file__).resolve().parent
@@ -192,6 +197,54 @@ def init_db_tables():
         except Exception:
             pass
 
+        # ترحيل: إضافة عمود teams لجدول الامتحانات (تخصيص الامتحان لفرق معينة)
+        try:
+            if is_pg:
+                c.execute("ALTER TABLE exams ADD COLUMN IF NOT EXISTS teams TEXT DEFAULT '[\"الكل\"]'")
+            else:
+                c.execute("PRAGMA table_info(exams)")
+                cols = [r[1] for r in c.fetchall()]
+                if "teams" not in cols:
+                    c.execute("ALTER TABLE exams ADD COLUMN teams TEXT DEFAULT '[\"الكل\"]'")
+        except Exception:
+            pass
+
+        # 9. جدول حسابات المديرين (أدمن عادي بصلاحيات محددة - يدخل نفس بوابة الإدارة)
+        c.execute(f"""CREATE TABLE IF NOT EXISTS admins (
+            id {id_type},
+            sap_id TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            email TEXT NOT NULL,
+            password TEXT NOT NULL,
+            permissions TEXT DEFAULT '[]',
+            created_at TIMESTAMP DEFAULT {ts_default}
+        )""")
+
+        # 10. جدول الفرق
+        c.execute(f"""CREATE TABLE IF NOT EXISTS teams (
+            id {id_type},
+            name TEXT UNIQUE NOT NULL
+        )""")
+
+        # 11. جدول ربط المستخدمين بالفرق (فرد يمكن أن يكون في فريقين كحد أقصى)
+        c.execute(f"""CREATE TABLE IF NOT EXISTS user_teams (
+            id {id_type},
+            sap_id TEXT NOT NULL,
+            team_id INTEGER NOT NULL,
+            UNIQUE(sap_id, team_id)
+        )""")
+
+        # 12. جدول جلسات دخول الامتحان (لمنع دخول الامتحان مرتين أو تركه دون تسليم)
+        c.execute(f"""CREATE TABLE IF NOT EXISTS exam_sessions (
+            id {id_type},
+            exam_id INTEGER NOT NULL,
+            sap_id TEXT NOT NULL,
+            status TEXT DEFAULT 'in_progress',
+            started_at TIMESTAMP DEFAULT {ts_default},
+            submitted_at TIMESTAMP,
+            UNIQUE(exam_id, sap_id)
+        )""")
+
         # ملاحظة: تم حذف الإدراج التلقائي لمستخدم تجريبي هنا نهائيًا لمنع رجوعه بعد الحذف
 
         conn.commit()
@@ -237,25 +290,153 @@ async def admin_login(
 ):
     conn, is_pg = get_db()
     c = conn.cursor()
-    query = (
+
+    # 1) تجربة الدخول كأدمن مركزي (صلاحيات كاملة دائمًا)
+    q_super = (
         "SELECT sap_id, name, email FROM admin_settings WHERE id = 1 AND sap_id = %s AND LOWER(email) = %s AND password = %s"
         if is_pg
         else "SELECT sap_id, name, email FROM admin_settings WHERE id = 1 AND sap_id = ? AND LOWER(email) = ? AND password = ?"
     )
-    c.execute(query, (sap_id.strip(), email.strip().lower(), password.strip()))
-    admin = c.fetchone()
+    c.execute(q_super, (sap_id.strip(), email.strip().lower(), password.strip()))
+    super_admin = c.fetchone()
+    if super_admin:
+        conn.close()
+        return {
+            "status": "success",
+            "role": "super_admin",
+            "name": super_admin[1],
+            "email": super_admin[2],
+            "sap_id": super_admin[0],
+            "permissions": ADMIN_PERMISSION_KEYS,
+        }
+
+    # 2) تجربة الدخول كأدمن عادي (مدير) بصلاحيات محددة
+    q_sub = (
+        "SELECT sap_id, name, email, permissions FROM admins WHERE sap_id = %s AND LOWER(email) = %s AND password = %s"
+        if is_pg
+        else "SELECT sap_id, name, email, permissions FROM admins WHERE sap_id = ? AND LOWER(email) = ? AND password = ?"
+    )
+    c.execute(q_sub, (sap_id.strip(), email.strip().lower(), password.strip()))
+    sub_admin = c.fetchone()
     conn.close()
-    if admin:
+    if sub_admin:
+        try:
+            perms = json.loads(sub_admin[3]) if sub_admin[3] else []
+        except Exception:
+            perms = []
         return {
             "status": "success",
             "role": "admin",
-            "name": admin[1],
-            "email": admin[2],
-            "sap_id": admin[0],
+            "name": sub_admin[1],
+            "email": sub_admin[2],
+            "sap_id": sub_admin[0],
+            "permissions": perms,
         }
+
     raise HTTPException(
         status_code=401, detail="بيانات دخول الإدارة غير صحيحة."
     )
+
+
+# --- إدارة حسابات المديرين (أدمن عادي بصلاحيات محددة) ---
+@app.get("/api/admin/admins")
+async def list_sub_admins():
+    conn, _ = get_db()
+    c = conn.cursor()
+    c.execute("SELECT sap_id, name, email, permissions FROM admins ORDER BY sap_id ASC")
+    rows = c.fetchall()
+    conn.close()
+    result = []
+    for r in rows:
+        try:
+            perms = json.loads(r[3]) if r[3] else []
+        except Exception:
+            perms = []
+        result.append({"sap_id": r[0], "name": r[1], "email": r[2], "permissions": perms})
+    return result
+
+
+@app.post("/api/admin/admins/add")
+async def add_sub_admin(
+    sap_id: str = Form(...),
+    name: str = Form(...),
+    email: str = Form(...),
+    password: str = Form(...),
+    permissions: str = Form("[]"),
+):
+    try:
+        perms_list = json.loads(permissions) if permissions else []
+        perms_list = [p for p in perms_list if p in ADMIN_PERMISSION_KEYS]
+    except Exception:
+        perms_list = []
+
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    if is_pg:
+        q = """INSERT INTO admins (sap_id, name, email, password, permissions) VALUES (%s, %s, %s, %s, %s)
+               ON CONFLICT(sap_id) DO UPDATE SET name=EXCLUDED.name, email=EXCLUDED.email, password=EXCLUDED.password, permissions=EXCLUDED.permissions"""
+    else:
+        q = """INSERT INTO admins (sap_id, name, email, password, permissions) VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(sap_id) DO UPDATE SET name=excluded.name, email=excluded.email, password=excluded.password, permissions=excluded.permissions"""
+    c.execute(
+        q,
+        (
+            sap_id.strip(),
+            name.strip(),
+            email.strip().lower(),
+            password.strip(),
+            json.dumps(perms_list, ensure_ascii=False),
+        ),
+    )
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": f"تم حفظ حساب المدير {name} بنجاح."}
+
+
+@app.delete("/api/admin/admins/{sap_id}")
+async def delete_sub_admin(sap_id: str):
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q = (
+        "DELETE FROM admins WHERE sap_id = %s"
+        if is_pg
+        else "DELETE FROM admins WHERE sap_id = ?"
+    )
+    c.execute(q, (sap_id.strip(),))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": "تم حذف حساب المدير."}
+
+
+@app.post("/api/admin/self/change-password")
+async def sub_admin_change_password(
+    sap_id: str = Form(...),
+    old_password: str = Form(...),
+    new_password: str = Form(...),
+):
+    """يسمح لحساب مدير عادي (غير الأدمن المركزي) بتغيير كلمة مروره الخاصة بنفسه."""
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q_sel = (
+        "SELECT password FROM admins WHERE sap_id = %s"
+        if is_pg
+        else "SELECT password FROM admins WHERE sap_id = ?"
+    )
+    c.execute(q_sel, (sap_id.strip(),))
+    row = c.fetchone()
+    if not row or row[0] != old_password.strip():
+        conn.close()
+        raise HTTPException(status_code=400, detail="كلمة المرور الحالية غير صحيحة.")
+
+    q_upd = (
+        "UPDATE admins SET password = %s WHERE sap_id = %s"
+        if is_pg
+        else "UPDATE admins SET password = ? WHERE sap_id = ?"
+    )
+    c.execute(q_upd, (new_password.strip(), sap_id.strip()))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": "تم تغيير كلمة المرور بنجاح."}
 
 
 @app.get("/api/admin/profile")
@@ -315,15 +496,25 @@ async def user_login(sap_id: str = Form(...), password: str = Form(...)):
     )
     c.execute(q, (sap_id.strip(), password.strip()))
     user = c.fetchone()
-    conn.close()
     if not user:
+        conn.close()
         raise HTTPException(status_code=401, detail="بيانات الدخول غير صحيحة.")
+
+    q_teams = (
+        """SELECT t.name FROM user_teams ut JOIN teams t ON ut.team_id = t.id WHERE ut.sap_id = %s"""
+        if is_pg
+        else """SELECT t.name FROM user_teams ut JOIN teams t ON ut.team_id = t.id WHERE ut.sap_id = ?"""
+    )
+    c.execute(q_teams, (user[0],))
+    teams = [r[0] for r in c.fetchall()]
+    conn.close()
     return {
         "status": "success",
         "sap_id": user[0],
         "name": user[1],
         "role": user[2],
         "department": user[3],
+        "teams": teams,
     }
 
 
@@ -491,6 +682,16 @@ async def get_all_users():
     c.execute(
         "SELECT sap_id, name, role, department, password FROM users ORDER BY sap_id ASC"
     )
+    users_rows = c.fetchall()
+
+    # تجميع فرق كل مستخدم في استعلام واحد لتفادي التكرار
+    c.execute("""SELECT ut.sap_id, t.id, t.name FROM user_teams ut
+                 JOIN teams t ON ut.team_id = t.id""")
+    teams_by_sap: Dict[str, List[Dict[str, object]]] = {}
+    for sap_id, team_id, team_name in c.fetchall():
+        teams_by_sap.setdefault(sap_id, []).append({"id": team_id, "name": team_name})
+
+    conn.close()
     users = [
         {
             "sap_id": r[0],
@@ -498,11 +699,107 @@ async def get_all_users():
             "role": r[2],
             "department": r[3],
             "password": r[4],
+            "teams": teams_by_sap.get(r[0], []),
         }
-        for r in c.fetchall()
+        for r in users_rows
     ]
-    conn.close()
     return users
+
+
+# --- إدارة الفرق ---
+@app.get("/api/admin/teams")
+async def list_teams():
+    conn, _ = get_db()
+    c = conn.cursor()
+    c.execute("SELECT id, name FROM teams ORDER BY name ASC")
+    rows = c.fetchall()
+    conn.close()
+    return [{"id": r[0], "name": r[1]} for r in rows]
+
+
+@app.post("/api/admin/teams/add")
+async def add_team(name: str = Form(...)):
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q = (
+        "INSERT INTO teams (name) VALUES (%s) ON CONFLICT(name) DO NOTHING"
+        if is_pg
+        else "INSERT INTO teams (name) VALUES (?) ON CONFLICT(name) DO NOTHING"
+    )
+    c.execute(q, (name.strip(),))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": f"تم إضافة/تأكيد فريق \"{name.strip()}\"."}
+
+
+@app.delete("/api/admin/teams/{team_id}")
+async def delete_team(team_id: int):
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q_ut = (
+        "DELETE FROM user_teams WHERE team_id = %s"
+        if is_pg
+        else "DELETE FROM user_teams WHERE team_id = ?"
+    )
+    c.execute(q_ut, (team_id,))
+    q_t = (
+        "DELETE FROM teams WHERE id = %s" if is_pg else "DELETE FROM teams WHERE id = ?"
+    )
+    c.execute(q_t, (team_id,))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": "تم حذف الفريق."}
+
+
+@app.get("/api/admin/users/{sap_id}/teams")
+async def get_user_teams(sap_id: str):
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q = (
+        """SELECT t.id, t.name FROM user_teams ut JOIN teams t ON ut.team_id = t.id WHERE ut.sap_id = %s"""
+        if is_pg
+        else """SELECT t.id, t.name FROM user_teams ut JOIN teams t ON ut.team_id = t.id WHERE ut.sap_id = ?"""
+    )
+    c.execute(q, (sap_id.strip(),))
+    rows = c.fetchall()
+    conn.close()
+    return [{"id": r[0], "name": r[1]} for r in rows]
+
+
+@app.post("/api/admin/users/{sap_id}/set-teams")
+async def set_user_teams(sap_id: str, team_ids: str = Form("[]")):
+    """يحدد فرق المستخدم (بحد أقصى فريقين)، ويستبدل أي تعيين سابق بالكامل."""
+    try:
+        ids = json.loads(team_ids) if team_ids else []
+        ids = [int(i) for i in ids]
+    except Exception:
+        raise HTTPException(status_code=400, detail="صيغة الفرق غير صحيحة.")
+
+    if len(ids) > 2:
+        raise HTTPException(
+            status_code=400, detail="لا يمكن أن يكون الفرد مشتركاً في أكثر من فريقين."
+        )
+
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q_del = (
+        "DELETE FROM user_teams WHERE sap_id = %s"
+        if is_pg
+        else "DELETE FROM user_teams WHERE sap_id = ?"
+    )
+    c.execute(q_del, (sap_id.strip(),))
+
+    q_ins = (
+        "INSERT INTO user_teams (sap_id, team_id) VALUES (%s, %s)"
+        if is_pg
+        else "INSERT INTO user_teams (sap_id, team_id) VALUES (?, ?)"
+    )
+    for tid in ids:
+        c.execute(q_ins, (sap_id.strip(), tid))
+
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": "تم تحديث فرق المستخدم بنجاح."}
 
 
 @app.post("/api/admin/add-user")
@@ -716,7 +1013,7 @@ async def delete_exam(exam_id: int):
         raise HTTPException(status_code=404, detail="الامتحان غير موجود.")
     exam_name = row[0]
 
-    for table in ("questions", "submissions", "retake_permissions"):
+    for table in ("questions", "submissions", "retake_permissions", "exam_sessions"):
         q_del = (
             f"DELETE FROM {table} WHERE exam_id = %s"
             if is_pg
@@ -763,6 +1060,7 @@ async def upload_excel(
     duration: int = Form(30),
     valid_until: Optional[str] = Form(None),
     departments: str = Form("[]"),
+    teams: str = Form("[]"),
     file: UploadFile = File(...),
 ):
     try:
@@ -771,15 +1069,19 @@ async def upload_excel(
         dept_list = json.loads(departments) if departments else ["الكل"]
         if not dept_list:
             dept_list = ["الكل"]
+        team_list = json.loads(teams) if teams else ["الكل"]
+        if not team_list:
+            team_list = ["الكل"]
 
         conn, is_pg = get_db()
         c = conn.cursor()
         if is_pg:
-            q_exam = """INSERT INTO exams (name, duration_minutes, departments, is_active, valid_until) 
-                        VALUES (%s, %s, %s, 1, %s)
+            q_exam = """INSERT INTO exams (name, duration_minutes, departments, teams, is_active, valid_until) 
+                        VALUES (%s, %s, %s, %s, 1, %s)
                         ON CONFLICT(name) DO UPDATE SET 
                            duration_minutes=EXCLUDED.duration_minutes, 
                            departments=EXCLUDED.departments,
+                           teams=EXCLUDED.teams,
                            is_active=1,
                            valid_until=EXCLUDED.valid_until RETURNING id"""
             c.execute(
@@ -788,16 +1090,18 @@ async def upload_excel(
                     exam_name,
                     duration,
                     json.dumps(dept_list, ensure_ascii=False),
+                    json.dumps(team_list, ensure_ascii=False),
                     valid_until if valid_until else None,
                 ),
             )
             exam_id = c.fetchone()[0]
         else:
-            q_exam = """INSERT INTO exams (name, duration_minutes, departments, is_active, valid_until) 
-                        VALUES (?, ?, ?, 1, ?)
+            q_exam = """INSERT INTO exams (name, duration_minutes, departments, teams, is_active, valid_until) 
+                        VALUES (?, ?, ?, ?, 1, ?)
                         ON CONFLICT(name) DO UPDATE SET 
                            duration_minutes=excluded.duration_minutes, 
                            departments=excluded.departments,
+                           teams=excluded.teams,
                            is_active=1,
                            valid_until=excluded.valid_until"""
             c.execute(
@@ -806,6 +1110,7 @@ async def upload_excel(
                     exam_name,
                     duration,
                     json.dumps(dept_list, ensure_ascii=False),
+                    json.dumps(team_list, ensure_ascii=False),
                     valid_until if valid_until else None,
                 ),
             )
@@ -869,28 +1174,54 @@ async def list_exams(
     conn, is_pg = get_db()
     c = conn.cursor()
     c.execute(
-        "SELECT id, name, duration_minutes, departments, is_active, valid_until FROM exams"
+        "SELECT id, name, duration_minutes, departments, teams, is_active, valid_until FROM exams"
     )
     rows = c.fetchall()
+
+    # فرق المستخدم الحالي (لتحديد الامتحانات المتاحة له حسب الفريق)
+    user_team_names = set()
+    if sap_id:
+        q_ut = (
+            """SELECT t.name FROM user_teams ut JOIN teams t ON ut.team_id = t.id WHERE ut.sap_id = %s"""
+            if is_pg
+            else """SELECT t.name FROM user_teams ut JOIN teams t ON ut.team_id = t.id WHERE ut.sap_id = ?"""
+        )
+        c.execute(q_ut, (sap_id.strip(),))
+        user_team_names = {r[0] for r in c.fetchall()}
 
     exams = []
     now = datetime.now().strftime("%Y-%m-%dT%H:%M")
 
     for r in rows:
-        exam_id, name, duration, depts_json, is_active, valid_until = r
+        exam_id, name, duration, depts_json, teams_json, is_active, valid_until = r
         depts = json.loads(depts_json) if depts_json else ["الكل"]
+        teams_target = json.loads(teams_json) if teams_json else ["الكل"]
         is_expired = True if valid_until and valid_until < now else False
-        already_submitted, retake_allowed = False, False
+        already_attempted, retake_allowed, in_progress = False, False, False
 
         if sap_id:
-            q_cnt = (
-                "SELECT COUNT(id) FROM submissions WHERE exam_id = %s AND sap_id = %s"
+            # أي محاولة دخول سابقة (سواء تم التسليم أو تُركت بدون تسليم) تُحسب كمحاولة مستهلكة
+            q_sess = (
+                "SELECT status FROM exam_sessions WHERE exam_id = %s AND sap_id = %s"
                 if is_pg
-                else "SELECT COUNT(id) FROM submissions WHERE exam_id = ? AND sap_id = ?"
+                else "SELECT status FROM exam_sessions WHERE exam_id = ? AND sap_id = ?"
             )
-            c.execute(q_cnt, (exam_id, sap_id.strip()))
-            if c.fetchone()[0] > 0:
-                already_submitted = True
+            c.execute(q_sess, (exam_id, sap_id.strip()))
+            sess = c.fetchone()
+            if sess:
+                already_attempted = True
+                in_progress = sess[0] == "in_progress"
+
+            # حماية إضافية: أي نتيجة مسجلة تُعتبر محاولة مستهلكة حتى لو لم تكن هناك جلسة (بيانات قديمة)
+            if not already_attempted:
+                q_cnt = (
+                    "SELECT COUNT(id) FROM submissions WHERE exam_id = %s AND sap_id = %s"
+                    if is_pg
+                    else "SELECT COUNT(id) FROM submissions WHERE exam_id = ? AND sap_id = ?"
+                )
+                c.execute(q_cnt, (exam_id, sap_id.strip()))
+                if c.fetchone()[0] > 0:
+                    already_attempted = True
 
             q_perm = (
                 "SELECT allowed FROM retake_permissions WHERE exam_id = %s AND sap_id = %s"
@@ -902,26 +1233,35 @@ async def list_exams(
             if perm and perm[0] == 1:
                 retake_allowed = True
 
-        if (
+        dept_ok = (
             department is None
             or "الكل" in depts
             or department in depts
             or department == "عام"
-        ):
+        )
+        team_ok = (
+            not sap_id
+            or "الكل" in teams_target
+            or bool(user_team_names.intersection(teams_target))
+        )
+
+        if dept_ok and team_ok:
             exams.append({
                 "id": exam_id,
                 "name": name,
                 "duration": duration,
                 "departments": depts,
+                "teams": teams_target,
                 "is_active": bool(is_active),
                 "valid_until": valid_until,
                 "is_expired": is_expired,
-                "already_submitted": already_submitted,
+                "already_submitted": already_attempted,
+                "in_progress": in_progress,
                 "retake_allowed": retake_allowed,
                 "can_enter": (
                     bool(is_active)
                     and not is_expired
-                    and (not already_submitted or retake_allowed)
+                    and (not already_attempted or retake_allowed)
                 ),
             })
     conn.close()
@@ -1030,26 +1370,71 @@ async def get_exam_questions(exam_id: int, sap_id: Optional[str] = None):
         )
 
     if sap_id:
-        q_cnt = (
-            "SELECT COUNT(id) FROM submissions WHERE exam_id = %s AND sap_id = %s"
+        sap_id_clean = sap_id.strip()
+
+        q_perm = (
+            "SELECT allowed FROM retake_permissions WHERE exam_id = %s AND sap_id = %s"
             if is_pg
-            else "SELECT COUNT(id) FROM submissions WHERE exam_id = ? AND sap_id = ?"
+            else "SELECT allowed FROM retake_permissions WHERE exam_id = ? AND sap_id = ?"
         )
-        c.execute(q_cnt, (exam_id, sap_id.strip()))
-        if c.fetchone()[0] > 0:
-            q_perm = (
-                "SELECT allowed FROM retake_permissions WHERE exam_id = %s AND sap_id = %s"
+        c.execute(q_perm, (exam_id, sap_id_clean))
+        perm = c.fetchone()
+        retake_allowed = bool(perm and perm[0] == 1)
+
+        q_sess = (
+            "SELECT status FROM exam_sessions WHERE exam_id = %s AND sap_id = %s"
+            if is_pg
+            else "SELECT status FROM exam_sessions WHERE exam_id = ? AND sap_id = ?"
+        )
+        c.execute(q_sess, (exam_id, sap_id_clean))
+        existing_session = c.fetchone()
+
+        if not existing_session:
+            # حماية إضافية لبيانات قديمة قبل إضافة جدول الجلسات: أي نتيجة مسجّلة تُعتبر محاولة مستهلكة
+            q_cnt = (
+                "SELECT COUNT(id) FROM submissions WHERE exam_id = %s AND sap_id = %s"
                 if is_pg
-                else "SELECT allowed FROM retake_permissions WHERE exam_id = ? AND sap_id = ?"
+                else "SELECT COUNT(id) FROM submissions WHERE exam_id = ? AND sap_id = ?"
             )
-            c.execute(q_perm, (exam_id, sap_id.strip()))
-            perm = c.fetchone()
-            if not perm or perm[0] != 1:
-                conn.close()
+            c.execute(q_cnt, (exam_id, sap_id_clean))
+            if c.fetchone()[0] > 0:
+                existing_session = ("submitted",)
+
+        if existing_session and not retake_allowed:
+            conn.close()
+            if existing_session[0] == "in_progress":
                 raise HTTPException(
                     status_code=403,
-                    detail="لقد قمت بخوض هذا الامتحان سابقاً.",
+                    detail="لقد قمت بفتح هذا الامتحان من قبل ولم تُكمل تسليمه. يجب الحصول على إذن الإدارة لإعادة المحاولة.",
                 )
+            raise HTTPException(
+                status_code=403,
+                detail="لقد قمت بخوض هذا الامتحان سابقاً. يجب الحصول على إذن الإدارة لإعادة المحاولة.",
+            )
+
+        if existing_session and retake_allowed:
+            # استهلاك إذن الإعادة فورًا (بمجرد الدخول تُحسب المحاولة) وبدء جلسة جديدة نظيفة
+            q_del_sess = (
+                "DELETE FROM exam_sessions WHERE exam_id = %s AND sap_id = %s"
+                if is_pg
+                else "DELETE FROM exam_sessions WHERE exam_id = ? AND sap_id = ?"
+            )
+            c.execute(q_del_sess, (exam_id, sap_id_clean))
+            q_reset_perm = (
+                "UPDATE retake_permissions SET allowed = 0 WHERE exam_id = %s AND sap_id = %s"
+                if is_pg
+                else "UPDATE retake_permissions SET allowed = 0 WHERE exam_id = ? AND sap_id = ?"
+            )
+            c.execute(q_reset_perm, (exam_id, sap_id_clean))
+
+        # تسجيل جلسة دخول جديدة "قيد التقدم" - بمجرد الدخول تُحسب المحاولة وتمنع أي فتح متزامن آخر
+        q_ins_sess = (
+            "INSERT INTO exam_sessions (exam_id, sap_id, status) VALUES (%s, %s, 'in_progress')"
+            if is_pg
+            else "INSERT INTO exam_sessions (exam_id, sap_id, status) VALUES (?, ?, 'in_progress')"
+        )
+        c.execute(q_ins_sess, (exam_id, sap_id_clean))
+        conn.commit()
 
     q_qs = (
         "SELECT id, branch, question, image_url, options FROM questions WHERE exam_id = %s"
@@ -1068,6 +1453,12 @@ async def get_exam_questions(exam_id: int, sap_id: Optional[str] = None):
         for r in c.fetchall()
     ]
     conn.close()
+
+    # ترتيب عشوائي للأسئلة ولخيارات كل سؤال لكل متحن على حدة
+    random.shuffle(questions)
+    for q in questions:
+        random.shuffle(q["options"])
+
     return {"duration": exam[0], "questions": questions}
 
 
@@ -1147,6 +1538,17 @@ async def submit_exam(exam_id: int, payload: Dict[str, object]):
     )
     c.execute(q_ret, (exam_id, sap_id))
 
+    # تحديث جلسة الدخول لتصبح "تم التسليم" (أو إنشاؤها لو غير موجودة لأي سبب)
+    if is_pg:
+        q_sess_upsert = """INSERT INTO exam_sessions (exam_id, sap_id, status, submitted_at)
+                            VALUES (%s, %s, 'submitted', CURRENT_TIMESTAMP)
+                            ON CONFLICT(exam_id, sap_id) DO UPDATE SET status='submitted', submitted_at=CURRENT_TIMESTAMP"""
+    else:
+        q_sess_upsert = """INSERT INTO exam_sessions (exam_id, sap_id, status, submitted_at)
+                            VALUES (?, ?, 'submitted', CURRENT_TIMESTAMP)
+                            ON CONFLICT(exam_id, sap_id) DO UPDATE SET status='submitted', submitted_at=CURRENT_TIMESTAMP"""
+    c.execute(q_sess_upsert, (exam_id, sap_id))
+
     conn.commit()
     conn.close()
 
@@ -1158,6 +1560,29 @@ async def submit_exam(exam_id: int, payload: Dict[str, object]):
         "overall_level": overall_lvl,
         "branch_results": branch_results,
     }
+
+
+@app.get("/api/admin/exams/{exam_id}/in-progress-users")
+async def get_in_progress_users(exam_id: int):
+    """قائمة الأفراد الذين فتحوا الامتحان ولم يقوموا بتسليمه بعد (محاولة مستهلكة تحتاج إذن الإدارة لإعادتها)."""
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q = (
+        """SELECT es.sap_id, u.name, es.started_at
+           FROM exam_sessions es LEFT JOIN users u ON es.sap_id = u.sap_id
+           WHERE es.exam_id = %s AND es.status = 'in_progress' ORDER BY es.started_at DESC"""
+        if is_pg
+        else """SELECT es.sap_id, u.name, es.started_at
+           FROM exam_sessions es LEFT JOIN users u ON es.sap_id = u.sap_id
+           WHERE es.exam_id = ? AND es.status = 'in_progress' ORDER BY es.started_at DESC"""
+    )
+    c.execute(q, (exam_id,))
+    rows = c.fetchall()
+    conn.close()
+    return [
+        {"sap_id": r[0], "name": r[1] or "-", "started_at": str(r[2])}
+        for r in rows
+    ]
 
 
 @app.get("/api/admin/exams/{exam_id}/submissions")
