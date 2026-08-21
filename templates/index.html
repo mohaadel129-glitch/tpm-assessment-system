@@ -133,6 +133,7 @@
                         <span class="text-xs bg-slate-100 text-slate-600 px-3 py-1 rounded-full font-mono border border-slate-200" id="dash-user-sap"></span>
                         <span class="text-xs bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full font-bold border border-indigo-100" id="dash-user-role"></span>
                         <span class="text-xs bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full font-bold border border-emerald-100" id="dash-user-dept"></span>
+                        <span id="dash-user-teams" class="flex flex-wrap gap-1"></span>
                     </div>
                 </div>
                 <div class="flex gap-2">
@@ -219,26 +220,35 @@
                 <aside class="w-full lg:w-64 flex-shrink-0 lg:sticky lg:top-20">
                     <div class="bg-white/95 backdrop-blur-sm rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 p-2.5">
                         <div class="flex lg:flex-col gap-1.5 overflow-x-auto lg:overflow-visible no-scrollbar" id="admin-tabs">
-                            <button type="button" onclick="switchAdminTab('admin-tab-settings')" data-tab="admin-tab-settings" class="admin-tab-btn admin-tab-active shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                            <button type="button" data-super-only="1" onclick="switchAdminTab('admin-tab-settings')" data-tab="admin-tab-settings" class="admin-tab-btn admin-tab-active shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>⚙</span><span>إعدادات حساب الأدمن</span>
                             </button>
-                            <button type="button" onclick="switchAdminTab('admin-tab-resets')" data-tab="admin-tab-resets" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                            <button type="button" data-perm="resets" onclick="switchAdminTab('admin-tab-resets')" data-tab="admin-tab-resets" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>🔔</span><span>طلبات استعادة كلمة المرور</span>
                             </button>
-                            <button type="button" onclick="switchAdminTab('admin-tab-gallery')" data-tab="admin-tab-gallery" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                            <button type="button" data-perm="gallery" onclick="switchAdminTab('admin-tab-gallery')" data-tab="admin-tab-gallery" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>🖼</span><span>معرض الصور والوسائط</span>
                             </button>
-                            <button type="button" onclick="switchAdminTab('admin-tab-create')" data-tab="admin-tab-create" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                            <button type="button" data-perm="create" onclick="switchAdminTab('admin-tab-create')" data-tab="admin-tab-create" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>📝</span><span>إنشاء دورة جديدة</span>
                             </button>
-                            <button type="button" onclick="switchAdminTab('admin-tab-manage')" data-tab="admin-tab-manage" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                            <button type="button" data-perm="manage" onclick="switchAdminTab('admin-tab-manage')" data-tab="admin-tab-manage" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>🔍</span><span>إدارة وطباعة الامتحانات</span>
                             </button>
-                            <button type="button" onclick="switchAdminTab('admin-tab-users')" data-tab="admin-tab-users" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                            <button type="button" data-perm="users" onclick="switchAdminTab('admin-tab-users')" data-tab="admin-tab-users" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>👥</span><span>إدارة المشتركين</span>
+                            </button>
+                            <button type="button" data-perm="teams" onclick="switchAdminTab('admin-tab-teams')" data-tab="admin-tab-teams" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                                <span>🧩</span><span>إدارة الفرق</span>
+                            </button>
+                            <button type="button" data-super-only="1" onclick="switchAdminTab('admin-tab-admins')" data-tab="admin-tab-admins" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                                <span>👔</span><span>إدارة حسابات المديرين</span>
                             </button>
                         </div>
                     </div>
+                    <button type="button" id="sub-admin-change-pass-btn" onclick="subAdminChangePassword()" class="hidden w-full mt-2.5 flex items-center justify-center gap-2 text-xs font-bold px-4 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all">
+                        🔑 تغيير كلمة مروري
+                    </button>
                 </aside>
 
                 <!-- محتوى التبويب -->
@@ -307,6 +317,14 @@
                         <span class="text-slate-400 col-span-3">جاري تحميل الإدارات...</span>
                     </div>
                 </div>
+
+                <div class="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/70 space-y-1">
+                    <label class="block text-xs font-bold text-slate-700">تخصيص الامتحان لفرق معينة (اختياري):</label>
+                    <div id="adm-team-target-container" class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                        <label class="flex items-center gap-1.5"><input type="checkbox" name="team_target" value="الكل" checked> الكل</label>
+                        <span class="text-slate-400 col-span-3">جاري تحميل الفرق...</span>
+                    </div>
+                </div>
                 <button onclick="uploadExamExcel()" class="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white px-6 py-2.5 rounded-xl font-bold text-xs transition-all shadow-md shadow-indigo-200 hover:-translate-y-0.5">حفظ ونشر الامتحان</button>
             </div>
 
@@ -341,6 +359,13 @@
                 </div>
 
                 <div id="adm-preview-container" class="hidden space-y-4 pt-4 border-t"></div>
+
+                <!-- محاولات مفتوحة لم تُكمل (دخل الامتحان ولم يسلّم) -->
+                <div id="adm-in-progress-section" class="hidden space-y-2 pt-4 border-t">
+                    <h4 class="text-sm font-bold text-amber-800">⏳ محاولات مفتوحة لم تُكمل (دخلوا الامتحان ولم يسلّموا)</h4>
+                    <p class="text-[11px] text-slate-500">هؤلاء استهلكوا محاولتهم بمجرد الدخول ولن يستطيعوا إعادة المحاولة إلا بالسماح لهم صراحة.</p>
+                    <div id="adm-in-progress-list" class="space-y-1.5"></div>
+                </div>
 
                 <!-- إدارة نتائج المتدربين للامتحان المختار -->
                 <div id="adm-submissions-section" class="hidden space-y-3 pt-4 border-t">
@@ -402,6 +427,7 @@
                                 <th class="p-2.5">الاسم</th>
                                 <th class="p-2.5">الدور</th>
                                 <th class="p-2.5">الإدارة</th>
+                                <th class="p-2.5">الفرق</th>
                                 <th class="p-2.5">كلمة المرور</th>
                                 <th class="p-2.5 text-center">إعادة الامتحان</th>
                                 <th class="p-2.5 text-center">حذف</th>
@@ -410,6 +436,45 @@
                         <tbody id="adm-users-table-body" class="divide-y"></tbody>
                     </table>
                 </div>
+            </div>
+
+            <!-- ز. إدارة الفرق -->
+            <div id="admin-tab-teams" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
+                <h3 class="text-lg font-bold text-slate-800 border-b pb-2">🧩 إدارة الفرق</h3>
+                <p class="text-[11px] text-slate-500">أنشئ الفرق هنا، ثم خصّص فريق كل مستخدم من تبويب "إدارة المشتركين" (حتى فريقين لكل فرد كحد أقصى). يمكنك أيضاً إتاحة امتحان معين لفريق محدد فقط من تبويب "إنشاء دورة جديدة".</p>
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <input type="text" id="adm-team-name" placeholder="اسم الفريق الجديد (مثال: فريق الصيانة الوقائية)" class="flex-1 px-3 py-2.5 border border-slate-200 bg-slate-50/60 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white transition-all">
+                    <button onclick="addTeam()" class="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs whitespace-nowrap transition-all shadow-md shadow-indigo-200 hover:-translate-y-0.5">➕ إضافة فريق</button>
+                </div>
+                <div id="adm-teams-list" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2"></div>
+            </div>
+
+            <!-- ح. إدارة حسابات المديرين (أدمن مركزي فقط) -->
+            <div id="admin-tab-admins" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
+                <h3 class="text-lg font-bold text-slate-800 border-b pb-2">👔 إدارة حسابات المديرين (أدمن عادي)</h3>
+                <p class="text-[11px] text-slate-500">أنشئ حساب مدير بصلاحيات محددة. سيدخل المدير من نفس بوابة "دخول الإدارة" ببياناته الخاصة، وسيرى فقط التبويبات المسموح له بها.</p>
+                <div class="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/70 space-y-3">
+                    <h4 class="text-xs font-bold text-slate-700">إنشاء / تعديل حساب مدير:</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                        <input type="text" id="adm-sub-sap" placeholder="رقم SAP" class="px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                        <input type="text" id="adm-sub-name" placeholder="اسم المدير" class="px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                        <input type="email" id="adm-sub-email" placeholder="البريد الإلكتروني" class="px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                        <input type="password" id="adm-sub-pass" placeholder="كلمة المرور" class="px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1.5">الصلاحيات الممنوحة (التبويبات التي سيراها):</label>
+                        <div class="flex flex-wrap gap-3 text-xs" id="adm-sub-perms-container">
+                            <label class="flex items-center gap-1.5"><input type="checkbox" name="sub_perm" value="resets"> طلبات استعادة كلمة المرور</label>
+                            <label class="flex items-center gap-1.5"><input type="checkbox" name="sub_perm" value="gallery"> معرض الصور</label>
+                            <label class="flex items-center gap-1.5"><input type="checkbox" name="sub_perm" value="create"> إنشاء دورة</label>
+                            <label class="flex items-center gap-1.5"><input type="checkbox" name="sub_perm" value="manage"> إدارة الامتحانات</label>
+                            <label class="flex items-center gap-1.5"><input type="checkbox" name="sub_perm" value="users"> إدارة المشتركين</label>
+                            <label class="flex items-center gap-1.5"><input type="checkbox" name="sub_perm" value="teams"> إدارة الفرق</label>
+                        </div>
+                    </div>
+                    <button onclick="addSubAdmin()" class="bg-gradient-to-r from-slate-700 to-slate-900 hover:from-slate-800 hover:to-black text-white px-4 py-2 rounded-xl text-xs font-bold">حفظ حساب المدير</button>
+                </div>
+                <div id="adm-sub-admins-list" class="space-y-2"></div>
             </div>
 
                 </div>
@@ -451,6 +516,22 @@
         </div>
     </div>
 
+    <!-- نافذة تعيين فرق المستخدم -->
+    <div id="team-assign-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 max-h-[85vh] flex flex-col shadow-2xl">
+            <div class="flex justify-between items-center border-b pb-2">
+                <div>
+                    <h3 class="font-bold text-slate-800 text-base">تحديد فرق المستخدم</h3>
+                    <p id="team-assign-user-label" class="text-xs text-slate-500 mt-0.5"></p>
+                </div>
+                <button onclick="closeTeamAssignModal()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+            </div>
+            <p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">يمكن اختيار فريقين كحد أقصى لكل فرد.</p>
+            <div id="team-assign-checkboxes" class="space-y-1 overflow-y-auto flex-1"></div>
+            <button onclick="saveTeamAssignment()" class="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold py-2.5 rounded-xl transition-all shadow-md shadow-indigo-200">حفظ الفرق</button>
+        </div>
+    </div>
+
     <div id="print-area" class="hidden p-8 bg-white text-black text-sm"></div>
 
     <script>
@@ -488,7 +569,13 @@
             const logoutBtn = document.getElementById('logout-btn');
             badge.classList.remove('hidden');
             logoutBtn.classList.remove('hidden');
-            badge.innerText = role === 'admin' ? `الإدارة (${user.name})` : `${user.name} - ${user.department}`;
+            if (role === 'super_admin') {
+                badge.innerText = `الإدارة المركزية (${user.name})`;
+            } else if (role === 'admin') {
+                badge.innerText = `مدير: ${user.name}`;
+            } else {
+                badge.innerText = `${user.name} - ${user.department}`;
+            }
         }
 
         function logout() {
@@ -517,6 +604,7 @@
                     document.getElementById('dash-user-sap').innerText = `SAP: ${data.sap_id}`;
                     document.getElementById('dash-user-role').innerText = data.role;
                     document.getElementById('dash-user-dept').innerText = `الإدارة: ${data.department}`;
+                    document.getElementById('dash-user-teams').innerHTML = (data.teams || []).map(t => `<span class="text-xs bg-violet-50 text-violet-700 px-3 py-1 rounded-full font-bold border border-violet-100">🧩 ${t}</span>`).join('');
                     loadUserExamsList();
                     switchView('view-user-dashboard');
                 } else {
@@ -548,20 +636,72 @@
                 const res = await fetch('/api/auth/admin-login', { method: 'POST', body: fd });
                 const data = await res.json();
                 if (res.ok) {
-                    setSession(data, 'admin');
+                    setSession(data, data.role);
+                    currentUser.permissions = data.permissions || [];
                     switchView('view-admin-dashboard');
-                    loadAdminProfileData().catch(e => console.error(e));
+                    applyAdminPermissionsUI();
+                    if (currentUser.role === 'super_admin') {
+                        loadAdminProfileData().catch(e => console.error(e));
+                        loadSubAdmins().catch(e => console.error(e));
+                    }
                     loadResetRequests().catch(e => console.error(e));
                     loadAdminGallery().catch(e => console.error(e));
                     loadAdminUsers().catch(e => console.error(e));
                     loadAdminExamList().catch(e => console.error(e));
                     loadDeptTargetCheckboxes().catch(e => console.error(e));
+                    loadTeamsList().catch(e => console.error(e));
+                    loadTeamTargetCheckboxes().catch(e => console.error(e));
                 } else {
                     alert(data.detail || "بيانات الدخول غير صحيحة.");
                 }
             } catch (err) {
                 alert("تعذر الاتصال بالسيرفر!");
             }
+        }
+
+        // --- تطبيق صلاحيات الأدمن على واجهة لوحة التحكم ---
+        function applyAdminPermissionsUI() {
+            const role = currentUser?.role;
+            const perms = currentUser?.permissions || [];
+            const isSuper = role === 'super_admin';
+
+            // تبويبات مقصورة على الأدمن المركزي فقط
+            document.querySelectorAll('[data-super-only="1"]').forEach(el => {
+                el.classList.toggle('hidden', !isSuper);
+            });
+
+            // تبويبات قابلة للتخصيص بالصلاحيات (لغير الأدمن المركزي)
+            document.querySelectorAll('[data-perm]').forEach(el => {
+                const key = el.dataset.perm;
+                const allowed = isSuper || perms.includes(key);
+                el.classList.toggle('hidden', !allowed);
+            });
+
+            // زر تغيير كلمة المرور الخاص بالمدير العادي (غير متاح للأدمن المركزي الذي له تبويب إعدادات مستقل)
+            const selfPassBtn = document.getElementById('sub-admin-change-pass-btn');
+            if (selfPassBtn) selfPassBtn.classList.toggle('hidden', role !== 'admin');
+
+            // اختيار أول تبويب ظاهر تلقائيًا
+            const firstVisibleBtn = document.querySelector('#admin-tabs .admin-tab-btn:not(.hidden)');
+            if (firstVisibleBtn) {
+                switchAdminTab(firstVisibleBtn.dataset.tab);
+            }
+        }
+
+        async function subAdminChangePassword() {
+            const oldPass = prompt("أدخل كلمة المرور الحالية:");
+            if (!oldPass) return;
+            const newPass = prompt("أدخل كلمة المرور الجديدة:");
+            if (!newPass) return;
+
+            const fd = new FormData();
+            fd.append('sap_id', currentUser.sap_id);
+            fd.append('old_password', oldPass);
+            fd.append('new_password', newPass);
+
+            const res = await fetch('/api/admin/self/change-password', { method: 'POST', body: fd });
+            const data = await res.json();
+            alert(data.message || data.detail);
         }
 
         async function loadAdminProfileData() {
@@ -676,7 +816,7 @@
                             <button onclick="startExamSession(${e.id}, '${e.name}')" class="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-md shadow-indigo-200 hover:-translate-y-0.5">بدء الامتحان الآن</button>
                         ` : `
                             <span class="text-xs font-bold px-3 py-1.5 rounded-xl ${e.already_submitted ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'}">
-                                ${e.already_submitted ? 'تم إنهاء الاختبار مسبقاً (يتطلب إذن الإدارة للإعادة)' : (e.is_expired ? 'انتهت صلاحية الاختبار' : 'معطل مؤقتاً')}
+                                ${e.in_progress ? 'بدأت هذا الامتحان ولم تُكمله (يتطلب إذن الإدارة لإعادة الدخول)' : (e.already_submitted ? 'تم إنهاء الاختبار مسبقاً (يتطلب إذن الإدارة للإعادة)' : (e.is_expired ? 'انتهت صلاحية الاختبار' : 'معطل مؤقتاً'))}
                             </span>
                         `}
                     </div>
@@ -929,6 +1069,31 @@
             }
         }
 
+        async function loadTeamTargetCheckboxes() {
+            const cont = document.getElementById('adm-team-target-container');
+            try {
+                const res = await fetch('/api/admin/teams');
+                if (!res.ok) {
+                    cont.innerHTML = `<label class="flex items-center gap-1.5"><input type="checkbox" name="team_target" value="الكل" checked> الكل</label>
+                        <span class="text-rose-500 col-span-3">تعذّر تحميل الفرق.</span>`;
+                    return;
+                }
+                const teams = await res.json();
+                let html = `<label class="flex items-center gap-1.5"><input type="checkbox" name="team_target" value="الكل" checked> الكل</label>`;
+                if (teams.length === 0) {
+                    html += `<span class="text-slate-400 col-span-3">لا توجد فرق بعد. أنشئ فريقاً من تبويب "إدارة الفرق".</span>`;
+                } else {
+                    for (const t of teams) {
+                        html += `<label class="flex items-center gap-1.5"><input type="checkbox" name="team_target" value="${t.name}"> ${t.name}</label>`;
+                    }
+                }
+                cont.innerHTML = html;
+            } catch (e) {
+                cont.innerHTML = `<label class="flex items-center gap-1.5"><input type="checkbox" name="team_target" value="الكل" checked> الكل</label>
+                    <span class="text-rose-500 col-span-3">تعذّر الاتصال بالسيرفر لتحميل الفرق.</span>`;
+            }
+        }
+
         async function uploadExamExcel() {
             const name = document.getElementById('adm-exam-name').value.trim();
             const duration = document.getElementById('adm-exam-duration').value;
@@ -937,12 +1102,14 @@
             if (!name || !file) return alert("يرجى كتابة اسم الامتحان واختيار الملف.");
 
             const selectedDepts = Array.from(document.querySelectorAll('input[name="dept_target"]:checked')).map(cb => cb.value);
+            const selectedTeams = Array.from(document.querySelectorAll('input[name="team_target"]:checked')).map(cb => cb.value);
 
             const fd = new FormData();
             fd.append('exam_name', name);
             fd.append('duration', duration);
             fd.append('valid_until', validity);
             fd.append('departments', JSON.stringify(selectedDepts));
+            fd.append('teams', JSON.stringify(selectedTeams.length ? selectedTeams : ['الكل']));
             fd.append('file', file);
 
             try {
@@ -980,6 +1147,7 @@
             document.getElementById('adm-curr-hide-lb').checked = !!data.hide_leaderboard;
 
             loadExamSubmissionsForAdmin(examId);
+            loadInProgressUsersForAdmin(examId);
 
             const cont = document.getElementById('adm-preview-container');
             cont.classList.remove('hidden');
@@ -1076,7 +1244,31 @@
             document.getElementById('adm-exam-control-bar').classList.add('hidden');
             document.getElementById('adm-preview-container').classList.add('hidden');
             document.getElementById('adm-submissions-section').classList.add('hidden');
+            document.getElementById('adm-in-progress-section').classList.add('hidden');
             loadAdminExamList();
+        }
+
+        async function loadInProgressUsersForAdmin(examId) {
+            const section = document.getElementById('adm-in-progress-section');
+            const list = document.getElementById('adm-in-progress-list');
+            try {
+                const res = await fetch(`/api/admin/exams/${examId}/in-progress-users`);
+                if (!res.ok) { section.classList.add('hidden'); return; }
+                const rows = await res.json();
+                if (rows.length === 0) {
+                    section.classList.add('hidden');
+                    return;
+                }
+                section.classList.remove('hidden');
+                list.innerHTML = rows.map(r => `
+                    <div class="flex items-center justify-between p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs">
+                        <span><strong class="text-slate-800">${r.name}</strong> <span class="font-mono text-slate-500">(SAP: ${r.sap_id})</span> - بدأ في: ${r.started_at}</span>
+                        <button onclick="allowUserRetake('${r.sap_id}')" class="bg-amber-200 hover:bg-amber-300 text-amber-900 px-2.5 py-1 rounded-lg font-bold">السماح بإعادة الدخول</button>
+                    </div>
+                `).join('');
+            } catch (e) {
+                section.classList.add('hidden');
+            }
         }
 
         async function loadExamSubmissionsForAdmin(examId) {
@@ -1198,6 +1390,12 @@
                     <td class="p-2.5 font-bold">${u.name}</td>
                     <td class="p-2.5 text-slate-600">${u.role}</td>
                     <td class="p-2.5 text-slate-600">${u.department}</td>
+                    <td class="p-2.5">
+                        <div class="flex flex-wrap gap-1 items-center">
+                            ${(u.teams || []).map(t => `<span class="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100 whitespace-nowrap">${t.name}</span>`).join('') || '<span class="text-[10px] text-slate-400">بدون فريق</span>'}
+                            <button onclick="openTeamAssignModal('${u.sap_id}', '${u.name.replace(/'/g, "\\'")}')" class="text-[10px] text-indigo-600 hover:underline font-bold whitespace-nowrap">تعديل</button>
+                        </div>
+                    </td>
                     <td class="p-2.5 font-mono text-indigo-600 font-bold">${u.password}</td>
                     <td class="p-2.5 text-center">
                         <button onclick="allowUserRetake('${u.sap_id}')" class="bg-amber-100 text-amber-900 px-2 py-1 rounded text-[11px] font-bold hover:bg-amber-200">السماح بالإعادة</button>
@@ -1278,6 +1476,159 @@
             if (!confirm(`هل أنت متأكد من حذف المستخدم رقم ${sapId}؟`)) return;
             await fetch(`/api/admin/delete-user/${sapId}`, { method: 'DELETE' });
             loadAdminUsers();
+        }
+
+        // --- إدارة الفرق ---
+        let allTeamsCache = [];
+
+        async function loadTeamsList() {
+            const res = await fetch('/api/admin/teams');
+            allTeamsCache = await res.json();
+            const cont = document.getElementById('adm-teams-list');
+            if (!cont) return;
+            if (allTeamsCache.length === 0) {
+                cont.innerHTML = '<p class="text-slate-500 text-xs col-span-full">لا توجد فرق بعد. أضف أول فريق من الأعلى.</p>';
+                return;
+            }
+            cont.innerHTML = allTeamsCache.map(t => `
+                <div class="flex items-center justify-between p-3 bg-slate-50/80 border border-slate-200/70 rounded-xl text-xs">
+                    <span class="font-bold text-slate-700">🧩 ${t.name}</span>
+                    <button onclick="deleteTeam(${t.id}, '${t.name}')" class="text-rose-600 hover:text-rose-800 font-bold">حذف</button>
+                </div>
+            `).join('');
+        }
+
+        async function addTeam() {
+            const input = document.getElementById('adm-team-name');
+            const name = input.value.trim();
+            if (!name) return alert("يرجى كتابة اسم الفريق.");
+            const fd = new FormData();
+            fd.append('name', name);
+            const res = await fetch('/api/admin/teams/add', { method: 'POST', body: fd });
+            const data = await res.json();
+            alert(data.message);
+            input.value = '';
+            loadTeamsList();
+            loadTeamTargetCheckboxes();
+        }
+
+        async function deleteTeam(teamId, teamName) {
+            if (!confirm(`حذف فريق "${teamName}"؟ سيتم إزالته من كل الأفراد المشتركين به.`)) return;
+            await fetch(`/api/admin/teams/${teamId}`, { method: 'DELETE' });
+            loadTeamsList();
+            loadTeamTargetCheckboxes();
+            loadAdminUsers();
+        }
+
+        // --- تعيين فرق المستخدم (حتى فريقين كحد أقصى) ---
+        let teamAssignTargetSap = null;
+
+        async function openTeamAssignModal(sapId, userName) {
+            teamAssignTargetSap = sapId;
+            document.getElementById('team-assign-user-label').innerText = `${userName} (SAP: ${sapId})`;
+            const res = await fetch(`/api/admin/users/${sapId}/teams`);
+            const currentTeams = await res.json();
+            const currentIds = currentTeams.map(t => t.id);
+
+            const cont = document.getElementById('team-assign-checkboxes');
+            if (allTeamsCache.length === 0) {
+                cont.innerHTML = '<p class="text-slate-500 text-xs">لا توجد فرق بعد. أنشئ فرقاً أولاً من تبويب "إدارة الفرق".</p>';
+            } else {
+                cont.innerHTML = allTeamsCache.map(t => `
+                    <label class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 cursor-pointer">
+                        <input type="checkbox" name="team_assign_cb" value="${t.id}" ${currentIds.includes(t.id) ? 'checked' : ''} onchange="enforceMaxTwoTeams(this)">
+                        <span class="text-sm">${t.name}</span>
+                    </label>
+                `).join('');
+            }
+            document.getElementById('team-assign-modal').classList.remove('hidden');
+        }
+
+        function enforceMaxTwoTeams(changedBox) {
+            const checked = document.querySelectorAll('input[name="team_assign_cb"]:checked');
+            if (checked.length > 2) {
+                changedBox.checked = false;
+                alert("لا يمكن أن يكون الفرد مشتركاً في أكثر من فريقين.");
+            }
+        }
+
+        function closeTeamAssignModal() {
+            document.getElementById('team-assign-modal').classList.add('hidden');
+            teamAssignTargetSap = null;
+        }
+
+        async function saveTeamAssignment() {
+            if (!teamAssignTargetSap) return;
+            const ids = Array.from(document.querySelectorAll('input[name="team_assign_cb"]:checked')).map(cb => parseInt(cb.value));
+            const fd = new FormData();
+            fd.append('team_ids', JSON.stringify(ids));
+            const res = await fetch(`/api/admin/users/${teamAssignTargetSap}/set-teams`, { method: 'POST', body: fd });
+            const data = await res.json();
+            if (!res.ok) return alert(data.detail || "فشل حفظ الفرق.");
+            alert(data.message);
+            closeTeamAssignModal();
+            loadAdminUsers();
+        }
+
+        // --- إدارة حسابات المديرين (أدمن مركزي فقط) ---
+        async function loadSubAdmins() {
+            const res = await fetch('/api/admin/admins');
+            const admins = await res.json();
+            const cont = document.getElementById('adm-sub-admins-list');
+            if (!cont) return;
+            if (admins.length === 0) {
+                cont.innerHTML = '<p class="text-slate-500 text-xs">لا يوجد حسابات مديرين بعد.</p>';
+                return;
+            }
+            const permLabels = {
+                resets: 'استعادة كلمة المرور', gallery: 'معرض الصور', create: 'إنشاء دورة',
+                manage: 'إدارة الامتحانات', users: 'إدارة المشتركين', teams: 'إدارة الفرق'
+            };
+            cont.innerHTML = admins.map(a => `
+                <div class="p-3.5 bg-slate-50/80 border border-slate-200/70 rounded-2xl flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+                    <div>
+                        <span class="font-bold text-slate-800">${a.name}</span>
+                        <span class="text-xs text-slate-500 font-mono"> (SAP: ${a.sap_id} - ${a.email})</span>
+                        <div class="flex flex-wrap gap-1 mt-1">
+                            ${a.permissions.length ? a.permissions.map(p => `<span class="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100">${permLabels[p] || p}</span>`).join('') : '<span class="text-[10px] text-slate-400">بدون صلاحيات محددة</span>'}
+                        </div>
+                    </div>
+                    <button onclick="deleteSubAdmin('${a.sap_id}')" class="text-rose-600 hover:text-rose-800 font-bold text-xs shrink-0">حذف الحساب</button>
+                </div>
+            `).join('');
+        }
+
+        async function addSubAdmin() {
+            const sap = document.getElementById('adm-sub-sap').value.trim();
+            const name = document.getElementById('adm-sub-name').value.trim();
+            const email = document.getElementById('adm-sub-email').value.trim();
+            const pass = document.getElementById('adm-sub-pass').value.trim();
+            if (!sap || !name || !email || !pass) return alert("يرجى ملء كافة الحقول.");
+
+            const perms = Array.from(document.querySelectorAll('input[name="sub_perm"]:checked')).map(cb => cb.value);
+
+            const fd = new FormData();
+            fd.append('sap_id', sap);
+            fd.append('name', name);
+            fd.append('email', email);
+            fd.append('password', pass);
+            fd.append('permissions', JSON.stringify(perms));
+
+            const res = await fetch('/api/admin/admins/add', { method: 'POST', body: fd });
+            const data = await res.json();
+            alert(data.message);
+            loadSubAdmins();
+            document.getElementById('adm-sub-sap').value = '';
+            document.getElementById('adm-sub-name').value = '';
+            document.getElementById('adm-sub-email').value = '';
+            document.getElementById('adm-sub-pass').value = '';
+            document.querySelectorAll('input[name="sub_perm"]').forEach(cb => cb.checked = false);
+        }
+
+        async function deleteSubAdmin(sapId) {
+            if (!confirm(`هل أنت متأكد من حذف حساب المدير رقم ${sapId}؟`)) return;
+            await fetch(`/api/admin/admins/${sapId}`, { method: 'DELETE' });
+            loadSubAdmins();
         }
 
         // --- Print A4 Engine ---
