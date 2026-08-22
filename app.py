@@ -1553,6 +1553,31 @@ async def list_exams(
     return exams
 
 
+@app.get("/api/admin/exams")
+async def list_admin_exams(_admin: Dict[str, object] = Depends(require_permission("manage"))):
+    # قائمة كل الامتحانات لاستخدام لوحة تحكم الإدارة (مثل قائمة المعاينة)،
+    # بدون منطق تصفية الطالب الموجود في /api/exams والذي يتطلب توكن نوعه "user" فقط.
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    c.execute(
+        "SELECT id, name, duration_minutes, departments, teams, is_active, valid_until FROM exams ORDER BY id DESC"
+    )
+    rows = c.fetchall()
+    conn.close()
+    return [
+        {
+            "id": r[0],
+            "name": r[1],
+            "duration": r[2],
+            "departments": json.loads(r[3]) if r[3] else ["الكل"],
+            "teams": json.loads(r[4]) if r[4] else ["الكل"],
+            "is_active": bool(r[5]),
+            "valid_until": r[6],
+        }
+        for r in rows
+    ]
+
+
 @app.get("/api/admin/exams/{exam_id}/preview")
 async def preview_exam(
     exam_id: int, _admin: Dict[str, object] = Depends(require_permission("manage"))
