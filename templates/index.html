@@ -595,6 +595,7 @@
     <div id="print-area" class="hidden p-8 bg-white text-black text-sm"></div>
 
     <script>
+        console.log('%c[TPM App Build] auth-fix-v2 — apiFetch skips session-expired handling on /api/auth/* endpoints', 'color:#4f46e5;font-weight:bold;');
         let currentUser = null;
         let authToken = localStorage.getItem('authToken') || null;
         let activeQuestions = [];
