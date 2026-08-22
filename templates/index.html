@@ -611,7 +611,11 @@
                 opts.headers['Authorization'] = `Bearer ${authToken}`;
             }
             const res = await window.fetch(url, opts);
-            if (res.status === 401 && authToken) {
+            // نقاط الدخول العامة (تسجيل الدخول / طلب استعادة كلمة المرور) لا تحتاج توكن أصلاً،
+            // وأي 401 منها معناه بيانات دخول خاطئة، وليس "انتهاء جلسة" - فلا نطبّق منطق انتهاء الجلسة عليها
+            const isPublicAuthCall = ['/api/auth/admin-login', '/api/auth/user-login', '/api/auth/request-reset']
+                .some(p => url.includes(p));
+            if (res.status === 401 && authToken && !isPublicAuthCall) {
                 // كانت هناك جلسة مسجّلة بالفعل وانتهت صلاحيتها أو أصبحت غير صالحة
                 handleSessionExpired();
             }
@@ -679,6 +683,9 @@
         // --- Auth Handlers ---
         async function handleUserLogin(e) {
             e.preventDefault();
+            // مسح أي توكن قديم متبقٍ من جلسة سابقة قبل محاولة دخول جديدة، لتفادي تعارضه مع الطلب الحالي
+            authToken = null;
+            localStorage.removeItem('authToken');
             const sap = document.getElementById('user-login-sap').value;
             const pass = document.getElementById('user-login-pass').value;
             const fd = new FormData();
@@ -719,6 +726,9 @@
 
         async function handleAdminLogin(e) {
             e.preventDefault();
+            // مسح أي توكن قديم متبقٍ من جلسة سابقة قبل محاولة دخول جديدة، لتفادي تعارضه مع الطلب الحالي
+            authToken = null;
+            localStorage.removeItem('authToken');
             try {
                 const fd = new FormData();
                 fd.append('sap_id', document.getElementById('admin-login-sap').value);
