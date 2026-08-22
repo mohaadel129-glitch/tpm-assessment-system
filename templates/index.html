@@ -136,7 +136,8 @@
                         <span id="dash-user-teams" class="flex flex-wrap gap-1"></span>
                     </div>
                 </div>
-                <div class="flex gap-2">
+                <div class="flex gap-2 flex-wrap">
+                    <button onclick="openMySkillMatrix()" class="text-xs bg-violet-50 hover:bg-violet-100 text-violet-700 px-3 py-2 rounded-xl font-bold transition">🎯 مصفوفة مهاراتي</button>
                     <button onclick="toggleUserHistory()" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-xl font-bold transition">📊 سجل نتائجي السابقة</button>
                     <button onclick="togglePasswordModal()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl font-bold transition">🔒 تغيير كلمة المرور</button>
                 </div>
@@ -212,6 +213,15 @@
             <button onclick="switchView('view-user-dashboard')" class="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white px-6 py-2.5 rounded-xl font-bold transition-all shadow-md shadow-indigo-200 hover:-translate-y-0.5">العودة للرئيسية</button>
         </div>
 
+        <!-- 5-ب. مصفوفة المهارات الخاصة بالفرد -->
+        <div id="view-skill-matrix" class="view-panel hidden bg-white/95 backdrop-blur-sm p-6 sm:p-8 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="text-xl font-bold text-slate-800">🎯 مصفوفة المهارات الخاصة بي</h3>
+                <button onclick="switchView('view-user-dashboard')" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl font-bold transition">العودة للرئيسية</button>
+            </div>
+            <div id="skill-matrix-content"></div>
+        </div>
+
         <!-- 6. لوحة تحكم الإدارة الكاملة -->
         <div id="view-admin-dashboard" class="view-panel hidden">
             <div class="flex flex-col lg:flex-row gap-5 lg:gap-6 items-start">
@@ -240,6 +250,12 @@
                             </button>
                             <button type="button" data-perm="teams" onclick="switchAdminTab('admin-tab-teams')" data-tab="admin-tab-teams" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>🧩</span><span>إدارة الفرق</span>
+                            </button>
+                            <button type="button" data-perm="analytics" onclick="switchAdminTab('admin-tab-analytics')" data-tab="admin-tab-analytics" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                                <span>📊</span><span>لوحة التحليلات</span>
+                            </button>
+                            <button type="button" data-perm="skills" onclick="switchAdminTab('admin-tab-skills')" data-tab="admin-tab-skills" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                                <span>🎯</span><span>مصفوفة المهارات</span>
                             </button>
                             <button type="button" data-super-only="1" onclick="switchAdminTab('admin-tab-admins')" data-tab="admin-tab-admins" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>👔</span><span>إدارة حسابات المديرين</span>
@@ -395,7 +411,7 @@
             <div id="admin-tab-users" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-5">
                 <div class="flex justify-between items-center border-b pb-3">
                     <h3 class="text-lg font-bold text-slate-800">👥 إدارة المشتركين وأذونات إعادة الامتحان</h3>
-                    <a href="/api/admin/download-users-template" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-xl font-bold">📥 تنزيل قالب شيت المستخدمين</a>
+                    <button onclick="downloadUsersTemplate()" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-xl font-bold">📥 تنزيل قالب شيت المستخدمين</button>
                 </div>
 
                 <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
@@ -447,6 +463,50 @@
                     <button onclick="addTeam()" class="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs whitespace-nowrap transition-all shadow-md shadow-indigo-200 hover:-translate-y-0.5">➕ إضافة فريق</button>
                 </div>
                 <div id="adm-teams-list" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2"></div>
+            </div>
+
+            <!-- ط. لوحة التحليلات -->
+            <div id="admin-tab-analytics" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-5">
+                <div class="flex justify-between items-center border-b pb-2">
+                    <h3 class="text-lg font-bold text-slate-800">📊 لوحة التحليلات العامة</h3>
+                    <button onclick="loadAnalytics()" class="text-xs font-bold text-indigo-600 hover:underline">🔄 تحديث</button>
+                </div>
+                <div id="analytics-overview-cards" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
+                <div>
+                    <h4 class="text-sm font-bold text-slate-700 mb-2">توزيع المستويات الإجمالي (كل الامتحانات)</h4>
+                    <div id="analytics-overall-levels" class="space-y-1.5"></div>
+                </div>
+                <div>
+                    <h4 class="text-sm font-bold text-slate-700 mb-2">تفاصيل كل دورة / امتحان</h4>
+                    <div id="analytics-per-exam" class="space-y-3"></div>
+                </div>
+            </div>
+
+            <!-- ي. مصفوفة المهارات -->
+            <div id="admin-tab-skills" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
+                <h3 class="text-lg font-bold text-slate-800 border-b pb-2">🎯 مصفوفة المهارات - المتطلبات حسب المسمى الوظيفي</h3>
+                <p class="text-[11px] text-slate-500">حدد المهارات المطلوبة لكل مسمى وظيفي (فني صيانة، فني إنتاج، مهندس، مشرف...)، ويمكن ربط كل مهارة بامتحان موجود بحيث يظهر للفرد تلقائياً هل تحقق المستوى المطلوب أم لا في صفحته الشخصية.</p>
+                <div class="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/70 space-y-3">
+                    <h4 class="text-xs font-bold text-slate-700">إضافة متطلب مهارة جديد:</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <input type="text" id="skill-role" placeholder="المسمى الوظيفي (مثال: فني صيانة)" class="px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                        <input type="text" id="skill-name" placeholder="اسم المهارة (مثال: أساسيات الهيدروليك)" class="px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                    </div>
+                    <textarea id="skill-desc" placeholder="وصف مختصر للمهارة (اختياري)" class="w-full px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all"></textarea>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <select id="skill-linked-exam" class="px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all cursor-pointer">
+                            <option value="">بدون ربط بامتحان (متطلب مرجعي فقط)</option>
+                        </select>
+                        <select id="skill-required-level" class="px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all cursor-pointer">
+                            <option value="المستوى 1 (مبتدئ)">الحد الأدنى: المستوى 1 (مبتدئ)</option>
+                            <option value="المستوى 2 (متوسط)" selected>الحد الأدنى: المستوى 2 (متوسط)</option>
+                            <option value="المستوى 3 (متقدم)">الحد الأدنى: المستوى 3 (متقدم)</option>
+                            <option value="المستوى 4 (خبير)">الحد الأدنى: المستوى 4 (خبير)</option>
+                        </select>
+                    </div>
+                    <button onclick="addSkillRequirement()" class="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-200">إضافة المتطلب</button>
+                </div>
+                <div id="skills-list-container" class="space-y-4"></div>
             </div>
 
             <!-- ح. إدارة حسابات المديرين (أدمن مركزي فقط) -->
@@ -587,6 +647,8 @@
             document.querySelectorAll('.admin-tab-btn').forEach(btn => {
                 btn.classList.toggle('admin-tab-active', btn.dataset.tab === tabId);
             });
+            if (tabId === 'admin-tab-analytics') loadAnalytics();
+            if (tabId === 'admin-tab-skills') loadSkills();
         }
 
         function setSession(user, role) {
@@ -1622,6 +1684,182 @@
             loadAdminUsers();
         }
 
+        // --- لوحة التحليلات ---
+        async function loadAnalytics() {
+            const res = await apiFetch('/api/admin/analytics/overview');
+            if (!res.ok) return;
+            const data = await res.json();
+
+            document.getElementById('analytics-overview-cards').innerHTML = `
+                <div class="p-4 bg-gradient-to-br from-indigo-50 to-violet-50 rounded-2xl border border-indigo-100 text-center">
+                    <div class="text-2xl font-black text-indigo-700">${data.total_exams}</div>
+                    <div class="text-[11px] text-slate-500 font-bold mt-1">عدد الدورات</div>
+                </div>
+                <div class="p-4 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border border-emerald-100 text-center">
+                    <div class="text-2xl font-black text-emerald-700">${data.total_participants}</div>
+                    <div class="text-[11px] text-slate-500 font-bold mt-1">أفراد أدوا امتحانات</div>
+                </div>
+                <div class="p-4 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border border-amber-100 text-center">
+                    <div class="text-2xl font-black text-amber-700">${data.total_submissions}</div>
+                    <div class="text-[11px] text-slate-500 font-bold mt-1">إجمالي المحاولات المسلّمة</div>
+                </div>
+                <div class="p-4 bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl border border-slate-200 text-center">
+                    <div class="text-2xl font-black text-slate-700">${data.overall_avg_pct}%</div>
+                    <div class="text-[11px] text-slate-500 font-bold mt-1">متوسط النسبة العام</div>
+                </div>
+            `;
+
+            const levelColors = ['bg-rose-400', 'bg-amber-400', 'bg-indigo-400', 'bg-emerald-500'];
+            document.getElementById('analytics-overall-levels').innerHTML = data.overall_level_distribution.map((l, i) => `
+                <div class="flex items-center gap-3 text-xs">
+                    <span class="w-32 shrink-0 font-bold text-slate-600">${l.level}</span>
+                    <div class="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden">
+                        <div class="h-full ${levelColors[i]} rounded-full transition-all" style="width:${l.pct}%"></div>
+                    </div>
+                    <span class="w-20 shrink-0 text-slate-500 font-mono">${l.count} (${l.pct}%)</span>
+                </div>
+            `).join('');
+
+            document.getElementById('analytics-per-exam').innerHTML = data.per_exam.length === 0
+                ? '<p class="text-slate-400 text-xs">لا توجد امتحانات بعد.</p>'
+                : data.per_exam.map(e => `
+                    <div class="p-3.5 bg-slate-50/80 border border-slate-200/70 rounded-2xl space-y-2">
+                        <div class="flex flex-wrap justify-between items-center gap-2">
+                            <span class="font-bold text-slate-800 text-sm">${e.exam_name}</span>
+                            <span class="text-[11px] text-slate-500">👥 ${e.participants} مشارك — متوسط ${e.avg_pct}%</span>
+                        </div>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-1.5">
+                            ${e.level_distribution.map((l, i) => `
+                                <div class="text-[10px] bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-center">
+                                    <div class="font-bold ${['text-rose-600','text-amber-600','text-indigo-600','text-emerald-600'][i]}">${l.pct}%</div>
+                                    <div class="text-slate-400">${l.level.replace('المستوى ', 'م')}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `).join('');
+        }
+
+        // --- مصفوفة المهارات (إدارة) ---
+        async function loadSkillLinkedExamOptions() {
+            // نعتمد على قائمة الامتحانات المُحمّلة أصلاً في شاشة "إدارة الامتحانات"
+            const select = document.getElementById('skill-linked-exam');
+            const sourceSelect = document.getElementById('adm-preview-select');
+            if (sourceSelect && sourceSelect.options.length > 1) {
+                select.innerHTML = '<option value="">بدون ربط بامتحان (متطلب مرجعي فقط)</option>' +
+                    Array.from(sourceSelect.options).filter(o => o.value).map(o => `<option value="${o.value}">${o.text}</option>`).join('');
+            }
+        }
+
+        async function loadSkills() {
+            await loadSkillLinkedExamOptions();
+            const res = await apiFetch('/api/admin/skills');
+            if (!res.ok) return;
+            const skills = await res.json();
+            const cont = document.getElementById('skills-list-container');
+            if (skills.length === 0) {
+                cont.innerHTML = '<p class="text-slate-400 text-xs">لا توجد متطلبات مهارات بعد.</p>';
+                return;
+            }
+            const byRole = {};
+            skills.forEach(s => { (byRole[s.role] = byRole[s.role] || []).push(s); });
+
+            cont.innerHTML = Object.entries(byRole).map(([role, items]) => `
+                <div class="p-3.5 bg-slate-50/80 border border-slate-200/70 rounded-2xl space-y-2">
+                    <h5 class="font-bold text-indigo-700 text-sm">👤 ${role}</h5>
+                    <div class="space-y-1.5">
+                        ${items.map(s => `
+                            <div class="flex items-start justify-between gap-2 bg-white p-2.5 rounded-xl border border-slate-100 text-xs">
+                                <div>
+                                    <span class="font-bold text-slate-800">${s.skill_name}</span>
+                                    ${s.description ? `<p class="text-slate-500 mt-0.5">${s.description}</p>` : ''}
+                                    <div class="flex flex-wrap gap-1.5 mt-1.5">
+                                        <span class="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100">الحد الأدنى: ${s.required_level}</span>
+                                        ${s.linked_exam_name ? `<span class="text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-100">مرتبط بامتحان: ${s.linked_exam_name}</span>` : `<span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">غير مرتبط بامتحان</span>`}
+                                    </div>
+                                </div>
+                                <button onclick="deleteSkillRequirement(${s.id})" class="text-rose-600 hover:text-rose-800 font-bold shrink-0">حذف</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function addSkillRequirement() {
+            const role = document.getElementById('skill-role').value.trim();
+            const name = document.getElementById('skill-name').value.trim();
+            const desc = document.getElementById('skill-desc').value.trim();
+            const examId = document.getElementById('skill-linked-exam').value;
+            const level = document.getElementById('skill-required-level').value;
+            if (!role || !name) return alert("يرجى كتابة المسمى الوظيفي واسم المهارة.");
+
+            const fd = new FormData();
+            fd.append('role', role);
+            fd.append('skill_name', name);
+            fd.append('description', desc);
+            if (examId) fd.append('linked_exam_id', examId);
+            fd.append('required_level', level);
+
+            const res = await apiFetch('/api/admin/skills/add', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (!res.ok) return alert(data.detail || "فشل إضافة المتطلب.");
+            document.getElementById('skill-role').value = '';
+            document.getElementById('skill-name').value = '';
+            document.getElementById('skill-desc').value = '';
+            loadSkills();
+        }
+
+        async function deleteSkillRequirement(skillId) {
+            if (!confirm("حذف متطلب المهارة هذا؟")) return;
+            await apiFetch(`/api/admin/skills/${skillId}`, { method: 'DELETE' });
+            loadSkills();
+        }
+
+        // --- مصفوفة المهارات (عرض المستخدم) ---
+        async function openMySkillMatrix() {
+            switchView('view-skill-matrix');
+            const cont = document.getElementById('skill-matrix-content');
+            cont.innerHTML = '<p class="text-slate-400 text-xs text-center py-6">جاري التحميل...</p>';
+            const res = await apiFetch(`/api/user/${currentUser.sap_id}/skill-matrix`);
+            if (!res.ok) {
+                cont.innerHTML = '<p class="text-rose-500 text-xs text-center py-6">تعذر تحميل مصفوفة المهارات.</p>';
+                return;
+            }
+            const data = await res.json();
+            if (data.skills.length === 0) {
+                cont.innerHTML = `<p class="text-slate-400 text-sm text-center py-8">لا توجد متطلبات مهارات محددة حاليًا لمسمى "${data.role}" الوظيفي.</p>`;
+                return;
+            }
+            const statusBadge = {
+                met: '<span class="text-xs bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full border border-emerald-100 font-bold">✔ تحقق المستوى المطلوب</span>',
+                below: '<span class="text-xs bg-amber-50 text-amber-700 px-3 py-1 rounded-full border border-amber-100 font-bold">⚠ دون المستوى المطلوب</span>',
+                not_assessed: '<span class="text-xs bg-slate-100 text-slate-500 px-3 py-1 rounded-full font-bold">⏳ لم يُختبر بعد</span>',
+                not_linked: '<span class="text-xs bg-slate-100 text-slate-500 px-3 py-1 rounded-full font-bold">مرجعي (غير مرتبط بامتحان)</span>',
+            };
+            cont.innerHTML = `
+                <p class="text-xs text-slate-500 mb-3">المهارات المطلوبة لمسمى: <strong class="text-indigo-700">${data.role}</strong></p>
+                <div class="space-y-2.5">
+                    ${data.skills.map(s => `
+                        <div class="p-4 bg-slate-50/80 border border-slate-200/70 rounded-2xl">
+                            <div class="flex flex-wrap justify-between items-start gap-2">
+                                <div>
+                                    <span class="font-bold text-slate-800">${s.skill_name}</span>
+                                    ${s.description ? `<p class="text-xs text-slate-500 mt-1">${s.description}</p>` : ''}
+                                </div>
+                                ${statusBadge[s.status]}
+                            </div>
+                            <div class="flex flex-wrap gap-3 mt-2 text-[11px] text-slate-500">
+                                <span>الحد الأدنى المطلوب: <strong>${s.required_level}</strong></span>
+                                ${s.achieved_level ? `<span>مستواك الحالي: <strong class="${s.status === 'met' ? 'text-emerald-600' : 'text-amber-600'}">${s.achieved_level} (${s.achieved_pct}%)</strong></span>` : ''}
+                                ${s.linked_exam_name ? `<span>الامتحان المرتبط: ${s.linked_exam_name}</span>` : ''}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
         // --- تعيين فرق المستخدم (حتى فريقين كحد أقصى) ---
         let teamAssignTargetSap = null;
 
@@ -1789,10 +2027,42 @@
             pArea.classList.add('hidden');
         }
 
-        function downloadAdminResults() {
+        async function downloadUsersTemplate() {
+            try {
+                const res = await apiFetch('/api/admin/download-users-template');
+                if (!res.ok) return alert("فشل تحميل القالب: " + await extractErrorMessage(res));
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'users_template.xlsx';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            } catch (e) {
+                alert("تعذر تحميل القالب.");
+            }
+        }
+
+        async function downloadAdminResults() {
             const examId = document.getElementById('adm-preview-select').value;
             if (!examId) return alert("اختر امتحاناً أولاً.");
-            window.location.href = `/api/admin/export-results/${examId}`;
+            try {
+                const res = await apiFetch(`/api/admin/export-results/${examId}`);
+                if (!res.ok) return alert("فشل تحميل ملف النتائج: " + await extractErrorMessage(res));
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `results_exam_${examId}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            } catch (e) {
+                alert("تعذر تحميل ملف النتائج.");
+            }
         }
 
         // --- Leaderboards ---
