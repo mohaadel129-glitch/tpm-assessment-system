@@ -1,7 +1,13 @@
+import base64
+import hashlib
+import hmac
 import io
 import json
 import os
 import random
+import re
+import secrets
+import time
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -9,7 +15,7 @@ from typing import Dict, List, Optional
 
 import cloudinary
 import cloudinary.uploader
-from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, Response, UploadFile
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -21,7 +27,116 @@ app = FastAPI(title="Enterprise Skill Matrix & Assessment System")
 
 # مفاتيح الصلاحيات المتاحة لحسابات الأدمن الفرعية (المديرين العاديين)
 # الأدمن المركزي (admin_settings) يملك كل الصلاحيات دائمًا تلقائيًا
-ADMIN_PERMISSION_KEYS = ["resets", "gallery", "create", "manage", "users", "teams"]
+ADMIN_PERMISSION_KEYS = [
+    "resets", "gallery", "create", "manage", "users", "teams", "analytics", "skills"
+]
+
+# ==================== تشفير كلمات المرور (بدون أي مكتبات خارجية) ====================
+PBKDF2_ITERATIONS = 260000
+
+
+def hash_password(password: str) -> str:
+    salt = secrets.token_hex(16)
+    dk = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt.encode("utf-8"), PBKDF2_ITERATIONS
+    )
+    return f"pbkdf2_sha256${PBKDF2_ITERATIONS}${salt}${dk.hex()}"
+
+
+def verify_password(password: str, stored: str) -> bool:
+    """يتحقق من كلمة المرور. يدعم كلمات المرور القديمة المخزّنة كنص صريح توافقًا رجعيًا
+    (لضمان استمرار عمل تسجيل الدخول لكل المستخدمين الحاليين دون أي تعطيل)."""
+    if not stored or password is None:
+        return False
+    if stored.startswith("pbkdf2_sha256$"):
+        try:
+            _, iterations, salt, hash_hex = stored.split("$")
+            dk = hashlib.pbkdf2_hmac(
+                "sha256", password.encode("utf-8"), salt.encode("utf-8"), int(iterations)
+            )
+            return hmac.compare_digest(dk.hex(), hash_hex)
+        except Exception:
+            return False
+    # توافق رجعي: كلمة مرور قديمة مخزّنة كنص صريح من قبل هذا التحديث
+    return hmac.compare_digest(stored, password)
+
+
+def is_hashed_password(stored: str) -> bool:
+    return bool(stored) and stored.startswith("pbkdf2_sha256$")
+
+
+# ==================== جلسات الدخول الموقّعة (بدون أي مكتبات خارجية) ====================
+# ملحوظة هامة للنشر: يفضّل ضبط متغيّر بيئة SECRET_KEY ثابت وسرّي على السيرفر،
+# وإلا فسيتم توليد مفتاح عشوائي مؤقت في الذاكرة يبطل كل الجلسات عند إعادة تشغيل السيرفر.
+SECRET_KEY = os.getenv("SECRET_KEY") or secrets.token_hex(32)
+TOKEN_VALID_HOURS = 12
+
+
+def create_token(payload: Dict[str, object]) -> str:
+    data = dict(payload)
+    data["exp"] = time.time() + TOKEN_VALID_HOURS * 3600
+    raw = json.dumps(data, ensure_ascii=False).encode("utf-8")
+    b64 = base64.urlsafe_b64encode(raw).decode("utf-8")
+    sig = hmac.new(SECRET_KEY.encode("utf-8"), b64.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{b64}.{sig}"
+
+
+def decode_token(token: str) -> Dict[str, object]:
+    try:
+        b64, sig = token.split(".")
+        expected_sig = hmac.new(
+            SECRET_KEY.encode("utf-8"), b64.encode("utf-8"), hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(sig, expected_sig):
+            raise ValueError("invalid signature")
+        data = json.loads(base64.urlsafe_b64decode(b64.encode("utf-8")))
+        if data.get("exp", 0) < time.time():
+            raise ValueError("expired")
+        return data
+    except Exception:
+        raise HTTPException(
+            status_code=401, detail="انتهت صلاحية الجلسة أو أنها غير صالحة، يرجى تسجيل الدخول مرة أخرى."
+        )
+
+
+async def get_current_user(authorization: Optional[str] = Header(None)) -> Dict[str, object]:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="يلزم تسجيل الدخول أولاً.")
+    payload = decode_token(authorization.split(" ", 1)[1])
+    if payload.get("type") != "user":
+        raise HTTPException(status_code=401, detail="جلسة غير صالحة.")
+    return payload
+
+
+async def get_current_admin(authorization: Optional[str] = Header(None)) -> Dict[str, object]:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="يلزم تسجيل دخول الإدارة أولاً.")
+    payload = decode_token(authorization.split(" ", 1)[1])
+    if payload.get("type") not in ("admin", "super_admin"):
+        raise HTTPException(status_code=401, detail="جلسة إدارة غير صالحة.")
+    return payload
+
+
+async def get_current_super_admin(
+    admin: Dict[str, object] = Depends(get_current_admin)
+) -> Dict[str, object]:
+    if admin.get("type") != "super_admin":
+        raise HTTPException(
+            status_code=403, detail="هذا الإجراء متاح للأدمن المركزي فقط."
+        )
+    return admin
+
+
+def require_permission(perm_key: str):
+    async def _dep(admin: Dict[str, object] = Depends(get_current_admin)):
+        if admin.get("type") == "super_admin":
+            return admin
+        if perm_key in (admin.get("permissions") or []):
+            return admin
+        raise HTTPException(
+            status_code=403, detail="ليس لديك صلاحية الوصول إلى هذا القسم."
+        )
+    return _dep
 
 # مسار القوالب المتوافق مع بيئة Vercel
 BASE_DIR = Path(__file__).resolve().parent
@@ -209,6 +324,18 @@ def init_db_tables():
         except Exception:
             pass
 
+        # ترحيل: إضافة عمود answers_detail لجدول النتائج (تفاصيل إجابة كل سؤال لاستخراج الإكسل)
+        try:
+            if is_pg:
+                c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS answers_detail TEXT")
+            else:
+                c.execute("PRAGMA table_info(submissions)")
+                cols = [r[1] for r in c.fetchall()]
+                if "answers_detail" not in cols:
+                    c.execute("ALTER TABLE submissions ADD COLUMN answers_detail TEXT")
+        except Exception:
+            pass
+
         # 9. جدول حسابات المديرين (أدمن عادي بصلاحيات محددة - يدخل نفس بوابة الإدارة)
         c.execute(f"""CREATE TABLE IF NOT EXISTS admins (
             id {id_type},
@@ -264,6 +391,40 @@ def get_level(percentage: float) -> str:
         return "المستوى 4 (خبير)"
 
 
+LEVEL_ORDER = [
+    "المستوى 1 (مبتدئ)",
+    "المستوى 2 (متوسط)",
+    "المستوى 3 (متقدم)",
+    "المستوى 4 (خبير)",
+]
+
+
+def parse_correct_answers(raw: str) -> List[str]:
+    """يحوّل قيمة الإجابة الصحيحة المخزّنة إلى قائمة نصوص، مع دعم التوافق الرجعي
+    للأسئلة القديمة المخزّنة كنص واحد (قبل دعم تعدد الإجابات الصحيحة)."""
+    if not raw:
+        return []
+    try:
+        val = json.loads(raw)
+        if isinstance(val, list):
+            return [str(x).strip() for x in val if str(x).strip()]
+    except Exception:
+        pass
+    return [str(raw).strip()] if str(raw).strip() else []
+
+
+def parse_correct_answers_from_excel_cell(raw) -> List[str]:
+    """يدعم كتابة أكثر من إجابة صحيحة في نفس الخلية في ملف الإكسل، مفصولة بفاصلة
+    عادية أو فاصلة عربية أو '|'، مثال: 'اختيار أ، اختيار ج' """
+    if raw is None:
+        return []
+    text = str(raw).strip()
+    if not text or text.lower() == "nan":
+        return []
+    parts = re.split(r"[،,|]", text)
+    return [p.strip() for p in parts if p.strip()]
+
+
 @app.get("/api/health")
 async def health_check():
     try:
@@ -288,19 +449,29 @@ async def serve_home(request: Request):
 async def admin_login(
     sap_id: str = Form(...), email: str = Form(...), password: str = Form(...)
 ):
+    sap_id_clean, email_clean, pass_clean = sap_id.strip(), email.strip().lower(), password.strip()
     conn, is_pg = get_db()
     c = conn.cursor()
 
     # 1) تجربة الدخول كأدمن مركزي (صلاحيات كاملة دائمًا)
     q_super = (
-        "SELECT sap_id, name, email FROM admin_settings WHERE id = 1 AND sap_id = %s AND LOWER(email) = %s AND password = %s"
+        "SELECT sap_id, name, email, password FROM admin_settings WHERE id = 1 AND sap_id = %s AND LOWER(email) = %s"
         if is_pg
-        else "SELECT sap_id, name, email FROM admin_settings WHERE id = 1 AND sap_id = ? AND LOWER(email) = ? AND password = ?"
+        else "SELECT sap_id, name, email, password FROM admin_settings WHERE id = 1 AND sap_id = ? AND LOWER(email) = ?"
     )
-    c.execute(q_super, (sap_id.strip(), email.strip().lower(), password.strip()))
+    c.execute(q_super, (sap_id_clean, email_clean))
     super_admin = c.fetchone()
-    if super_admin:
+    if super_admin and verify_password(pass_clean, super_admin[3]):
+        if not is_hashed_password(super_admin[3]):
+            q_upg = (
+                "UPDATE admin_settings SET password = %s WHERE id = 1"
+                if is_pg
+                else "UPDATE admin_settings SET password = ? WHERE id = 1"
+            )
+            c.execute(q_upg, (hash_password(pass_clean),))
+            conn.commit()
         conn.close()
+        token = create_token({"type": "super_admin", "sap_id": super_admin[0], "permissions": ADMIN_PERMISSION_KEYS})
         return {
             "status": "success",
             "role": "super_admin",
@@ -308,22 +479,32 @@ async def admin_login(
             "email": super_admin[2],
             "sap_id": super_admin[0],
             "permissions": ADMIN_PERMISSION_KEYS,
+            "token": token,
         }
 
     # 2) تجربة الدخول كأدمن عادي (مدير) بصلاحيات محددة
     q_sub = (
-        "SELECT sap_id, name, email, permissions FROM admins WHERE sap_id = %s AND LOWER(email) = %s AND password = %s"
+        "SELECT sap_id, name, email, permissions, password FROM admins WHERE sap_id = %s AND LOWER(email) = %s"
         if is_pg
-        else "SELECT sap_id, name, email, permissions FROM admins WHERE sap_id = ? AND LOWER(email) = ? AND password = ?"
+        else "SELECT sap_id, name, email, permissions, password FROM admins WHERE sap_id = ? AND LOWER(email) = ?"
     )
-    c.execute(q_sub, (sap_id.strip(), email.strip().lower(), password.strip()))
+    c.execute(q_sub, (sap_id_clean, email_clean))
     sub_admin = c.fetchone()
-    conn.close()
-    if sub_admin:
+    if sub_admin and verify_password(pass_clean, sub_admin[4]):
+        if not is_hashed_password(sub_admin[4]):
+            q_upg = (
+                "UPDATE admins SET password = %s WHERE sap_id = %s"
+                if is_pg
+                else "UPDATE admins SET password = ? WHERE sap_id = ?"
+            )
+            c.execute(q_upg, (hash_password(pass_clean), sub_admin[0]))
+            conn.commit()
+        conn.close()
         try:
             perms = json.loads(sub_admin[3]) if sub_admin[3] else []
         except Exception:
             perms = []
+        token = create_token({"type": "admin", "sap_id": sub_admin[0], "permissions": perms})
         return {
             "status": "success",
             "role": "admin",
@@ -331,8 +512,10 @@ async def admin_login(
             "email": sub_admin[2],
             "sap_id": sub_admin[0],
             "permissions": perms,
+            "token": token,
         }
 
+    conn.close()
     raise HTTPException(
         status_code=401, detail="بيانات دخول الإدارة غير صحيحة."
     )
@@ -340,7 +523,7 @@ async def admin_login(
 
 # --- إدارة حسابات المديرين (أدمن عادي بصلاحيات محددة) ---
 @app.get("/api/admin/admins")
-async def list_sub_admins():
+async def list_sub_admins(_admin: Dict[str, object] = Depends(get_current_super_admin)):
     conn, _ = get_db()
     c = conn.cursor()
     c.execute("SELECT sap_id, name, email, permissions FROM admins ORDER BY sap_id ASC")
@@ -363,6 +546,7 @@ async def add_sub_admin(
     email: str = Form(...),
     password: str = Form(...),
     permissions: str = Form("[]"),
+    _admin: Dict[str, object] = Depends(get_current_super_admin),
 ):
     try:
         perms_list = json.loads(permissions) if permissions else []
@@ -384,7 +568,7 @@ async def add_sub_admin(
             sap_id.strip(),
             name.strip(),
             email.strip().lower(),
-            password.strip(),
+            hash_password(password.strip()),
             json.dumps(perms_list, ensure_ascii=False),
         ),
     )
@@ -394,7 +578,9 @@ async def add_sub_admin(
 
 
 @app.delete("/api/admin/admins/{sap_id}")
-async def delete_sub_admin(sap_id: str):
+async def delete_sub_admin(
+    sap_id: str, _admin: Dict[str, object] = Depends(get_current_super_admin)
+):
     conn, is_pg = get_db()
     c = conn.cursor()
     q = (
@@ -410,11 +596,17 @@ async def delete_sub_admin(sap_id: str):
 
 @app.post("/api/admin/self/change-password")
 async def sub_admin_change_password(
-    sap_id: str = Form(...),
     old_password: str = Form(...),
     new_password: str = Form(...),
+    admin: Dict[str, object] = Depends(get_current_admin),
 ):
-    """يسمح لحساب مدير عادي (غير الأدمن المركزي) بتغيير كلمة مروره الخاصة بنفسه."""
+    """يسمح لحساب مدير عادي (غير الأدمن المركزي) بتغيير كلمة مروره الخاصة بنفسه فقط."""
+    if admin.get("type") != "admin":
+        raise HTTPException(
+            status_code=400,
+            detail="هذا الإجراء متاح لحسابات المديرين العاديين فقط. الأدمن المركزي يغيّر كلمة مروره من تبويب الإعدادات.",
+        )
+    sap_id = str(admin["sap_id"])
     conn, is_pg = get_db()
     c = conn.cursor()
     q_sel = (
@@ -422,9 +614,9 @@ async def sub_admin_change_password(
         if is_pg
         else "SELECT password FROM admins WHERE sap_id = ?"
     )
-    c.execute(q_sel, (sap_id.strip(),))
+    c.execute(q_sel, (sap_id,))
     row = c.fetchone()
-    if not row or row[0] != old_password.strip():
+    if not row or not verify_password(old_password.strip(), row[0]):
         conn.close()
         raise HTTPException(status_code=400, detail="كلمة المرور الحالية غير صحيحة.")
 
@@ -433,14 +625,14 @@ async def sub_admin_change_password(
         if is_pg
         else "UPDATE admins SET password = ? WHERE sap_id = ?"
     )
-    c.execute(q_upd, (new_password.strip(), sap_id.strip()))
+    c.execute(q_upd, (hash_password(new_password.strip()), sap_id))
     conn.commit()
     conn.close()
     return {"status": "success", "message": "تم تغيير كلمة المرور بنجاح."}
 
 
 @app.get("/api/admin/profile")
-async def get_admin_profile():
+async def get_admin_profile(_admin: Dict[str, object] = Depends(get_current_super_admin)):
     conn, _ = get_db()
     c = conn.cursor()
     c.execute("SELECT sap_id, name, email FROM admin_settings WHERE id = 1")
@@ -455,6 +647,7 @@ async def update_admin_profile(
     name: str = Form(...),
     email: str = Form(...),
     password: Optional[str] = Form(None),
+    _admin: Dict[str, object] = Depends(get_current_super_admin),
 ):
     conn, is_pg = get_db()
     c = conn.cursor()
@@ -470,7 +663,7 @@ async def update_admin_profile(
                 sap_id.strip(),
                 name.strip(),
                 email.strip().lower(),
-                password.strip(),
+                hash_password(password.strip()),
             ),
         )
     else:
@@ -487,18 +680,28 @@ async def update_admin_profile(
 
 @app.post("/api/auth/user-login")
 async def user_login(sap_id: str = Form(...), password: str = Form(...)):
+    sap_id_clean, pass_clean = sap_id.strip(), password.strip()
     conn, is_pg = get_db()
     c = conn.cursor()
     q = (
-        "SELECT sap_id, name, role, department FROM users WHERE sap_id = %s AND password = %s"
+        "SELECT sap_id, name, role, department, password FROM users WHERE sap_id = %s"
         if is_pg
-        else "SELECT sap_id, name, role, department FROM users WHERE sap_id = ? AND password = ?"
+        else "SELECT sap_id, name, role, department, password FROM users WHERE sap_id = ?"
     )
-    c.execute(q, (sap_id.strip(), password.strip()))
+    c.execute(q, (sap_id_clean,))
     user = c.fetchone()
-    if not user:
+    if not user or not verify_password(pass_clean, user[4]):
         conn.close()
         raise HTTPException(status_code=401, detail="بيانات الدخول غير صحيحة.")
+
+    if not is_hashed_password(user[4]):
+        q_upg = (
+            "UPDATE users SET password = %s WHERE sap_id = %s"
+            if is_pg
+            else "UPDATE users SET password = ? WHERE sap_id = ?"
+        )
+        c.execute(q_upg, (hash_password(pass_clean), user[0]))
+        conn.commit()
 
     q_teams = (
         """SELECT t.name FROM user_teams ut JOIN teams t ON ut.team_id = t.id WHERE ut.sap_id = %s"""
@@ -508,6 +711,7 @@ async def user_login(sap_id: str = Form(...), password: str = Form(...)):
     c.execute(q_teams, (user[0],))
     teams = [r[0] for r in c.fetchall()]
     conn.close()
+    token = create_token({"type": "user", "sap_id": user[0]})
     return {
         "status": "success",
         "sap_id": user[0],
@@ -515,6 +719,7 @@ async def user_login(sap_id: str = Form(...), password: str = Form(...)):
         "role": user[2],
         "department": user[3],
         "teams": teams,
+        "token": token,
     }
 
 
@@ -551,10 +756,11 @@ async def request_password_reset(sap_id: str = Form(...)):
 
 @app.post("/api/auth/change-password")
 async def change_password(
-    sap_id: str = Form(...),
     old_password: str = Form(...),
     new_password: str = Form(...),
+    user: Dict[str, object] = Depends(get_current_user),
 ):
+    sap_id = str(user["sap_id"])
     conn, is_pg = get_db()
     c = conn.cursor()
     q_sel = (
@@ -562,9 +768,9 @@ async def change_password(
         if is_pg
         else "SELECT password FROM users WHERE sap_id = ?"
     )
-    c.execute(q_sel, (sap_id.strip(),))
+    c.execute(q_sel, (sap_id,))
     row = c.fetchone()
-    if not row or row[0] != old_password.strip():
+    if not row or not verify_password(old_password.strip(), row[0]):
         conn.close()
         raise HTTPException(
             status_code=400, detail="كلمة المرور الحالية غير صحيحة."
@@ -575,7 +781,7 @@ async def change_password(
         if is_pg
         else "UPDATE users SET password = ? WHERE sap_id = ?"
     )
-    c.execute(q_upd, (new_password.strip(), sap_id.strip()))
+    c.execute(q_upd, (hash_password(new_password.strip()), sap_id))
     conn.commit()
     conn.close()
     return {"status": "success", "message": "تم تغيير كلمة المرور بنجاح."}
@@ -583,7 +789,10 @@ async def change_password(
 
 # --- إدارة معرض الصور ---
 @app.post("/api/admin/upload-multiple-images")
-async def upload_multiple_images(files: List[UploadFile] = File(...)):
+async def upload_multiple_images(
+    files: List[UploadFile] = File(...),
+    _admin: Dict[str, object] = Depends(require_permission("gallery")),
+):
     conn, is_pg = get_db()
     c = conn.cursor()
     uploaded_urls = []
@@ -614,7 +823,9 @@ async def upload_multiple_images(files: List[UploadFile] = File(...)):
 
 
 @app.delete("/api/admin/gallery/{image_id}")
-async def delete_gallery_image(image_id: int):
+async def delete_gallery_image(
+    image_id: int, _admin: Dict[str, object] = Depends(require_permission("gallery"))
+):
     conn, is_pg = get_db()
     c = conn.cursor()
     q_sel = (
@@ -647,7 +858,7 @@ async def delete_gallery_image(image_id: int):
 
 
 @app.get("/api/admin/gallery")
-async def get_gallery():
+async def get_gallery(_admin: Dict[str, object] = Depends(require_permission("gallery"))):
     conn, _ = get_db()
     c = conn.cursor()
     c.execute(
@@ -663,7 +874,9 @@ async def get_gallery():
 
 # --- إدارة المستخدمين ---
 @app.get("/api/admin/departments")
-async def get_registered_departments():
+async def get_registered_departments(
+    _admin: Dict[str, object] = Depends(get_current_admin)
+):
     """يرجّع قائمة الإدارات الفعلية المسجّلة عند المستخدمين (بدون تكرار)."""
     conn, _ = get_db()
     c = conn.cursor()
@@ -676,7 +889,7 @@ async def get_registered_departments():
 
 
 @app.get("/api/admin/users")
-async def get_all_users():
+async def get_all_users(_admin: Dict[str, object] = Depends(require_permission("users"))):
     conn, _ = get_db()
     c = conn.cursor()
     c.execute(
@@ -698,7 +911,8 @@ async def get_all_users():
             "name": r[1],
             "role": r[2],
             "department": r[3],
-            "password": r[4],
+            "password": None if is_hashed_password(r[4]) else r[4],
+            "password_hidden": is_hashed_password(r[4]),
             "teams": teams_by_sap.get(r[0], []),
         }
         for r in users_rows
@@ -708,7 +922,7 @@ async def get_all_users():
 
 # --- إدارة الفرق ---
 @app.get("/api/admin/teams")
-async def list_teams():
+async def list_teams(_admin: Dict[str, object] = Depends(require_permission("teams"))):
     conn, _ = get_db()
     c = conn.cursor()
     c.execute("SELECT id, name FROM teams ORDER BY name ASC")
@@ -718,7 +932,9 @@ async def list_teams():
 
 
 @app.post("/api/admin/teams/add")
-async def add_team(name: str = Form(...)):
+async def add_team(
+    name: str = Form(...), _admin: Dict[str, object] = Depends(require_permission("teams"))
+):
     conn, is_pg = get_db()
     c = conn.cursor()
     q = (
@@ -733,7 +949,9 @@ async def add_team(name: str = Form(...)):
 
 
 @app.delete("/api/admin/teams/{team_id}")
-async def delete_team(team_id: int):
+async def delete_team(
+    team_id: int, _admin: Dict[str, object] = Depends(require_permission("teams"))
+):
     conn, is_pg = get_db()
     c = conn.cursor()
     q_ut = (
@@ -752,7 +970,9 @@ async def delete_team(team_id: int):
 
 
 @app.get("/api/admin/users/{sap_id}/teams")
-async def get_user_teams(sap_id: str):
+async def get_user_teams(
+    sap_id: str, _admin: Dict[str, object] = Depends(require_permission("users"))
+):
     conn, is_pg = get_db()
     c = conn.cursor()
     q = (
@@ -767,7 +987,11 @@ async def get_user_teams(sap_id: str):
 
 
 @app.post("/api/admin/users/{sap_id}/set-teams")
-async def set_user_teams(sap_id: str, team_ids: str = Form("[]")):
+async def set_user_teams(
+    sap_id: str,
+    team_ids: str = Form("[]"),
+    _admin: Dict[str, object] = Depends(require_permission("users")),
+):
     """يحدد فرق المستخدم (بحد أقصى فريقين)، ويستبدل أي تعيين سابق بالكامل."""
     try:
         ids = json.loads(team_ids) if team_ids else []
@@ -809,6 +1033,7 @@ async def add_single_user(
     password: str = Form(...),
     role: str = Form("فني"),
     department: str = Form("عام"),
+    _admin: Dict[str, object] = Depends(require_permission("users")),
 ):
     conn, is_pg = get_db()
     c = conn.cursor()
@@ -823,7 +1048,7 @@ async def add_single_user(
         (
             sap_id.strip(),
             name.strip(),
-            password.strip(),
+            hash_password(password.strip()),
             role.strip(),
             department.strip(),
         ),
@@ -834,7 +1059,9 @@ async def add_single_user(
 
 
 @app.delete("/api/admin/delete-user/{sap_id}")
-async def delete_user(sap_id: str):
+async def delete_user(
+    sap_id: str, _admin: Dict[str, object] = Depends(require_permission("users"))
+):
     conn, is_pg = get_db()
     c = conn.cursor()
     q = (
@@ -849,7 +1076,10 @@ async def delete_user(sap_id: str):
 
 
 @app.post("/api/admin/upload-users-excel")
-async def upload_users_excel(file: UploadFile = File(...)):
+async def upload_users_excel(
+    file: UploadFile = File(...),
+    _admin: Dict[str, object] = Depends(require_permission("users")),
+):
     try:
         contents = await file.read()
         df = pd.read_excel(io.BytesIO(contents))
@@ -877,7 +1107,7 @@ async def upload_users_excel(file: UploadFile = File(...)):
                 else:
                     q = """INSERT INTO users (sap_id, name, password, role, department) VALUES (?, ?, ?, ?, ?)
                            ON CONFLICT(sap_id) DO UPDATE SET name=excluded.name, password=excluded.password, role=excluded.role, department=excluded.department"""
-                c.execute(q, (sap_id, name, password, role, dept))
+                c.execute(q, (sap_id, name, hash_password(password), role, dept))
                 count += 1
         conn.commit()
         conn.close()
@@ -890,7 +1120,9 @@ async def upload_users_excel(file: UploadFile = File(...)):
 
 
 @app.get("/api/admin/download-users-template")
-async def download_users_template():
+async def download_users_template(
+    _admin: Dict[str, object] = Depends(require_permission("users"))
+):
     sample_data = [
         {
             "الاسم": "محمد عادل",
@@ -924,7 +1156,9 @@ async def download_users_template():
 
 
 @app.get("/api/admin/reset-requests")
-async def get_reset_requests():
+async def get_reset_requests(
+    _admin: Dict[str, object] = Depends(require_permission("resets"))
+):
     conn, _ = get_db()
     c = conn.cursor()
     c.execute("""SELECT r.id, r.sap_id, r.user_name, r.created_at, u.password, u.department
@@ -940,7 +1174,7 @@ async def get_reset_requests():
             "sap_id": r[1],
             "name": r[2],
             "date": str(r[3]),
-            "current_password": r[4],
+            "current_password": None if is_hashed_password(r[4]) else r[4],
             "department": r[5],
         }
         for r in rows
@@ -952,6 +1186,7 @@ async def reset_password_action(
     request_id: int = Form(...),
     sap_id: str = Form(...),
     new_password: Optional[str] = Form(None),
+    _admin: Dict[str, object] = Depends(require_permission("resets")),
 ):
     conn, is_pg = get_db()
     c = conn.cursor()
@@ -961,7 +1196,7 @@ async def reset_password_action(
             if is_pg
             else "UPDATE users SET password = ? WHERE sap_id = ?"
         )
-        c.execute(q_upd, (new_password.strip(), sap_id.strip()))
+        c.execute(q_upd, (hash_password(new_password.strip()), sap_id.strip()))
     q_req = (
         "UPDATE reset_requests SET status = 'resolved' WHERE id = %s"
         if is_pg
@@ -976,6 +1211,26 @@ async def reset_password_action(
     }
 
 
+@app.post("/api/admin/users/{sap_id}/set-password")
+async def admin_set_user_password(
+    sap_id: str,
+    new_password: str = Form(...),
+    _admin: Dict[str, object] = Depends(require_permission("users")),
+):
+    """تعيين كلمة مرور جديدة لمستخدم من لوحة إدارة المشتركين مباشرة."""
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q_upd = (
+        "UPDATE users SET password = %s WHERE sap_id = %s"
+        if is_pg
+        else "UPDATE users SET password = ? WHERE sap_id = ?"
+    )
+    c.execute(q_upd, (hash_password(new_password.strip()), sap_id.strip()))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": "تم تعيين كلمة المرور الجديدة بنجاح."}
+
+
 # --- الامتحانات والأسئلة ---
 @app.post("/api/admin/exams/{exam_id}/update-validity")
 async def update_exam_validity(
@@ -983,6 +1238,7 @@ async def update_exam_validity(
     is_active: int = Form(...),
     valid_until: Optional[str] = Form(None),
     hide_leaderboard: int = Form(0),
+    _admin: Dict[str, object] = Depends(require_permission("manage")),
 ):
     conn, is_pg = get_db()
     c = conn.cursor()
@@ -998,7 +1254,9 @@ async def update_exam_validity(
 
 
 @app.delete("/api/admin/exams/{exam_id}")
-async def delete_exam(exam_id: int):
+async def delete_exam(
+    exam_id: int, _admin: Dict[str, object] = Depends(require_permission("manage"))
+):
     """حذف امتحان بالكامل مع كل أسئلته ونتائجه وأذونات الإعادة الخاصة به."""
     conn, is_pg = get_db()
     c = conn.cursor()
@@ -1032,7 +1290,11 @@ async def delete_exam(exam_id: int):
 
 
 @app.post("/api/admin/exams/{exam_id}/allow-retake")
-async def allow_retake(exam_id: int, sap_id: str = Form(...)):
+async def allow_retake(
+    exam_id: int,
+    sap_id: str = Form(...),
+    _admin: Dict[str, object] = Depends(require_permission("manage")),
+):
     conn, is_pg = get_db()
     c = conn.cursor()
     if is_pg:
@@ -1062,6 +1324,7 @@ async def upload_excel(
     departments: str = Form("[]"),
     teams: str = Form("[]"),
     file: UploadFile = File(...),
+    _admin: Dict[str, object] = Depends(require_permission("create")),
 ):
     try:
         contents = await file.read()
@@ -1138,7 +1401,10 @@ async def upload_excel(
                 str(row["الاختيار 3"]).strip(),
                 str(row["الاختيار 4"]).strip(),
             ]
-            correct_option = str(row["الإجابة الصحيحة"]).strip()
+            correct_options = parse_correct_answers_from_excel_cell(
+                row["الإجابة الصحيحة"]
+            )
+            correct_option = json.dumps(correct_options, ensure_ascii=False)
 
             ins_q = (
                 "INSERT INTO questions (exam_id, branch, question, image_url, options, correct_option) VALUES (%s, %s, %s, %s, %s, %s)"
@@ -1169,8 +1435,12 @@ async def upload_excel(
 
 @app.get("/api/exams")
 async def list_exams(
-    department: Optional[str] = None, sap_id: Optional[str] = None
+    department: Optional[str] = None,
+    sap_id: Optional[str] = None,
+    user: Dict[str, object] = Depends(get_current_user),
 ):
+    # نتجاهل أي sap_id قادم من الاستعلام ونستخدم هوية المستخدم من التوكن فقط لمنع انتحال شخصية فرد آخر
+    sap_id = str(user["sap_id"])
     conn, is_pg = get_db()
     c = conn.cursor()
     c.execute(
@@ -1269,7 +1539,9 @@ async def list_exams(
 
 
 @app.get("/api/admin/exams/{exam_id}/preview")
-async def preview_exam(exam_id: int):
+async def preview_exam(
+    exam_id: int, _admin: Dict[str, object] = Depends(require_permission("manage"))
+):
     conn, is_pg = get_db()
     c = conn.cursor()
     q_exam = (
@@ -1293,7 +1565,7 @@ async def preview_exam(exam_id: int):
             "question": r[2],
             "image_url": r[3],
             "options": json.loads(r[4]),
-            "correct_option": r[5],
+            "correct_options": parse_correct_answers(r[5]),
         }
         for r in c.fetchall()
     ]
@@ -1319,11 +1591,21 @@ async def update_question(
     opt2: str = Form(...),
     opt3: str = Form(...),
     opt4: str = Form(...),
-    correct_option: str = Form(...),
+    correct_options: str = Form(...),
+    _admin: Dict[str, object] = Depends(require_permission("manage")),
 ):
     conn, is_pg = get_db()
     c = conn.cursor()
     options = [opt1.strip(), opt2.strip(), opt3.strip(), opt4.strip()]
+    try:
+        correct_list = json.loads(correct_options)
+        if not isinstance(correct_list, list):
+            raise ValueError
+    except Exception:
+        raise HTTPException(status_code=400, detail="صيغة الإجابات الصحيحة غير سليمة.")
+    if not correct_list:
+        raise HTTPException(status_code=400, detail="يجب تحديد إجابة صحيحة واحدة على الأقل.")
+
     q = (
         "UPDATE questions SET branch = %s, question = %s, image_url = %s, options = %s, correct_option = %s WHERE id = %s"
         if is_pg
@@ -1336,7 +1618,7 @@ async def update_question(
             question.strip(),
             image_url.strip() if image_url else "",
             json.dumps(options, ensure_ascii=False),
-            correct_option.strip(),
+            json.dumps([str(x).strip() for x in correct_list], ensure_ascii=False),
             q_id,
         ),
     )
@@ -1345,8 +1627,70 @@ async def update_question(
     return {"status": "success", "message": "تم تحديث السؤال بنجاح."}
 
 
+@app.post("/api/admin/questions/add")
+async def add_question(
+    exam_id: int = Form(...),
+    branch: str = Form(...),
+    question: str = Form(...),
+    image_url: Optional[str] = Form(""),
+    opt1: str = Form(...),
+    opt2: str = Form(...),
+    opt3: str = Form(...),
+    opt4: str = Form(...),
+    correct_options: str = Form(...),
+    _admin: Dict[str, object] = Depends(require_permission("manage")),
+):
+    options = [opt1.strip(), opt2.strip(), opt3.strip(), opt4.strip()]
+    try:
+        correct_list = json.loads(correct_options)
+        if not isinstance(correct_list, list):
+            raise ValueError
+    except Exception:
+        raise HTTPException(status_code=400, detail="صيغة الإجابات الصحيحة غير سليمة.")
+    if not correct_list:
+        raise HTTPException(status_code=400, detail="يجب تحديد إجابة صحيحة واحدة على الأقل.")
+
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q = (
+        "INSERT INTO questions (exam_id, branch, question, image_url, options, correct_option) VALUES (%s, %s, %s, %s, %s, %s)"
+        if is_pg
+        else "INSERT INTO questions (exam_id, branch, question, image_url, options, correct_option) VALUES (?, ?, ?, ?, ?, ?)"
+    )
+    c.execute(
+        q,
+        (
+            exam_id,
+            branch.strip(),
+            question.strip(),
+            image_url.strip() if image_url else "",
+            json.dumps(options, ensure_ascii=False),
+            json.dumps([str(x).strip() for x in correct_list], ensure_ascii=False),
+        ),
+    )
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": "تم إضافة السؤال بنجاح."}
+
+
+@app.delete("/api/admin/questions/{q_id}")
+async def delete_question(
+    q_id: int, _admin: Dict[str, object] = Depends(require_permission("manage"))
+):
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q = "DELETE FROM questions WHERE id = %s" if is_pg else "DELETE FROM questions WHERE id = ?"
+    c.execute(q, (q_id,))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": "تم حذف السؤال بنجاح."}
+
+
 @app.get("/api/exams/{exam_id}/questions")
-async def get_exam_questions(exam_id: int, sap_id: Optional[str] = None):
+async def get_exam_questions(
+    exam_id: int, user: Dict[str, object] = Depends(get_current_user)
+):
+    sap_id = str(user["sap_id"])
     conn, is_pg = get_db()
     c = conn.cursor()
     q_exam = (
@@ -1463,17 +1807,21 @@ async def get_exam_questions(exam_id: int, sap_id: Optional[str] = None):
 
 
 @app.post("/api/exams/{exam_id}/submit")
-async def submit_exam(exam_id: int, payload: Dict[str, object]):
-    sap_id = str(payload.get("sap_id", "")).strip()
+async def submit_exam(
+    exam_id: int,
+    payload: Dict[str, object],
+    user: Dict[str, object] = Depends(get_current_user),
+):
+    sap_id = str(user["sap_id"])
     user_name = str(payload.get("user_name", "")).strip()
     answers = payload.get("answers", {})
 
     conn, is_pg = get_db()
     c = conn.cursor()
     q_qs = (
-        "SELECT id, branch, correct_option FROM questions WHERE exam_id = %s"
+        "SELECT id, branch, question, correct_option FROM questions WHERE exam_id = %s"
         if is_pg
-        else "SELECT id, branch, correct_option FROM questions WHERE exam_id = ?"
+        else "SELECT id, branch, question, correct_option FROM questions WHERE exam_id = ?"
     )
     c.execute(q_qs, (exam_id,))
     questions = c.fetchall()
@@ -1483,14 +1831,32 @@ async def submit_exam(exam_id: int, payload: Dict[str, object]):
 
     branch_stats = {}
     total_correct = 0
+    answers_detail = []
 
-    for q_id, branch, correct_opt in questions:
+    for q_id, branch, q_text, correct_opt_raw in questions:
         if branch not in branch_stats:
             branch_stats[branch] = {"total": 0, "correct": 0}
         branch_stats[branch]["total"] += 1
-        if str(answers.get(str(q_id), "")).strip() == correct_opt.strip():
+
+        correct_set = set(parse_correct_answers(correct_opt_raw))
+        given_raw = answers.get(str(q_id), [])
+        if isinstance(given_raw, str):
+            given_raw = [given_raw] if given_raw else []
+        given_set = set(str(g).strip() for g in given_raw if str(g).strip())
+
+        is_correct = bool(correct_set) and given_set == correct_set
+        if is_correct:
             total_correct += 1
             branch_stats[branch]["correct"] += 1
+
+        answers_detail.append({
+            "question_id": q_id,
+            "branch": branch,
+            "question": q_text,
+            "given": sorted(given_set),
+            "correct": sorted(correct_set),
+            "is_correct": is_correct,
+        })
 
     total_q = len(questions)
     overall_pct = (total_correct / total_q) * 100
@@ -1511,11 +1877,11 @@ async def submit_exam(exam_id: int, payload: Dict[str, object]):
         }
 
     q_sub = (
-        """INSERT INTO submissions (exam_id, sap_id, user_name, total_score, total_questions, total_pct, overall_level, branch_details) 
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"""
+        """INSERT INTO submissions (exam_id, sap_id, user_name, total_score, total_questions, total_pct, overall_level, branch_details, answers_detail) 
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
         if is_pg
-        else """INSERT INTO submissions (exam_id, sap_id, user_name, total_score, total_questions, total_pct, overall_level, branch_details) 
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)"""
+        else """INSERT INTO submissions (exam_id, sap_id, user_name, total_score, total_questions, total_pct, overall_level, branch_details, answers_detail) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"""
     )
     c.execute(
         q_sub,
@@ -1528,6 +1894,7 @@ async def submit_exam(exam_id: int, payload: Dict[str, object]):
             overall_pct,
             overall_lvl,
             json.dumps(branch_results, ensure_ascii=False),
+            json.dumps(answers_detail, ensure_ascii=False),
         ),
     )
 
@@ -1563,7 +1930,9 @@ async def submit_exam(exam_id: int, payload: Dict[str, object]):
 
 
 @app.get("/api/admin/exams/{exam_id}/in-progress-users")
-async def get_in_progress_users(exam_id: int):
+async def get_in_progress_users(
+    exam_id: int, _admin: Dict[str, object] = Depends(require_permission("manage"))
+):
     """قائمة الأفراد الذين فتحوا الامتحان ولم يقوموا بتسليمه بعد (محاولة مستهلكة تحتاج إذن الإدارة لإعادتها)."""
     conn, is_pg = get_db()
     c = conn.cursor()
@@ -1586,7 +1955,9 @@ async def get_in_progress_users(exam_id: int):
 
 
 @app.get("/api/admin/exams/{exam_id}/submissions")
-async def get_exam_submissions_admin(exam_id: int):
+async def get_exam_submissions_admin(
+    exam_id: int, _admin: Dict[str, object] = Depends(require_permission("manage"))
+):
     """قائمة كل نتائج المتدربين لامتحان معين، لإدارتها من لوحة الأدمن (تشمل النتائج المُعلّقة)."""
     conn, is_pg = get_db()
     c = conn.cursor()
@@ -1616,7 +1987,11 @@ async def get_exam_submissions_admin(exam_id: int):
 
 
 @app.post("/api/admin/submissions/{submission_id}/toggle-hidden")
-async def toggle_submission_hidden(submission_id: int, hidden: int = Form(...)):
+async def toggle_submission_hidden(
+    submission_id: int,
+    hidden: int = Form(...),
+    _admin: Dict[str, object] = Depends(require_permission("manage")),
+):
     """تعليق (إخفاء) أو إظهار نتيجة فرد معين في لوحة الشرف بدون حذفها."""
     conn, is_pg = get_db()
     c = conn.cursor()
@@ -1635,7 +2010,9 @@ async def toggle_submission_hidden(submission_id: int, hidden: int = Form(...)):
 
 
 @app.delete("/api/admin/submissions/{submission_id}")
-async def delete_submission(submission_id: int):
+async def delete_submission(
+    submission_id: int, _admin: Dict[str, object] = Depends(require_permission("manage"))
+):
     """حذف نتيجة فرد معين نهائيًا."""
     conn, is_pg = get_db()
     c = conn.cursor()
@@ -1651,7 +2028,16 @@ async def delete_submission(submission_id: int):
 
 
 @app.get("/api/user/{sap_id}/history")
-async def get_user_history(sap_id: str):
+async def get_user_history(sap_id: str, authorization: Optional[str] = Header(None)):
+    # يُسمح بالوصول لصاحب السجل نفسه أو لأي حساب إدارة (أدمن مركزي أو مدير عادي)
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="يلزم تسجيل الدخول أولاً.")
+    payload = decode_token(authorization.split(" ", 1)[1])
+    if payload.get("type") == "user" and str(payload.get("sap_id")) != sap_id.strip():
+        raise HTTPException(status_code=403, detail="غير مصرح لك بعرض سجل فرد آخر.")
+    if payload.get("type") not in ("user", "admin", "super_admin"):
+        raise HTTPException(status_code=401, detail="جلسة غير صالحة.")
+
     conn, is_pg = get_db()
     c = conn.cursor()
     q = (
@@ -1745,7 +2131,9 @@ async def get_general_leaderboard():
 
 
 @app.get("/api/admin/export-results/{exam_id}")
-async def export_results(exam_id: int):
+async def export_results(
+    exam_id: int, _admin: Dict[str, object] = Depends(require_permission("manage"))
+):
     conn, is_pg = get_db()
     c = conn.cursor()
     q = (
