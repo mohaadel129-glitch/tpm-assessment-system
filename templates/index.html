@@ -1230,8 +1230,12 @@
         }
 
         async function loadAdminExamList() {
-            const res = await apiFetch('/api/exams');
+            const res = await apiFetch('/api/admin/exams');
             const exams = await res.json();
+            if (!res.ok || !Array.isArray(exams)) {
+                console.error('loadAdminExamList failed:', exams);
+                return;
+            }
             const sel = document.getElementById('adm-preview-select');
             sel.innerHTML = exams.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
             if (exams.length > 0) previewSelectedExam();
