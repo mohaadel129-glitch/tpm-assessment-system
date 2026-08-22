@@ -536,11 +536,37 @@
 
     <script>
         let currentUser = null;
+        let authToken = localStorage.getItem('authToken') || null;
         let activeQuestions = [];
         let currentExamId = null;
         let timerInterval = null;
         let activeTargetQuestionId = null;
         let galleryImages = [];
+
+        // --- طبقة اتصال موحّدة تُرفق تلقائيًا رمز الجلسة (Authorization) مع كل طلب ---
+        async function apiFetch(url, options = {}) {
+            const opts = { ...options };
+            opts.headers = { ...(options.headers || {}) };
+            if (authToken) {
+                opts.headers['Authorization'] = `Bearer ${authToken}`;
+            }
+            const res = await window.fetch(url, opts);
+            if (res.status === 401 && authToken) {
+                // كانت هناك جلسة مسجّلة بالفعل وانتهت صلاحيتها أو أصبحت غير صالحة
+                handleSessionExpired();
+            }
+            return res;
+        }
+
+        function handleSessionExpired() {
+            authToken = null;
+            localStorage.removeItem('authToken');
+            currentUser = null;
+            alert('انتهت صلاحية الجلسة، يرجى تسجيل الدخول مرة أخرى.');
+            switchView('view-login-user');
+            document.getElementById('session-badge').classList.add('hidden');
+            document.getElementById('logout-btn').classList.add('hidden');
+        }
 
         function switchView(viewId) {
             document.querySelectorAll('.view-panel').forEach(el => el.classList.add('hidden'));
@@ -580,6 +606,8 @@
 
         function logout() {
             currentUser = null;
+            authToken = null;
+            localStorage.removeItem('authToken');
             clearInterval(timerInterval);
             document.getElementById('session-badge').classList.add('hidden');
             document.getElementById('logout-btn').classList.add('hidden');
@@ -596,9 +624,11 @@
             fd.append('password', pass);
 
             try {
-                const res = await fetch('/api/auth/user-login', { method: 'POST', body: fd });
+                const res = await apiFetch('/api/auth/user-login', { method: 'POST', body: fd });
                 const data = await res.json();
                 if (res.ok) {
+                    authToken = data.token;
+                    localStorage.setItem('authToken', authToken);
                     setSession(data, 'user');
                     document.getElementById('dash-user-name').innerText = data.name;
                     document.getElementById('dash-user-sap').innerText = `SAP: ${data.sap_id}`;
@@ -620,7 +650,7 @@
             if (!sap) return;
             const fd = new FormData();
             fd.append('sap_id', sap);
-            const res = await fetch('/api/auth/request-reset', { method: 'POST', body: fd });
+            const res = await apiFetch('/api/auth/request-reset', { method: 'POST', body: fd });
             const data = await res.json();
             alert(data.message || data.detail);
         }
@@ -633,9 +663,11 @@
                 fd.append('email', document.getElementById('admin-login-email').value);
                 fd.append('password', document.getElementById('admin-login-pass').value);
 
-                const res = await fetch('/api/auth/admin-login', { method: 'POST', body: fd });
+                const res = await apiFetch('/api/auth/admin-login', { method: 'POST', body: fd });
                 const data = await res.json();
                 if (res.ok) {
+                    authToken = data.token;
+                    localStorage.setItem('authToken', authToken);
                     setSession(data, data.role);
                     currentUser.permissions = data.permissions || [];
                     switchView('view-admin-dashboard');
@@ -695,17 +727,16 @@
             if (!newPass) return;
 
             const fd = new FormData();
-            fd.append('sap_id', currentUser.sap_id);
             fd.append('old_password', oldPass);
             fd.append('new_password', newPass);
 
-            const res = await fetch('/api/admin/self/change-password', { method: 'POST', body: fd });
+            const res = await apiFetch('/api/admin/self/change-password', { method: 'POST', body: fd });
             const data = await res.json();
             alert(data.message || data.detail);
         }
 
         async function loadAdminProfileData() {
-            const res = await fetch('/api/admin/profile');
+            const res = await apiFetch('/api/admin/profile');
             const data = await res.json();
             document.getElementById('adm-set-sap').value = data.sap_id;
             document.getElementById('adm-set-name').value = data.name;
@@ -720,13 +751,13 @@
             const pass = document.getElementById('adm-set-pass').value;
             if (pass) fd.append('password', pass);
 
-            const res = await fetch('/api/admin/profile/update', { method: 'POST', body: fd });
+            const res = await apiFetch('/api/admin/profile/update', { method: 'POST', body: fd });
             const data = await res.json();
             alert(data.message);
         }
 
         async function loadResetRequests() {
-            const res = await fetch('/api/admin/reset-requests');
+            const res = await apiFetch('/api/admin/reset-requests');
             const reqs = await res.json();
             const cont = document.getElementById('reset-requests-list');
             if (reqs.length === 0) {
@@ -752,7 +783,7 @@
             fd.append('request_id', reqId);
             fd.append('sap_id', sapId);
             if (newPass) fd.append('new_password', newPass);
-            await fetch('/api/admin/reset-password-action', { method: 'POST', body: fd });
+            await apiFetch('/api/admin/reset-password-action', { method: 'POST', body: fd });
             loadResetRequests();
             loadAdminUsers();
         }
@@ -776,11 +807,10 @@
             if (!oldPass || !newPass) return alert("يرجى ملء جميع الحقول.");
 
             const fd = new FormData();
-            fd.append('sap_id', currentUser.sap_id);
             fd.append('old_password', oldPass);
             fd.append('new_password', newPass);
 
-            const res = await fetch('/api/auth/change-password', { method: 'POST', body: fd });
+            const res = await apiFetch('/api/auth/change-password', { method: 'POST', body: fd });
             const data = await res.json();
             if (res.ok) {
                 msg.className = "text-xs font-semibold text-emerald-600";
@@ -793,7 +823,7 @@
         }
 
         async function loadUserExamsList() {
-            const res = await fetch(`/api/exams?department=${encodeURIComponent(currentUser.department)}&sap_id=${encodeURIComponent(currentUser.sap_id)}`);
+            const res = await apiFetch(`/api/exams?department=${encodeURIComponent(currentUser.department)}&sap_id=${encodeURIComponent(currentUser.sap_id)}`);
             const exams = await res.json();
             const cont = document.getElementById('user-exams-cards-container');
             
@@ -828,7 +858,7 @@
             const card = document.getElementById('user-history-card');
             card.classList.toggle('hidden');
             if (!card.classList.contains('hidden')) {
-                const res = await fetch(`/api/user/${currentUser.sap_id}/history`);
+                const res = await apiFetch(`/api/user/${currentUser.sap_id}/history`);
                 const list = await res.json();
                 const cont = document.getElementById('user-history-list');
                 if (list.length === 0) {
@@ -853,7 +883,7 @@
 
         async function startExamSession(examId, examName) {
             currentExamId = examId;
-            const res = await fetch(`/api/exams/${currentExamId}/questions?sap_id=${encodeURIComponent(currentUser.sap_id)}`);
+            const res = await apiFetch(`/api/exams/${currentExamId}/questions`);
             const data = await res.json();
             if (!res.ok) return alert(data.detail);
 
@@ -872,10 +902,11 @@
                     </div>
                     <p class="font-bold text-slate-800 text-base md:text-lg">${q.question}</p>
                     ${q.image_url ? `<img src="${q.image_url}" class="max-h-60 rounded-2xl mx-auto border border-slate-200 object-contain shadow-sm">` : ''}
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 pt-2">
+                    <p class="text-[11px] text-slate-400">يمكن اختيار أكثر من إجابة إذا لزم الأمر</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
                         ${q.options.map(opt => `
                             <label class="flex items-center space-x-3 space-x-reverse p-3.5 rounded-2xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/50 cursor-pointer transition-all">
-                                <input type="radio" name="q_${q.id}" value="${opt}" class="text-indigo-600 focus:ring-indigo-500">
+                                <input type="checkbox" name="q_${q.id}" value="${opt}" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500">
                                 <span class="text-sm font-medium text-slate-700 mr-2">${opt}</span>
                             </label>
                         `).join('')}
@@ -907,15 +938,14 @@
 
             const answers = {};
             activeQuestions.forEach(q => {
-                const sel = document.querySelector(`input[name="q_${q.id}"]:checked`);
-                if (sel) answers[q.id] = sel.value;
+                const checked = document.querySelectorAll(`input[name="q_${q.id}"]:checked`);
+                if (checked.length) answers[q.id] = Array.from(checked).map(cb => cb.value);
             });
 
-            const res = await fetch(`/api/exams/${currentExamId}/submit`, {
+            const res = await apiFetch(`/api/exams/${currentExamId}/submit`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    sap_id: currentUser.sap_id,
                     user_name: currentUser.name,
                     answers: answers
                 })
@@ -964,7 +994,7 @@
                 fd.append('files', f);
             }
             try {
-                const res = await fetch('/api/admin/upload-multiple-images', { method: 'POST', body: fd });
+                const res = await apiFetch('/api/admin/upload-multiple-images', { method: 'POST', body: fd });
                 if (!res.ok) {
                     alert("فشل رفع الصور: " + await extractErrorMessage(res));
                     return;
@@ -980,7 +1010,7 @@
 
         async function loadAdminGallery() {
             try {
-                const res = await fetch('/api/admin/gallery');
+                const res = await apiFetch('/api/admin/gallery');
                 if (!res.ok) {
                     alert("فشل تحميل المعرض: " + await extractErrorMessage(res));
                     return;
@@ -1003,7 +1033,7 @@
         async function deleteGalleryImage(imageId) {
             if (!confirm("متأكد إنك عايز تحذف الصورة دي نهائيًا؟")) return;
             try {
-                const res = await fetch(`/api/admin/gallery/${imageId}`, { method: 'DELETE' });
+                const res = await apiFetch(`/api/admin/gallery/${imageId}`, { method: 'DELETE' });
                 if (!res.ok) {
                     alert("فشل حذف الصورة: " + await extractErrorMessage(res));
                     return;
@@ -1046,7 +1076,7 @@
         async function loadDeptTargetCheckboxes() {
             const cont = document.getElementById('adm-dept-target-container');
             try {
-                const res = await fetch('/api/admin/departments');
+                const res = await apiFetch('/api/admin/departments');
                 if (!res.ok) {
                     cont.innerHTML = `<label class="flex items-center gap-1.5"><input type="checkbox" name="dept_target" value="الكل" checked> الكل</label>
                         <span class="text-rose-500 col-span-3">تعذّر تحميل الإدارات: ${await extractErrorMessage(res)}</span>`;
@@ -1072,7 +1102,7 @@
         async function loadTeamTargetCheckboxes() {
             const cont = document.getElementById('adm-team-target-container');
             try {
-                const res = await fetch('/api/admin/teams');
+                const res = await apiFetch('/api/admin/teams');
                 if (!res.ok) {
                     cont.innerHTML = `<label class="flex items-center gap-1.5"><input type="checkbox" name="team_target" value="الكل" checked> الكل</label>
                         <span class="text-rose-500 col-span-3">تعذّر تحميل الفرق.</span>`;
@@ -1113,7 +1143,7 @@
             fd.append('file', file);
 
             try {
-                const res = await fetch('/api/admin/upload-excel', { method: 'POST', body: fd });
+                const res = await apiFetch('/api/admin/upload-excel', { method: 'POST', body: fd });
                 if (!res.ok) {
                     alert("فشل رفع الامتحان: " + await extractErrorMessage(res));
                     return;
@@ -1127,7 +1157,7 @@
         }
 
         async function loadAdminExamList() {
-            const res = await fetch('/api/exams');
+            const res = await apiFetch('/api/exams');
             const exams = await res.json();
             const sel = document.getElementById('adm-preview-select');
             sel.innerHTML = exams.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
@@ -1137,7 +1167,7 @@
         async function previewSelectedExam() {
             const examId = document.getElementById('adm-preview-select').value;
             if (!examId) return;
-            const res = await fetch(`/api/admin/exams/${examId}/preview`);
+            const res = await apiFetch(`/api/admin/exams/${examId}/preview`);
             const data = await res.json();
 
             const controlBar = document.getElementById('adm-exam-control-bar');
@@ -1159,7 +1189,10 @@
                     <div class="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/70 text-sm space-y-3" id="q-card-${q.id}">
                         <div class="flex justify-between items-center">
                             <span class="font-bold text-slate-800">س ${idx+1}</span>
-                            <button onclick="saveQuestionEdit(${q.id})" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-3 py-1 rounded-lg text-xs font-bold">حفظ تعديلات السؤال</button>
+                            <div class="flex gap-1.5">
+                                <button onclick="saveQuestionEdit(${q.id})" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-3 py-1 rounded-lg text-xs font-bold">حفظ تعديلات السؤال</button>
+                                <button onclick="deleteQuestion(${q.id}, ${examId})" class="bg-rose-100 hover:bg-rose-200 text-rose-700 px-3 py-1 rounded-lg text-xs font-bold">🗑 حذف السؤال</button>
+                            </div>
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
                             <div>
@@ -1187,12 +1220,79 @@
                             `).join('')}
                         </div>
                         <div>
-                            <label class="text-xs font-bold text-emerald-700 block mb-1">الإجابة الصحيحة:</label>
-                            <input type="text" id="edit-correct-${q.id}" value="${q.correct_option}" class="w-full px-2.5 py-1.5 border border-emerald-200 rounded-lg bg-emerald-50 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-400 transition-all">
+                            <label class="text-xs font-bold text-emerald-700 block mb-1">الإجابة الصحيحة (يمكن اختيار أكثر من إجابة):</label>
+                            <div class="flex flex-wrap gap-3 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg" id="edit-correct-${q.id}">
+                                ${q.options.map((opt, oIdx) => `
+                                    <label class="flex items-center gap-1.5 text-xs font-bold text-emerald-800">
+                                        <input type="checkbox" value="${opt}" ${q.correct_options.includes(opt) ? 'checked' : ''} class="correct-cb-${q.id}">
+                                        اختيار ${oIdx+1}
+                                    </label>
+                                `).join('')}
+                            </div>
                         </div>
                     </div>
                 `).join('')}
+
+                <div class="p-4 bg-indigo-50/60 rounded-2xl border-2 border-dashed border-indigo-200 space-y-3">
+                    <h4 class="font-bold text-indigo-900 text-sm">➕ إضافة سؤال جديد لهذا الامتحان</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <input type="text" id="new-q-branch" placeholder="الفرع" class="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                        <input type="text" id="new-q-img" placeholder="رابط صورة (اختياري)" class="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                    </div>
+                    <textarea id="new-q-text" placeholder="نص السؤال" class="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all"></textarea>
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="text" id="new-q-opt1" placeholder="اختيار 1" class="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                        <input type="text" id="new-q-opt2" placeholder="اختيار 2" class="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                        <input type="text" id="new-q-opt3" placeholder="اختيار 3" class="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                        <input type="text" id="new-q-opt4" placeholder="اختيار 4" class="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-emerald-700 block mb-1">حدد الإجابة/الإجابات الصحيحة:</label>
+                        <div class="flex flex-wrap gap-3 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg" id="new-q-correct">
+                            <label class="flex items-center gap-1.5 text-xs font-bold text-emerald-800"><input type="checkbox" class="new-q-correct-cb" data-opt="1"> اختيار 1</label>
+                            <label class="flex items-center gap-1.5 text-xs font-bold text-emerald-800"><input type="checkbox" class="new-q-correct-cb" data-opt="2"> اختيار 2</label>
+                            <label class="flex items-center gap-1.5 text-xs font-bold text-emerald-800"><input type="checkbox" class="new-q-correct-cb" data-opt="3"> اختيار 3</label>
+                            <label class="flex items-center gap-1.5 text-xs font-bold text-emerald-800"><input type="checkbox" class="new-q-correct-cb" data-opt="4"> اختيار 4</label>
+                        </div>
+                    </div>
+                    <button onclick="addNewQuestion(${examId})" class="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-200">إضافة السؤال</button>
+                </div>
             `;
+        }
+
+        async function deleteQuestion(qId, examId) {
+            if (!confirm("هل أنت متأكد من حذف هذا السؤال نهائياً؟")) return;
+            const res = await apiFetch(`/api/admin/questions/${qId}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (!res.ok) return alert(data.detail || "فشل حذف السؤال.");
+            previewSelectedExam();
+        }
+
+        async function addNewQuestion(examId) {
+            const branch = document.getElementById('new-q-branch').value.trim();
+            const text = document.getElementById('new-q-text').value.trim();
+            const img = document.getElementById('new-q-img').value.trim();
+            const opts = [1, 2, 3, 4].map(i => document.getElementById(`new-q-opt${i}`).value.trim());
+            if (!branch || !text || opts.some(o => !o)) return alert("يرجى ملء الفرع ونص السؤال وكل الاختيارات الأربعة.");
+
+            const correctOpts = Array.from(document.querySelectorAll('.new-q-correct-cb:checked')).map(cb => opts[parseInt(cb.dataset.opt) - 1]);
+            if (correctOpts.length === 0) return alert("يرجى تحديد إجابة صحيحة واحدة على الأقل.");
+
+            const fd = new FormData();
+            fd.append('exam_id', examId);
+            fd.append('branch', branch);
+            fd.append('question', text);
+            fd.append('image_url', img);
+            fd.append('opt1', opts[0]);
+            fd.append('opt2', opts[1]);
+            fd.append('opt3', opts[2]);
+            fd.append('opt4', opts[3]);
+            fd.append('correct_options', JSON.stringify(correctOpts));
+
+            const res = await apiFetch('/api/admin/questions/add', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (!res.ok) return alert(data.detail || "فشل إضافة السؤال.");
+            previewSelectedExam();
         }
 
         async function saveExamValidityChanges() {
@@ -1208,7 +1308,7 @@
 
             let res;
             try {
-                res = await fetch(`/api/admin/exams/${examId}/update-validity`, { method: 'POST', body: fd });
+                res = await apiFetch(`/api/admin/exams/${examId}/update-validity`, { method: 'POST', body: fd });
             } catch (e) {
                 alert("تعذّر الاتصال بالسيرفر أثناء حفظ التغييرات.");
                 return;
@@ -1230,7 +1330,7 @@
 
             let res;
             try {
-                res = await fetch(`/api/admin/exams/${examId}`, { method: 'DELETE' });
+                res = await apiFetch(`/api/admin/exams/${examId}`, { method: 'DELETE' });
             } catch (e) {
                 alert("تعذّر الاتصال بالسيرفر أثناء حذف الامتحان.");
                 return;
@@ -1252,7 +1352,7 @@
             const section = document.getElementById('adm-in-progress-section');
             const list = document.getElementById('adm-in-progress-list');
             try {
-                const res = await fetch(`/api/admin/exams/${examId}/in-progress-users`);
+                const res = await apiFetch(`/api/admin/exams/${examId}/in-progress-users`);
                 if (!res.ok) { section.classList.add('hidden'); return; }
                 const rows = await res.json();
                 if (rows.length === 0) {
@@ -1275,7 +1375,7 @@
             const section = document.getElementById('adm-submissions-section');
             const tbody = document.getElementById('adm-submissions-table-body');
             try {
-                const res = await fetch(`/api/admin/exams/${examId}/submissions`);
+                const res = await apiFetch(`/api/admin/exams/${examId}/submissions`);
                 if (!res.ok) {
                     section.classList.add('hidden');
                     return;
@@ -1314,7 +1414,7 @@
             fd.append('hidden', newHidden);
             let res;
             try {
-                res = await fetch(`/api/admin/submissions/${subId}/toggle-hidden`, { method: 'POST', body: fd });
+                res = await apiFetch(`/api/admin/submissions/${subId}/toggle-hidden`, { method: 'POST', body: fd });
             } catch (e) {
                 alert("تعذّر الاتصال بالسيرفر.");
                 return;
@@ -1330,7 +1430,7 @@
             if (!confirm("هل أنت متأكد من حذف هذه النتيجة نهائيًا؟")) return;
             let res;
             try {
-                res = await fetch(`/api/admin/submissions/${subId}`, { method: 'DELETE' });
+                res = await apiFetch(`/api/admin/submissions/${subId}`, { method: 'DELETE' });
             } catch (e) {
                 alert("تعذّر الاتصال بالسيرفر.");
                 return;
@@ -1352,10 +1452,12 @@
             fd.append('opt2', document.getElementById(`edit-opt-${qId}-2`).value);
             fd.append('opt3', document.getElementById(`edit-opt-${qId}-3`).value);
             fd.append('opt4', document.getElementById(`edit-opt-${qId}-4`).value);
-            fd.append('correct_option', document.getElementById(`edit-correct-${qId}`).value);
+            const correctOpts = Array.from(document.querySelectorAll(`#edit-correct-${qId} input:checked`)).map(cb => cb.value);
+            if (correctOpts.length === 0) return alert("يرجى تحديد إجابة صحيحة واحدة على الأقل.");
+            fd.append('correct_options', JSON.stringify(correctOpts));
 
             try {
-                const res = await fetch('/api/admin/questions/update', { method: 'POST', body: fd });
+                const res = await apiFetch('/api/admin/questions/update', { method: 'POST', body: fd });
                 if (!res.ok) {
                     alert("فشل حفظ السؤال: " + await extractErrorMessage(res));
                     return;
@@ -1374,14 +1476,14 @@
             const fd = new FormData();
             fd.append('sap_id', sapId);
 
-            const res = await fetch(`/api/admin/exams/${examId}/allow-retake`, { method: 'POST', body: fd });
+            const res = await apiFetch(`/api/admin/exams/${examId}/allow-retake`, { method: 'POST', body: fd });
             const data = await res.json();
             alert(data.message);
         }
 
         // --- Admin Users Load ---
         async function loadAdminUsers() {
-            const res = await fetch('/api/admin/users');
+            const res = await apiFetch('/api/admin/users');
             const users = await res.json();
             const tbody = document.getElementById('adm-users-table-body');
             tbody.innerHTML = users.map(u => `
@@ -1424,7 +1526,7 @@
 
             let res;
             try {
-                res = await fetch('/api/admin/add-user', { method: 'POST', body: fd });
+                res = await apiFetch('/api/admin/add-user', { method: 'POST', body: fd });
             } catch (e) {
                 alert("تعذّر الاتصال بالسيرفر أثناء إضافة المستخدم.");
                 return;
@@ -1456,7 +1558,7 @@
 
             let res;
             try {
-                res = await fetch('/api/admin/upload-users-excel', { method: 'POST', body: fd });
+                res = await apiFetch('/api/admin/upload-users-excel', { method: 'POST', body: fd });
             } catch (e) {
                 alert("تعذّر الاتصال بالسيرفر أثناء رفع الملف.");
                 return;
@@ -1474,7 +1576,7 @@
 
         async function deleteUser(sapId) {
             if (!confirm(`هل أنت متأكد من حذف المستخدم رقم ${sapId}؟`)) return;
-            await fetch(`/api/admin/delete-user/${sapId}`, { method: 'DELETE' });
+            await apiFetch(`/api/admin/delete-user/${sapId}`, { method: 'DELETE' });
             loadAdminUsers();
         }
 
@@ -1482,7 +1584,7 @@
         let allTeamsCache = [];
 
         async function loadTeamsList() {
-            const res = await fetch('/api/admin/teams');
+            const res = await apiFetch('/api/admin/teams');
             allTeamsCache = await res.json();
             const cont = document.getElementById('adm-teams-list');
             if (!cont) return;
@@ -1504,7 +1606,7 @@
             if (!name) return alert("يرجى كتابة اسم الفريق.");
             const fd = new FormData();
             fd.append('name', name);
-            const res = await fetch('/api/admin/teams/add', { method: 'POST', body: fd });
+            const res = await apiFetch('/api/admin/teams/add', { method: 'POST', body: fd });
             const data = await res.json();
             alert(data.message);
             input.value = '';
@@ -1514,7 +1616,7 @@
 
         async function deleteTeam(teamId, teamName) {
             if (!confirm(`حذف فريق "${teamName}"؟ سيتم إزالته من كل الأفراد المشتركين به.`)) return;
-            await fetch(`/api/admin/teams/${teamId}`, { method: 'DELETE' });
+            await apiFetch(`/api/admin/teams/${teamId}`, { method: 'DELETE' });
             loadTeamsList();
             loadTeamTargetCheckboxes();
             loadAdminUsers();
@@ -1526,7 +1628,7 @@
         async function openTeamAssignModal(sapId, userName) {
             teamAssignTargetSap = sapId;
             document.getElementById('team-assign-user-label').innerText = `${userName} (SAP: ${sapId})`;
-            const res = await fetch(`/api/admin/users/${sapId}/teams`);
+            const res = await apiFetch(`/api/admin/users/${sapId}/teams`);
             const currentTeams = await res.json();
             const currentIds = currentTeams.map(t => t.id);
 
@@ -1562,7 +1664,7 @@
             const ids = Array.from(document.querySelectorAll('input[name="team_assign_cb"]:checked')).map(cb => parseInt(cb.value));
             const fd = new FormData();
             fd.append('team_ids', JSON.stringify(ids));
-            const res = await fetch(`/api/admin/users/${teamAssignTargetSap}/set-teams`, { method: 'POST', body: fd });
+            const res = await apiFetch(`/api/admin/users/${teamAssignTargetSap}/set-teams`, { method: 'POST', body: fd });
             const data = await res.json();
             if (!res.ok) return alert(data.detail || "فشل حفظ الفرق.");
             alert(data.message);
@@ -1572,7 +1674,7 @@
 
         // --- إدارة حسابات المديرين (أدمن مركزي فقط) ---
         async function loadSubAdmins() {
-            const res = await fetch('/api/admin/admins');
+            const res = await apiFetch('/api/admin/admins');
             const admins = await res.json();
             const cont = document.getElementById('adm-sub-admins-list');
             if (!cont) return;
@@ -1614,7 +1716,7 @@
             fd.append('password', pass);
             fd.append('permissions', JSON.stringify(perms));
 
-            const res = await fetch('/api/admin/admins/add', { method: 'POST', body: fd });
+            const res = await apiFetch('/api/admin/admins/add', { method: 'POST', body: fd });
             const data = await res.json();
             alert(data.message);
             loadSubAdmins();
@@ -1627,7 +1729,7 @@
 
         async function deleteSubAdmin(sapId) {
             if (!confirm(`هل أنت متأكد من حذف حساب المدير رقم ${sapId}؟`)) return;
-            await fetch(`/api/admin/admins/${sapId}`, { method: 'DELETE' });
+            await apiFetch(`/api/admin/admins/${sapId}`, { method: 'DELETE' });
             loadSubAdmins();
         }
 
@@ -1636,7 +1738,7 @@
             const examId = document.getElementById('adm-preview-select').value;
             if (!examId) return alert("اختر امتحاناً أولاً.");
 
-            const res = await fetch(`/api/admin/exams/${examId}/preview`);
+            const res = await apiFetch(`/api/admin/exams/${examId}/preview`);
             const data = await res.json();
 
             const pArea = document.getElementById('print-area');
@@ -1672,8 +1774,8 @@
                             ${q.image_url ? `<img src="${q.image_url}" style="max-height: 140px; margin: 6px auto; display: block; border: 1px solid #ddd;">` : ''}
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; font-size: 13px;">
                                 ${q.options.map(opt => `
-                                    <div style="padding: 6px; border: 1px solid ${isAnswerKey && opt === q.correct_option ? '#16a34a' : '#ddd'}; background: ${isAnswerKey && opt === q.correct_option ? '#dcfce7' : '#fff'}; border-radius: 4px;">
-                                        [ &nbsp; ] ${opt} ${isAnswerKey && opt === q.correct_option ? '<strong>(الإجابة الصحيحة ✔)</strong>' : ''}
+                                    <div style="padding: 6px; border: 1px solid ${isAnswerKey && q.correct_options.includes(opt) ? '#16a34a' : '#ddd'}; background: ${isAnswerKey && q.correct_options.includes(opt) ? '#dcfce7' : '#fff'}; border-radius: 4px;">
+                                        [ &nbsp; ] ${opt} ${isAnswerKey && q.correct_options.includes(opt) ? '<strong>(الإجابة الصحيحة ✔)</strong>' : ''}
                                     </div>
                                 `).join('')}
                             </div>
@@ -1695,14 +1797,14 @@
 
         // --- Leaderboards ---
         async function loadLeaderboardExams() {
-            const res = await fetch('/api/exams');
+            const res = await apiFetch('/api/exams');
             const exams = await res.json();
             const sel = document.getElementById('lb-exam-select');
             sel.innerHTML = `<option value="">-- اختر دورة لعرض ترتيبها --</option>` + exams.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
         }
 
         async function loadGeneralLeaderboard() {
-            const res = await fetch('/api/leaderboard/general');
+            const res = await apiFetch('/api/leaderboard/general');
             const data = await res.json();
             document.getElementById('lb-head').innerHTML = `
                 <tr>
@@ -1733,7 +1835,7 @@
         async function loadExamLeaderboard() {
             const examId = document.getElementById('lb-exam-select').value;
             if (!examId) return loadGeneralLeaderboard();
-            const res = await fetch(`/api/leaderboard/exam/${examId}`);
+            const res = await apiFetch(`/api/leaderboard/exam/${examId}`);
             const data = await res.json();
             document.getElementById('lb-head').innerHTML = `
                 <tr>
