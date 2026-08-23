@@ -9,7 +9,7 @@ import re
 import secrets
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -380,12 +380,25 @@ def init_db_tables():
         c.execute(f"""CREATE TABLE IF NOT EXISTS skill_requirements (
             id {id_type},
             role TEXT NOT NULL,
+            skill_group TEXT DEFAULT 'عام',
             skill_name TEXT NOT NULL,
             description TEXT,
             linked_exam_id INTEGER,
             required_level TEXT DEFAULT 'المستوى 2 (متوسط)',
             created_at TIMESTAMP DEFAULT {ts_default}
         )""")
+
+        # ترحيل: إضافة عمود مجموعة المهارة لجدول مصفوفة المهارات (لتجميع المهارات تحت عنوان واحد)
+        try:
+            if is_pg:
+                c.execute("ALTER TABLE skill_requirements ADD COLUMN IF NOT EXISTS skill_group TEXT DEFAULT 'عام'")
+            else:
+                c.execute("PRAGMA table_info(skill_requirements)")
+                cols = [r[1] for r in c.fetchall()]
+                if "skill_group" not in cols:
+                    c.execute("ALTER TABLE skill_requirements ADD COLUMN skill_group TEXT DEFAULT 'عام'")
+        except Exception:
+            pass
 
         # ملاحظة: تم حذف الإدراج التلقائي لمستخدم تجريبي هنا نهائيًا لمنع رجوعه بعد الحذف
 
@@ -1331,6 +1344,47 @@ async def allow_retake(
     }
 
 
+@app.post("/api/admin/exams/{exam_id}/allow-retake-bulk")
+async def allow_retake_bulk(
+    exam_id: int,
+    sap_ids: str = Form(...),
+    _admin: Dict[str, object] = Depends(require_permission("manage")),
+):
+    """السماح بإعادة الامتحان لمجموعة من الأفراد دفعة واحدة."""
+    try:
+        ids = json.loads(sap_ids)
+        if not isinstance(ids, list) or not ids:
+            raise ValueError
+    except Exception:
+        raise HTTPException(status_code=400, detail="يجب اختيار فرد واحد على الأقل.")
+
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    if is_pg:
+        q = (
+            "INSERT INTO retake_permissions (exam_id, sap_id, allowed) VALUES (%s, %s, 1)"
+            " ON CONFLICT(exam_id, sap_id) DO UPDATE SET allowed = 1"
+        )
+    else:
+        q = (
+            "INSERT INTO retake_permissions (exam_id, sap_id, allowed) VALUES (?, ?, 1)"
+            " ON CONFLICT(exam_id, sap_id) DO UPDATE SET allowed = 1"
+        )
+    count = 0
+    for sap_id in ids:
+        sap_id_clean = str(sap_id).strip()
+        if not sap_id_clean:
+            continue
+        c.execute(q, (exam_id, sap_id_clean))
+        count += 1
+    conn.commit()
+    conn.close()
+    return {
+        "status": "success",
+        "message": f"تم السماح لـ {count} فرد بإعادة الامتحان.",
+    }
+
+
 @app.post("/api/admin/upload-excel")
 async def upload_excel(
     exam_name: str = Form(...),
@@ -2143,6 +2197,18 @@ async def get_exam_leaderboard(exam_id: int):
     ]
 
 
+@app.get("/api/exams/public-list")
+async def list_exams_public():
+    """قائمة مبسطة بأسماء الامتحانات لتعبئة قائمة اختيار الدورة في لوحة الشرف العامة،
+    وهي شاشة متاحة للجميع بدون تسجيل دخول، فهذه النقطة عامة أيضًا بلا حاجة لتوكن."""
+    conn, _ = get_db()
+    c = conn.cursor()
+    c.execute("SELECT id, name FROM exams WHERE hide_leaderboard = 0 OR hide_leaderboard IS NULL ORDER BY id DESC")
+    rows = c.fetchall()
+    conn.close()
+    return [{"id": r[0], "name": r[1]} for r in rows]
+
+
 @app.get("/api/leaderboard/general")
 async def get_general_leaderboard():
     conn, _ = get_db()
@@ -2262,9 +2328,9 @@ async def list_skill_requirements(
     conn, is_pg = get_db()
     c = conn.cursor()
     c.execute(
-        """SELECT sr.id, sr.role, sr.skill_name, sr.description, sr.linked_exam_id, e.name, sr.required_level
+        """SELECT sr.id, sr.role, sr.skill_name, sr.description, sr.linked_exam_id, e.name, sr.required_level, sr.skill_group
            FROM skill_requirements sr LEFT JOIN exams e ON sr.linked_exam_id = e.id
-           ORDER BY sr.role ASC, sr.id ASC"""
+           ORDER BY sr.role ASC, sr.skill_group ASC, sr.id ASC"""
     )
     rows = c.fetchall()
     conn.close()
@@ -2277,6 +2343,7 @@ async def list_skill_requirements(
             "linked_exam_id": r[4],
             "linked_exam_name": r[5],
             "required_level": r[6],
+            "skill_group": r[7] or "عام",
         }
         for r in rows
     ]
@@ -2289,22 +2356,119 @@ async def add_skill_requirement(
     description: str = Form(""),
     linked_exam_id: Optional[str] = Form(None),
     required_level: str = Form("المستوى 2 (متوسط)"),
+    skill_group: str = Form("عام"),
     _admin: Dict[str, object] = Depends(require_permission("skills")),
 ):
     exam_id_val = int(linked_exam_id) if linked_exam_id and linked_exam_id.strip() else None
     conn, is_pg = get_db()
     c = conn.cursor()
     q = (
-        """INSERT INTO skill_requirements (role, skill_name, description, linked_exam_id, required_level)
-           VALUES (%s, %s, %s, %s, %s)"""
+        """INSERT INTO skill_requirements (role, skill_group, skill_name, description, linked_exam_id, required_level)
+           VALUES (%s, %s, %s, %s, %s, %s)"""
         if is_pg
-        else """INSERT INTO skill_requirements (role, skill_name, description, linked_exam_id, required_level)
-           VALUES (?, ?, ?, ?, ?)"""
+        else """INSERT INTO skill_requirements (role, skill_group, skill_name, description, linked_exam_id, required_level)
+           VALUES (?, ?, ?, ?, ?, ?)"""
     )
-    c.execute(q, (role.strip(), skill_name.strip(), description.strip(), exam_id_val, required_level.strip()))
+    c.execute(q, (
+        role.strip(),
+        skill_group.strip() or "عام",
+        skill_name.strip(),
+        description.strip(),
+        exam_id_val,
+        required_level.strip(),
+    ))
     conn.commit()
     conn.close()
     return {"status": "success", "message": "تم إضافة متطلب المهارة بنجاح."}
+
+
+@app.get("/api/admin/skills/download-template")
+async def download_skills_template(
+    _admin: Dict[str, object] = Depends(require_permission("skills"))
+):
+    df = pd.DataFrame([
+        {
+            "المسمى الوظيفي": "فني صيانة",
+            "مجموعة المهارة": "السلامة المهنية",
+            "اسم المهارة": "أساسيات السلامة والصحة المهنية",
+            "الوصف": "معرفة إجراءات السلامة الأساسية في المصنع",
+            "الحد الأدنى للمستوى": "المستوى 2 (متوسط)",
+            "اسم الامتحان المرتبط (اختياري)": "",
+        },
+        {
+            "المسمى الوظيفي": "فني صيانة",
+            "مجموعة المهارة": "الصيانة الميكانيكية",
+            "اسم المهارة": "أساسيات الهيدروليك",
+            "الوصف": "",
+            "الحد الأدنى للمستوى": "المستوى 3 (متقدم)",
+            "اسم الامتحان المرتبط (اختياري)": "",
+        },
+    ])
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="مصفوفة المهارات")
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=skills_matrix_template.xlsx"},
+    )
+
+
+@app.post("/api/admin/skills/upload-excel")
+async def upload_skills_excel(
+    file: UploadFile = File(...),
+    _admin: Dict[str, object] = Depends(require_permission("skills")),
+):
+    try:
+        contents = await file.read()
+        df = pd.read_excel(io.BytesIO(contents))
+
+        conn, is_pg = get_db()
+        c = conn.cursor()
+
+        c.execute("SELECT id, name FROM exams")
+        exam_name_to_id = {name: eid for eid, name in c.fetchall()}
+
+        q = (
+            """INSERT INTO skill_requirements (role, skill_group, skill_name, description, linked_exam_id, required_level)
+               VALUES (%s, %s, %s, %s, %s, %s)"""
+            if is_pg
+            else """INSERT INTO skill_requirements (role, skill_group, skill_name, description, linked_exam_id, required_level)
+               VALUES (?, ?, ?, ?, ?, ?)"""
+        )
+
+        added = 0
+        skipped = 0
+        for _, row in df.iterrows():
+            role = str(row.get("المسمى الوظيفي", "")).strip()
+            skill_name = str(row.get("اسم المهارة", "")).strip()
+            if not role or not skill_name or role.lower() == "nan" or skill_name.lower() == "nan":
+                skipped += 1
+                continue
+            skill_group = str(row.get("مجموعة المهارة", "") or "عام").strip()
+            if skill_group.lower() == "nan" or not skill_group:
+                skill_group = "عام"
+            description = str(row.get("الوصف", "") or "").strip()
+            if description.lower() == "nan":
+                description = ""
+            required_level = str(row.get("الحد الأدنى للمستوى", "") or "المستوى 2 (متوسط)").strip()
+            if required_level not in LEVEL_ORDER:
+                required_level = "المستوى 2 (متوسط)"
+            exam_name = str(row.get("اسم الامتحان المرتبط (اختياري)", "") or "").strip()
+            linked_exam_id = exam_name_to_id.get(exam_name) if exam_name and exam_name.lower() != "nan" else None
+
+            c.execute(q, (role, skill_group, skill_name, description, linked_exam_id, required_level))
+            added += 1
+
+        conn.commit()
+        conn.close()
+        return {
+            "status": "success",
+            "message": f"تم استيراد {added} مهارة بنجاح" + (f" (وتخطي {skipped} صف غير مكتمل)" if skipped else "") + ".",
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.delete("/api/admin/skills/{skill_id}")
@@ -2347,19 +2511,19 @@ async def get_user_skill_matrix(sap_id: str, authorization: Optional[str] = Head
     role = urow[0]
 
     q_skills = (
-        """SELECT sr.id, sr.skill_name, sr.description, sr.linked_exam_id, e.name, sr.required_level
+        """SELECT sr.id, sr.skill_name, sr.description, sr.linked_exam_id, e.name, sr.required_level, sr.skill_group
            FROM skill_requirements sr LEFT JOIN exams e ON sr.linked_exam_id = e.id
-           WHERE sr.role = %s ORDER BY sr.id ASC"""
+           WHERE sr.role = %s ORDER BY sr.skill_group ASC, sr.id ASC"""
         if is_pg
-        else """SELECT sr.id, sr.skill_name, sr.description, sr.linked_exam_id, e.name, sr.required_level
+        else """SELECT sr.id, sr.skill_name, sr.description, sr.linked_exam_id, e.name, sr.required_level, sr.skill_group
            FROM skill_requirements sr LEFT JOIN exams e ON sr.linked_exam_id = e.id
-           WHERE sr.role = ? ORDER BY sr.id ASC"""
+           WHERE sr.role = ? ORDER BY sr.skill_group ASC, sr.id ASC"""
     )
     c.execute(q_skills, (role,))
     skills = c.fetchall()
 
     result = []
-    for sk_id, skill_name, description, linked_exam_id, exam_name, required_level in skills:
+    for sk_id, skill_name, description, linked_exam_id, exam_name, required_level, skill_group in skills:
         item = {
             "id": sk_id,
             "skill_name": skill_name,
@@ -2367,6 +2531,7 @@ async def get_user_skill_matrix(sap_id: str, authorization: Optional[str] = Head
             "linked_exam_id": linked_exam_id,
             "linked_exam_name": exam_name,
             "required_level": required_level,
+            "skill_group": skill_group or "عام",
             "status": "not_linked",
             "achieved_level": None,
             "achieved_pct": None,
@@ -2406,6 +2571,9 @@ async def get_analytics_overview(
     c.execute("SELECT COUNT(id) FROM exams")
     total_exams = c.fetchone()[0]
 
+    c.execute("SELECT COUNT(sap_id) FROM users")
+    total_users = c.fetchone()[0]
+
     c.execute("SELECT COUNT(DISTINCT sap_id) FROM submissions")
     total_participants = c.fetchone()[0]
 
@@ -2415,6 +2583,22 @@ async def get_analytics_overview(
     c.execute("SELECT AVG(total_pct) FROM submissions")
     row = c.fetchone()
     overall_avg_pct = round(row[0], 1) if row and row[0] is not None else 0
+
+    # نسبة النجاح العامة (يُعتبر ناجحًا من حقق 60% فأكثر، وهي حدّ المستوى الثاني)
+    c.execute("SELECT COUNT(id) FROM submissions WHERE total_pct >= 60")
+    passing_count = c.fetchone()[0]
+    overall_pass_rate = round((passing_count / total_submissions) * 100, 1) if total_submissions else 0
+
+    # النشاط الأخير
+    now = datetime.now()
+    d7 = (now - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
+    d30 = (now - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
+    q7 = "SELECT COUNT(id) FROM submissions WHERE submitted_at >= %s" if is_pg else "SELECT COUNT(id) FROM submissions WHERE submitted_at >= ?"
+    c.execute(q7, (d7,))
+    submissions_last_7d = c.fetchone()[0]
+    q30 = "SELECT COUNT(id) FROM submissions WHERE submitted_at >= %s" if is_pg else "SELECT COUNT(id) FROM submissions WHERE submitted_at >= ?"
+    c.execute(q30, (d30,))
+    submissions_last_30d = c.fetchone()[0]
 
     c.execute("SELECT overall_level, COUNT(id) FROM submissions GROUP BY overall_level")
     overall_level_counts = {lvl: cnt for lvl, cnt in c.fetchall()}
@@ -2430,14 +2614,15 @@ async def get_analytics_overview(
     ]
 
     c.execute(
-        """SELECT e.id, e.name, COUNT(s.id) as participants, AVG(s.total_pct) as avg_pct
+        """SELECT e.id, e.name, COUNT(s.id) as participants, AVG(s.total_pct) as avg_pct,
+                  SUM(CASE WHEN s.total_pct >= 60 THEN 1 ELSE 0 END) as passing
            FROM exams e LEFT JOIN submissions s ON e.id = s.exam_id
            GROUP BY e.id, e.name ORDER BY e.id DESC"""
     )
     exam_rows = c.fetchall()
 
     per_exam = []
-    for exam_id, exam_name, participants, avg_pct in exam_rows:
+    for exam_id, exam_name, participants, avg_pct, passing in exam_rows:
         q_lvl = (
             "SELECT overall_level, COUNT(id) FROM submissions WHERE exam_id = %s GROUP BY overall_level"
             if is_pg
@@ -2459,24 +2644,102 @@ async def get_analytics_overview(
             "exam_name": exam_name,
             "participants": p,
             "avg_pct": round(avg_pct, 1) if avg_pct is not None else 0,
+            "pass_rate": round(((passing or 0) / p) * 100, 1) if p else 0,
             "level_distribution": level_dist,
         })
 
     # أكثر 5 امتحانات مشاركة
     top_participation = sorted(per_exam, key=lambda x: x["participants"], reverse=True)[:5]
 
+    # أضعف وأقوى 3 دورات من حيث متوسط الأداء (من بين الدورات التي لها مشاركات فعلية)
+    exams_with_participants = [e for e in per_exam if e["participants"] > 0]
+    weakest_exams = sorted(exams_with_participants, key=lambda x: x["avg_pct"])[:3]
+    strongest_exams = sorted(exams_with_participants, key=lambda x: x["avg_pct"], reverse=True)[:3]
+
+    # التوزيع حسب الإدارة (متوسط الأداء وعدد المشاركين لكل إدارة)
+    c.execute(
+        """SELECT u.department, COUNT(s.id) as participants, AVG(s.total_pct) as avg_pct
+           FROM submissions s LEFT JOIN users u ON s.sap_id = u.sap_id
+           GROUP BY u.department ORDER BY participants DESC"""
+    )
+    dept_breakdown = [
+        {
+            "department": d or "غير محدد",
+            "participants": p,
+            "avg_pct": round(a, 1) if a is not None else 0,
+        }
+        for d, p, a in c.fetchall()
+    ]
+
+    # أفضل 5 أفراد أداءً (متوسط النسبة عبر كل امتحاناتهم)
+    c.execute(
+        """SELECT s.sap_id, s.user_name, u.department, AVG(s.total_pct) as avg_pct, COUNT(s.id) as exams_taken
+           FROM submissions s LEFT JOIN users u ON s.sap_id = u.sap_id
+           GROUP BY s.sap_id, s.user_name, u.department
+           ORDER BY avg_pct DESC LIMIT 5"""
+    )
+    top_performers = [
+        {
+            "sap_id": sap_id,
+            "name": name,
+            "department": dept or "-",
+            "avg_pct": round(avg_pct, 1) if avg_pct is not None else 0,
+            "exams_taken": exams_taken,
+        }
+        for sap_id, name, dept, avg_pct, exams_taken in c.fetchall()
+    ]
+
+    # تحليل أضعف الأسئلة (الأقل نسبة إجابة صحيحة) عبر كل الامتحانات، بالاعتماد على تفاصيل الإجابات
+    # المخزّنة وقت التسليم (متاحة فقط للنتائج المسجّلة بعد تفعيل هذه الميزة)
+    c.execute("SELECT answers_detail FROM submissions WHERE answers_detail IS NOT NULL")
+    q_stats: Dict[str, Dict[str, object]] = {}
+    for (detail_raw,) in c.fetchall():
+        try:
+            details = json.loads(detail_raw)
+        except Exception:
+            continue
+        for d in details:
+            key = f"{d.get('question_id')}"
+            if key not in q_stats:
+                q_stats[key] = {"question": d.get("question", ""), "branch": d.get("branch", ""), "total": 0, "correct": 0}
+            q_stats[key]["total"] += 1
+            if d.get("is_correct"):
+                q_stats[key]["correct"] += 1
+
+    weakest_questions = []
+    for stats in q_stats.values():
+        if stats["total"] >= 2:  # نتجاهل الأسئلة قليلة المحاولات لتفادي نتائج غير دالة إحصائيًا
+            correct_rate = round((stats["correct"] / stats["total"]) * 100, 1)
+            weakest_questions.append({
+                "question": stats["question"],
+                "branch": stats["branch"],
+                "attempts": stats["total"],
+                "correct_rate": correct_rate,
+            })
+    weakest_questions = sorted(weakest_questions, key=lambda x: x["correct_rate"])[:8]
+
     conn.close()
     return {
         "total_exams": total_exams,
+        "total_users": total_users,
         "total_participants": total_participants,
+        "participation_rate": round((total_participants / total_users) * 100, 1) if total_users else 0,
         "total_submissions": total_submissions,
         "overall_avg_pct": overall_avg_pct,
+        "overall_pass_rate": overall_pass_rate,
+        "submissions_last_7d": submissions_last_7d,
+        "submissions_last_30d": submissions_last_30d,
         "overall_level_distribution": overall_level_distribution,
         "per_exam": per_exam,
         "top_participation": [
             {"exam_name": e["exam_name"], "participants": e["participants"]}
             for e in top_participation
         ],
+        "weakest_exams": weakest_exams,
+        "strongest_exams": strongest_exams,
+        "department_breakdown": dept_breakdown,
+        "top_performers": top_performers,
+        "weakest_questions": weakest_questions,
     }
 
 
