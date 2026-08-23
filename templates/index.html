@@ -586,6 +586,8 @@
                             <label class="flex items-center gap-1.5"><input type="checkbox" name="sub_perm" value="manage"> إدارة الامتحانات</label>
                             <label class="flex items-center gap-1.5"><input type="checkbox" name="sub_perm" value="users"> إدارة المشتركين</label>
                             <label class="flex items-center gap-1.5"><input type="checkbox" name="sub_perm" value="teams"> إدارة الفرق</label>
+                            <label class="flex items-center gap-1.5"><input type="checkbox" name="sub_perm" value="analytics"> لوحة التحليلات</label>
+                            <label class="flex items-center gap-1.5"><input type="checkbox" name="sub_perm" value="skills"> مصفوفة المهارات</label>
                         </div>
                     </div>
                     <button onclick="addSubAdmin()" class="bg-gradient-to-r from-slate-700 to-slate-900 hover:from-slate-800 hover:to-black text-white px-4 py-2 rounded-xl text-xs font-bold">حفظ حساب المدير</button>
@@ -645,6 +647,52 @@
             <p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">يمكن اختيار فريقين كحد أقصى لكل فرد.</p>
             <div id="team-assign-checkboxes" class="space-y-1 overflow-y-auto flex-1"></div>
             <button onclick="saveTeamAssignment()" class="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold py-2.5 rounded-xl transition-all shadow-md shadow-indigo-200">حفظ الفرق</button>
+        </div>
+    </div>
+
+    <!-- نافذة تعديل متطلب مهارة -->
+    <div id="skill-edit-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-lg w-full p-6 space-y-3 max-h-[85vh] overflow-y-auto shadow-2xl">
+            <div class="flex justify-between items-center border-b pb-2">
+                <h3 class="font-bold text-slate-800 text-base">✏️ تعديل متطلب المهارة</h3>
+                <button onclick="closeSkillEditModal()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                    <label class="text-xs text-slate-500 font-bold block mb-1">المسمى الوظيفي</label>
+                    <input type="text" id="edit-skill-role" class="w-full px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                </div>
+                <div>
+                    <label class="text-xs text-slate-500 font-bold block mb-1">مجموعة المهارة</label>
+                    <input type="text" id="edit-skill-group" class="w-full px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                </div>
+            </div>
+            <div>
+                <label class="text-xs text-slate-500 font-bold block mb-1">اسم المهارة</label>
+                <input type="text" id="edit-skill-name" class="w-full px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+            </div>
+            <div>
+                <label class="text-xs text-slate-500 font-bold block mb-1">الوصف (اختياري)</label>
+                <textarea id="edit-skill-desc" class="w-full px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all"></textarea>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                    <label class="text-xs text-slate-500 font-bold block mb-1">الامتحان المرتبط</label>
+                    <select id="edit-skill-linked-exam" class="w-full px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all cursor-pointer">
+                        <option value="">بدون ربط بامتحان (متطلب مرجعي فقط)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs text-slate-500 font-bold block mb-1">الحد الأدنى للمستوى</label>
+                    <select id="edit-skill-required-level" class="w-full px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all cursor-pointer">
+                        <option value="المستوى 1 (مبتدئ)">المستوى 1 (مبتدئ)</option>
+                        <option value="المستوى 2 (متوسط)">المستوى 2 (متوسط)</option>
+                        <option value="المستوى 3 (متقدم)">المستوى 3 (متقدم)</option>
+                        <option value="المستوى 4 (خبير)">المستوى 4 (خبير)</option>
+                    </select>
+                </div>
+            </div>
+            <button onclick="saveSkillEdit()" class="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold py-2.5 rounded-xl transition-all shadow-md shadow-indigo-200">حفظ التعديلات</button>
         </div>
     </div>
 
@@ -1933,11 +1981,14 @@
             }
         }
 
+        let lastLoadedSkills = [];
+
         async function loadSkills() {
             await loadSkillLinkedExamOptions();
             const res = await apiFetch('/api/admin/skills');
             if (!res.ok) return;
             const skills = await res.json();
+            lastLoadedSkills = skills;
             const cont = document.getElementById('skills-list-container');
             if (skills.length === 0) {
                 cont.innerHTML = '<p class="text-slate-400 text-xs">لا توجد متطلبات مهارات بعد.</p>';
@@ -1966,7 +2017,10 @@
                                                 ${s.linked_exam_name ? `<span class="text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-100">مرتبط بامتحان: ${s.linked_exam_name}</span>` : `<span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">غير مرتبط بامتحان</span>`}
                                             </div>
                                         </div>
-                                        <button onclick="deleteSkillRequirement(${s.id})" class="text-rose-600 hover:text-rose-800 font-bold shrink-0">حذف</button>
+                                        <div class="flex items-center gap-2.5 shrink-0">
+                                            <button onclick="openEditSkillModal(${s.id})" class="text-indigo-600 hover:text-indigo-800 font-bold">تعديل</button>
+                                            <button onclick="deleteSkillRequirement(${s.id})" class="text-rose-600 hover:text-rose-800 font-bold">حذف</button>
+                                        </div>
                                     </div>
                                 `).join('')}
                             </div>
@@ -2007,6 +2061,63 @@
         async function deleteSkillRequirement(skillId) {
             if (!confirm("حذف متطلب المهارة هذا؟")) return;
             await apiFetch(`/api/admin/skills/${skillId}`, { method: 'DELETE' });
+            loadSkills();
+        }
+
+        // --- تعديل متطلب مهارة موجود (الاسم، المجموعة، الوصف، الحد الأدنى، وربط/تغيير الامتحان) ---
+        let editingSkillId = null;
+
+        function openEditSkillModal(skillId) {
+            const s = lastLoadedSkills.find(x => x.id === skillId);
+            if (!s) return;
+            editingSkillId = skillId;
+
+            document.getElementById('edit-skill-role').value = s.role;
+            document.getElementById('edit-skill-group').value = s.skill_group || 'عام';
+            document.getElementById('edit-skill-name').value = s.skill_name;
+            document.getElementById('edit-skill-desc').value = s.description || '';
+            document.getElementById('edit-skill-required-level').value = s.required_level;
+
+            const select = document.getElementById('edit-skill-linked-exam');
+            const sourceSelect = document.getElementById('adm-preview-select');
+            let optionsHtml = '<option value="">بدون ربط بامتحان (متطلب مرجعي فقط)</option>';
+            if (sourceSelect && sourceSelect.options.length > 1) {
+                optionsHtml += Array.from(sourceSelect.options).filter(o => o.value).map(o => `<option value="${o.value}">${o.text}</option>`).join('');
+            }
+            select.innerHTML = optionsHtml;
+            select.value = s.linked_exam_id || '';
+
+            document.getElementById('skill-edit-modal').classList.remove('hidden');
+        }
+
+        function closeSkillEditModal() {
+            document.getElementById('skill-edit-modal').classList.add('hidden');
+            editingSkillId = null;
+        }
+
+        async function saveSkillEdit() {
+            if (!editingSkillId) return;
+            const role = document.getElementById('edit-skill-role').value.trim();
+            const group = document.getElementById('edit-skill-group').value.trim();
+            const name = document.getElementById('edit-skill-name').value.trim();
+            const desc = document.getElementById('edit-skill-desc').value.trim();
+            const examId = document.getElementById('edit-skill-linked-exam').value;
+            const level = document.getElementById('edit-skill-required-level').value;
+            if (!role || !name) return alert("يرجى كتابة المسمى الوظيفي واسم المهارة.");
+
+            const fd = new FormData();
+            fd.append('role', role);
+            fd.append('skill_group', group || 'عام');
+            fd.append('skill_name', name);
+            fd.append('description', desc);
+            if (examId) fd.append('linked_exam_id', examId);
+            fd.append('required_level', level);
+
+            const res = await apiFetch(`/api/admin/skills/${editingSkillId}/update`, { method: 'POST', body: fd });
+            const data = await res.json();
+            if (!res.ok) return alert(data.detail || "فشل حفظ التعديلات.");
+            alert(data.message);
+            closeSkillEditModal();
             loadSkills();
         }
 
@@ -2156,7 +2267,8 @@
             }
             const permLabels = {
                 resets: 'استعادة كلمة المرور', gallery: 'معرض الصور', create: 'إنشاء دورة',
-                manage: 'إدارة الامتحانات', users: 'إدارة المشتركين', teams: 'إدارة الفرق'
+                manage: 'إدارة الامتحانات', users: 'إدارة المشتركين', teams: 'إدارة الفرق',
+                analytics: 'لوحة التحليلات', skills: 'مصفوفة المهارات'
             };
             cont.innerHTML = admins.map(a => `
                 <div class="p-3.5 bg-slate-50/80 border border-slate-200/70 rounded-2xl flex flex-col sm:flex-row justify-between sm:items-center gap-2">
