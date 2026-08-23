@@ -2471,6 +2471,41 @@ async def upload_skills_excel(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/admin/skills/{skill_id}/update")
+async def update_skill_requirement(
+    skill_id: int,
+    role: str = Form(...),
+    skill_group: str = Form("عام"),
+    skill_name: str = Form(...),
+    description: str = Form(""),
+    linked_exam_id: Optional[str] = Form(None),
+    required_level: str = Form("المستوى 2 (متوسط)"),
+    _admin: Dict[str, object] = Depends(require_permission("skills")),
+):
+    exam_id_val = int(linked_exam_id) if linked_exam_id and linked_exam_id.strip() else None
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q = (
+        """UPDATE skill_requirements SET role = %s, skill_group = %s, skill_name = %s,
+           description = %s, linked_exam_id = %s, required_level = %s WHERE id = %s"""
+        if is_pg
+        else """UPDATE skill_requirements SET role = ?, skill_group = ?, skill_name = ?,
+           description = ?, linked_exam_id = ?, required_level = ? WHERE id = ?"""
+    )
+    c.execute(q, (
+        role.strip(),
+        skill_group.strip() or "عام",
+        skill_name.strip(),
+        description.strip(),
+        exam_id_val,
+        required_level.strip(),
+        skill_id,
+    ))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": "تم تحديث متطلب المهارة بنجاح."}
+
+
 @app.delete("/api/admin/skills/{skill_id}")
 async def delete_skill_requirement(
     skill_id: int, _admin: Dict[str, object] = Depends(require_permission("skills"))
