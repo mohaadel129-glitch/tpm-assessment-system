@@ -376,6 +376,17 @@
 
                 <div id="adm-preview-container" class="hidden space-y-4 pt-4 border-t"></div>
 
+                <!-- شريط الإجراء الجماعي لإعادة الامتحان لمجموعة من الأفراد -->
+                <div id="adm-bulk-retake-bar" class="hidden pt-4 border-t flex flex-wrap items-center justify-between gap-2 bg-amber-50/60 border border-amber-200 rounded-2xl p-3">
+                    <label class="flex items-center gap-2 text-xs font-bold text-amber-900">
+                        <input type="checkbox" id="select-all-retake-cb" onchange="toggleSelectAllRetake(this)">
+                        تحديد الكل
+                    </label>
+                    <button onclick="bulkAllowRetake()" class="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md shadow-amber-200">
+                        🔁 السماح بإعادة الامتحان للمحددين (<span id="bulk-retake-count">0</span>)
+                    </button>
+                </div>
+
                 <!-- محاولات مفتوحة لم تُكمل (دخل الامتحان ولم يسلّم) -->
                 <div id="adm-in-progress-section" class="hidden space-y-2 pt-4 border-t">
                     <h4 class="text-sm font-bold text-amber-800">⏳ محاولات مفتوحة لم تُكمل (دخلوا الامتحان ولم يسلّموا)</h4>
@@ -386,11 +397,12 @@
                 <!-- إدارة نتائج المتدربين للامتحان المختار -->
                 <div id="adm-submissions-section" class="hidden space-y-3 pt-4 border-t">
                     <h4 class="text-sm font-bold text-slate-800">📋 إدارة نتائج المتدربين لهذا الامتحان</h4>
-                    <p class="text-[11px] text-slate-500">تقدر تعلّق ظهور نتيجة فرد معين في لوحة الشرف بدون حذفها، أو تحذفها نهائيًا.</p>
+                    <p class="text-[11px] text-slate-500">تقدر تعلّق ظهور نتيجة فرد معين في لوحة الشرف بدون حذفها، أو تحذفها نهائيًا. حدد أفراداً من عمود ✔ للسماح لهم بإعادة الامتحان دفعة واحدة من الشريط أعلاه.</p>
                     <div class="overflow-x-auto max-h-80">
                         <table class="w-full text-right border-collapse text-xs">
                             <thead class="bg-slate-50/95 backdrop-blur text-slate-500 text-[11px] uppercase tracking-wider sticky top-0 border-b-2 border-slate-200">
                                 <tr>
+                                    <th class="p-2.5 text-center">✔</th>
                                     <th class="p-2.5">SAP ID</th>
                                     <th class="p-2.5">الاسم</th>
                                     <th class="p-2.5">الدرجة</th>
@@ -472,10 +484,40 @@
                     <button onclick="loadAnalytics()" class="text-xs font-bold text-indigo-600 hover:underline">🔄 تحديث</button>
                 </div>
                 <div id="analytics-overview-cards" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
-                <div>
-                    <h4 class="text-sm font-bold text-slate-700 mb-2">توزيع المستويات الإجمالي (كل الامتحانات)</h4>
-                    <div id="analytics-overall-levels" class="space-y-1.5"></div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                    <div>
+                        <h4 class="text-sm font-bold text-slate-700 mb-2">توزيع المستويات الإجمالي (كل الامتحانات)</h4>
+                        <div id="analytics-overall-levels" class="space-y-1.5"></div>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-bold text-slate-700 mb-2">🏆 أفضل 5 أفراد أداءً (متوسط عبر كل امتحاناتهم)</h4>
+                        <div id="analytics-top-performers" class="space-y-1.5"></div>
+                    </div>
                 </div>
+
+                <div>
+                    <h4 class="text-sm font-bold text-slate-700 mb-2">🏢 الأداء حسب الإدارة</h4>
+                    <div id="analytics-dept-breakdown" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2"></div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                    <div>
+                        <h4 class="text-sm font-bold text-emerald-700 mb-2">📈 أقوى 3 دورات (بمتوسط الأداء)</h4>
+                        <div id="analytics-strongest-exams" class="space-y-1.5"></div>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-bold text-rose-700 mb-2">📉 أضعف 3 دورات (تحتاج مراجعة)</h4>
+                        <div id="analytics-weakest-exams" class="space-y-1.5"></div>
+                    </div>
+                </div>
+
+                <div>
+                    <h4 class="text-sm font-bold text-slate-700 mb-2">❓ أضعف الأسئلة (الأقل نسبة إجابة صحيحة)</h4>
+                    <p class="text-[11px] text-slate-400 mb-2">مبني على تفاصيل الإجابات المسجّلة بعد تفعيل هذه الميزة، بحد أدنى محاولتين لكل سؤال لضمان دلالة إحصائية.</p>
+                    <div id="analytics-weakest-questions" class="space-y-1.5"></div>
+                </div>
+
                 <div>
                     <h4 class="text-sm font-bold text-slate-700 mb-2">تفاصيل كل دورة / امتحان</h4>
                     <div id="analytics-per-exam" class="space-y-3"></div>
@@ -485,11 +527,24 @@
             <!-- ي. مصفوفة المهارات -->
             <div id="admin-tab-skills" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
                 <h3 class="text-lg font-bold text-slate-800 border-b pb-2">🎯 مصفوفة المهارات - المتطلبات حسب المسمى الوظيفي</h3>
-                <p class="text-[11px] text-slate-500">حدد المهارات المطلوبة لكل مسمى وظيفي (فني صيانة، فني إنتاج، مهندس، مشرف...)، ويمكن ربط كل مهارة بامتحان موجود بحيث يظهر للفرد تلقائياً هل تحقق المستوى المطلوب أم لا في صفحته الشخصية.</p>
+                <p class="text-[11px] text-slate-500">حدد المهارات المطلوبة لكل مسمى وظيفي (فني صيانة، فني إنتاج، مهندس، مشرف...)، مقسّمة على مجموعات (مثال: "السلامة المهنية"، "الصيانة الميكانيكية"). يمكن ربط كل مهارة بامتحان موجود بحيث يظهر للفرد تلقائياً هل تحقق المستوى المطلوب أم لا في صفحته الشخصية.</p>
+
+                <div class="p-4 bg-indigo-50/60 rounded-2xl border border-indigo-100 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 justify-between">
+                    <span class="text-xs font-bold text-indigo-900">📥 استيراد مصفوفة مهارات كاملة من ملف إكسل دفعة واحدة</span>
+                    <div class="flex gap-2 shrink-0">
+                        <button onclick="downloadSkillsTemplate()" class="text-xs bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 px-3 py-2 rounded-xl font-bold transition">تنزيل القالب</button>
+                        <label class="text-xs bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white px-3 py-2 rounded-xl font-bold cursor-pointer transition-all">
+                            رفع ملف إكسل
+                            <input type="file" id="skills-excel-file" accept=".xlsx,.xls" class="hidden" onchange="uploadSkillsExcel()">
+                        </label>
+                    </div>
+                </div>
+
                 <div class="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/70 space-y-3">
-                    <h4 class="text-xs font-bold text-slate-700">إضافة متطلب مهارة جديد:</h4>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <h4 class="text-xs font-bold text-slate-700">أو إضافة متطلب مهارة واحد يدويًا:</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <input type="text" id="skill-role" placeholder="المسمى الوظيفي (مثال: فني صيانة)" class="px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                        <input type="text" id="skill-group" placeholder="مجموعة المهارة (مثال: السلامة المهنية)" class="px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
                         <input type="text" id="skill-name" placeholder="اسم المهارة (مثال: أساسيات الهيدروليك)" class="px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
                     </div>
                     <textarea id="skill-desc" placeholder="وصف مختصر للمهارة (اختياري)" class="w-full px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all"></textarea>
@@ -508,6 +563,7 @@
                 </div>
                 <div id="skills-list-container" class="space-y-4"></div>
             </div>
+
 
             <!-- ح. إدارة حسابات المديرين (أدمن مركزي فقط) -->
             <div id="admin-tab-admins" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
@@ -1434,15 +1490,20 @@
                 const rows = await res.json();
                 if (rows.length === 0) {
                     section.classList.add('hidden');
+                    updateBulkRetakeBar();
                     return;
                 }
                 section.classList.remove('hidden');
                 list.innerHTML = rows.map(r => `
                     <div class="flex items-center justify-between p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs">
-                        <span><strong class="text-slate-800">${r.name}</strong> <span class="font-mono text-slate-500">(SAP: ${r.sap_id})</span> - بدأ في: ${r.started_at}</span>
-                        <button onclick="allowUserRetake('${r.sap_id}')" class="bg-amber-200 hover:bg-amber-300 text-amber-900 px-2.5 py-1 rounded-lg font-bold">السماح بإعادة الدخول</button>
+                        <label class="flex items-center gap-2">
+                            <input type="checkbox" class="bulk-retake-cb" value="${r.sap_id}" onchange="updateBulkRetakeBar()">
+                            <span><strong class="text-slate-800">${r.name}</strong> <span class="font-mono text-slate-500">(SAP: ${r.sap_id})</span> - بدأ في: ${r.started_at}</span>
+                        </label>
+                        <button onclick="allowUserRetake('${r.sap_id}')" class="bg-amber-200 hover:bg-amber-300 text-amber-900 px-2.5 py-1 rounded-lg font-bold shrink-0">السماح بإعادة الدخول</button>
                     </div>
                 `).join('');
+                updateBulkRetakeBar();
             } catch (e) {
                 section.classList.add('hidden');
             }
@@ -1459,12 +1520,17 @@
                 }
                 const subs = await res.json();
                 section.classList.remove('hidden');
+                document.getElementById('adm-bulk-retake-bar').classList.remove('hidden');
                 if (subs.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-slate-400">لا توجد نتائج بعد لهذا الامتحان.</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="9" class="p-4 text-center text-slate-400">لا توجد نتائج بعد لهذا الامتحان.</td></tr>`;
+                    updateBulkRetakeBar();
                     return;
                 }
                 tbody.innerHTML = subs.map(s => `
                     <tr class="hover:bg-slate-50 ${s.hidden ? 'opacity-50' : ''}">
+                        <td class="p-2.5 text-center">
+                            <input type="checkbox" class="bulk-retake-cb" value="${s.sap_id}" onchange="updateBulkRetakeBar()">
+                        </td>
                         <td class="p-2.5 font-mono">${s.sap_id}</td>
                         <td class="p-2.5 font-bold">${s.name}</td>
                         <td class="p-2.5">${s.score}</td>
@@ -1481,9 +1547,42 @@
                         </td>
                     </tr>
                 `).join('');
+                updateBulkRetakeBar();
             } catch (e) {
                 section.classList.add('hidden');
             }
+        }
+
+        // --- السماح بإعادة الامتحان لمجموعة من الأفراد دفعة واحدة ---
+        function updateBulkRetakeBar() {
+            const checked = document.querySelectorAll('.bulk-retake-cb:checked').length;
+            const bar = document.getElementById('adm-bulk-retake-bar');
+            const countEl = document.getElementById('bulk-retake-count');
+            if (countEl) countEl.innerText = checked;
+            const total = document.querySelectorAll('.bulk-retake-cb').length;
+            if (bar) bar.classList.toggle('hidden', total === 0);
+        }
+
+        function toggleSelectAllRetake(checkbox) {
+            document.querySelectorAll('.bulk-retake-cb').forEach(cb => { cb.checked = checkbox.checked; });
+            updateBulkRetakeBar();
+        }
+
+        async function bulkAllowRetake() {
+            const sapIds = Array.from(document.querySelectorAll('.bulk-retake-cb:checked')).map(cb => cb.value);
+            if (sapIds.length === 0) return alert("يرجى تحديد فرد واحد على الأقل.");
+            const examId = document.getElementById('adm-preview-select').value;
+            if (!examId) return;
+            if (!confirm(`هل تريد السماح لـ ${sapIds.length} فرد بإعادة هذا الامتحان؟`)) return;
+
+            const fd = new FormData();
+            fd.append('sap_ids', JSON.stringify(sapIds));
+            const res = await apiFetch(`/api/admin/exams/${examId}/allow-retake-bulk`, { method: 'POST', body: fd });
+            const data = await res.json();
+            if (!res.ok) return alert(data.detail || "فشلت العملية.");
+            alert(data.message);
+            document.getElementById('select-all-retake-cb').checked = false;
+            previewSelectedExam();
         }
 
         async function toggleSubmissionHidden(subId, newHidden, examId) {
@@ -1711,8 +1810,8 @@
                     <div class="text-[11px] text-slate-500 font-bold mt-1">عدد الدورات</div>
                 </div>
                 <div class="p-4 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border border-emerald-100 text-center">
-                    <div class="text-2xl font-black text-emerald-700">${data.total_participants}</div>
-                    <div class="text-[11px] text-slate-500 font-bold mt-1">أفراد أدوا امتحانات</div>
+                    <div class="text-2xl font-black text-emerald-700">${data.total_participants}<span class="text-xs text-slate-400"> / ${data.total_users}</span></div>
+                    <div class="text-[11px] text-slate-500 font-bold mt-1">أفراد أدوا امتحانات (${data.participation_rate}%)</div>
                 </div>
                 <div class="p-4 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border border-amber-100 text-center">
                     <div class="text-2xl font-black text-amber-700">${data.total_submissions}</div>
@@ -1721,6 +1820,22 @@
                 <div class="p-4 bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl border border-slate-200 text-center">
                     <div class="text-2xl font-black text-slate-700">${data.overall_avg_pct}%</div>
                     <div class="text-[11px] text-slate-500 font-bold mt-1">متوسط النسبة العام</div>
+                </div>
+                <div class="p-4 bg-gradient-to-br from-teal-50 to-emerald-50 rounded-2xl border border-teal-100 text-center">
+                    <div class="text-2xl font-black text-teal-700">${data.overall_pass_rate}%</div>
+                    <div class="text-[11px] text-slate-500 font-bold mt-1">نسبة النجاح العامة (≥60%)</div>
+                </div>
+                <div class="p-4 bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl border border-sky-100 text-center">
+                    <div class="text-2xl font-black text-sky-700">${data.submissions_last_7d}</div>
+                    <div class="text-[11px] text-slate-500 font-bold mt-1">محاولات آخر 7 أيام</div>
+                </div>
+                <div class="p-4 bg-gradient-to-br from-violet-50 to-purple-50 rounded-2xl border border-violet-100 text-center">
+                    <div class="text-2xl font-black text-violet-700">${data.submissions_last_30d}</div>
+                    <div class="text-[11px] text-slate-500 font-bold mt-1">محاولات آخر 30 يوم</div>
+                </div>
+                <div class="p-4 bg-gradient-to-br from-rose-50 to-pink-50 rounded-2xl border border-rose-100 text-center">
+                    <div class="text-2xl font-black text-rose-700">${data.total_users - data.total_participants}</div>
+                    <div class="text-[11px] text-slate-500 font-bold mt-1">أفراد لم يؤدوا أي امتحان بعد</div>
                 </div>
             `;
 
@@ -1735,13 +1850,65 @@
                 </div>
             `).join('');
 
+            document.getElementById('analytics-top-performers').innerHTML = data.top_performers.length === 0
+                ? '<p class="text-slate-400 text-xs">لا توجد بيانات كافية بعد.</p>'
+                : data.top_performers.map((p, i) => `
+                    <div class="flex items-center justify-between gap-2 p-2.5 bg-slate-50/80 border border-slate-200/70 rounded-xl text-xs">
+                        <div class="flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-full ${i < 3 ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white' : 'bg-slate-200 text-slate-600'} flex items-center justify-center font-bold text-[11px]">${i + 1}</span>
+                            <div>
+                                <div class="font-bold text-slate-800">${p.name}</div>
+                                <div class="text-[10px] text-slate-400">${p.department} — ${p.exams_taken} امتحان</div>
+                            </div>
+                        </div>
+                        <span class="font-black text-emerald-600">${p.avg_pct}%</span>
+                    </div>
+                `).join('');
+
+            document.getElementById('analytics-dept-breakdown').innerHTML = data.department_breakdown.length === 0
+                ? '<p class="text-slate-400 text-xs">لا توجد بيانات بعد.</p>'
+                : data.department_breakdown.map(d => `
+                    <div class="p-3 bg-slate-50/80 border border-slate-200/70 rounded-xl text-xs">
+                        <div class="font-bold text-slate-800">${d.department}</div>
+                        <div class="flex justify-between mt-1 text-[11px] text-slate-500">
+                            <span>👥 ${d.participants} مشارك</span>
+                            <span class="font-bold text-indigo-600">${d.avg_pct}%</span>
+                        </div>
+                    </div>
+                `).join('');
+
+            const renderExamMini = (e) => `
+                <div class="flex items-center justify-between gap-2 p-2.5 bg-slate-50/80 border border-slate-200/70 rounded-xl text-xs">
+                    <span class="font-bold text-slate-700">${e.exam_name}</span>
+                    <span class="font-black">${e.avg_pct}% <span class="text-[10px] text-slate-400 font-normal">(${e.participants} مشارك)</span></span>
+                </div>
+            `;
+            document.getElementById('analytics-strongest-exams').innerHTML = data.strongest_exams.length === 0
+                ? '<p class="text-slate-400 text-xs">لا توجد بيانات كافية بعد.</p>'
+                : data.strongest_exams.map(renderExamMini).join('');
+            document.getElementById('analytics-weakest-exams').innerHTML = data.weakest_exams.length === 0
+                ? '<p class="text-slate-400 text-xs">لا توجد بيانات كافية بعد.</p>'
+                : data.weakest_exams.map(renderExamMini).join('');
+
+            document.getElementById('analytics-weakest-questions').innerHTML = data.weakest_questions.length === 0
+                ? '<p class="text-slate-400 text-xs">لا توجد بيانات كافية بعد (متاحة فقط للنتائج الحديثة).</p>'
+                : data.weakest_questions.map(q => `
+                    <div class="p-2.5 bg-rose-50/60 border border-rose-100 rounded-xl text-xs flex justify-between items-center gap-3">
+                        <div>
+                            <span class="text-slate-700">${q.question}</span>
+                            <span class="text-[10px] text-slate-400 mr-1">(${q.branch} — ${q.attempts} محاولة)</span>
+                        </div>
+                        <span class="font-black text-rose-600 shrink-0">${q.correct_rate}%</span>
+                    </div>
+                `).join('');
+
             document.getElementById('analytics-per-exam').innerHTML = data.per_exam.length === 0
                 ? '<p class="text-slate-400 text-xs">لا توجد امتحانات بعد.</p>'
                 : data.per_exam.map(e => `
                     <div class="p-3.5 bg-slate-50/80 border border-slate-200/70 rounded-2xl space-y-2">
                         <div class="flex flex-wrap justify-between items-center gap-2">
                             <span class="font-bold text-slate-800 text-sm">${e.exam_name}</span>
-                            <span class="text-[11px] text-slate-500">👥 ${e.participants} مشارك — متوسط ${e.avg_pct}%</span>
+                            <span class="text-[11px] text-slate-500">👥 ${e.participants} مشارك — متوسط ${e.avg_pct}% — نجاح ${e.pass_rate}%</span>
                         </div>
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-1.5">
                             ${e.level_distribution.map((l, i) => `
@@ -1779,30 +1946,40 @@
             const byRole = {};
             skills.forEach(s => { (byRole[s.role] = byRole[s.role] || []).push(s); });
 
-            cont.innerHTML = Object.entries(byRole).map(([role, items]) => `
-                <div class="p-3.5 bg-slate-50/80 border border-slate-200/70 rounded-2xl space-y-2">
+            cont.innerHTML = Object.entries(byRole).map(([role, roleItems]) => {
+                const byGroup = {};
+                roleItems.forEach(s => { (byGroup[s.skill_group || 'عام'] = byGroup[s.skill_group || 'عام'] || []).push(s); });
+                return `
+                <div class="p-3.5 bg-slate-50/80 border border-slate-200/70 rounded-2xl space-y-3">
                     <h5 class="font-bold text-indigo-700 text-sm">👤 ${role}</h5>
-                    <div class="space-y-1.5">
-                        ${items.map(s => `
-                            <div class="flex items-start justify-between gap-2 bg-white p-2.5 rounded-xl border border-slate-100 text-xs">
-                                <div>
-                                    <span class="font-bold text-slate-800">${s.skill_name}</span>
-                                    ${s.description ? `<p class="text-slate-500 mt-0.5">${s.description}</p>` : ''}
-                                    <div class="flex flex-wrap gap-1.5 mt-1.5">
-                                        <span class="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100">الحد الأدنى: ${s.required_level}</span>
-                                        ${s.linked_exam_name ? `<span class="text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-100">مرتبط بامتحان: ${s.linked_exam_name}</span>` : `<span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">غير مرتبط بامتحان</span>`}
+                    ${Object.entries(byGroup).map(([group, items]) => `
+                        <div class="space-y-1.5">
+                            <h6 class="text-[11px] font-bold text-violet-700 bg-violet-50 inline-block px-2.5 py-1 rounded-full border border-violet-100">📁 ${group}</h6>
+                            <div class="space-y-1.5">
+                                ${items.map(s => `
+                                    <div class="flex items-start justify-between gap-2 bg-white p-2.5 rounded-xl border border-slate-100 text-xs">
+                                        <div>
+                                            <span class="font-bold text-slate-800">${s.skill_name}</span>
+                                            ${s.description ? `<p class="text-slate-500 mt-0.5">${s.description}</p>` : ''}
+                                            <div class="flex flex-wrap gap-1.5 mt-1.5">
+                                                <span class="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100">الحد الأدنى: ${s.required_level}</span>
+                                                ${s.linked_exam_name ? `<span class="text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-100">مرتبط بامتحان: ${s.linked_exam_name}</span>` : `<span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">غير مرتبط بامتحان</span>`}
+                                            </div>
+                                        </div>
+                                        <button onclick="deleteSkillRequirement(${s.id})" class="text-rose-600 hover:text-rose-800 font-bold shrink-0">حذف</button>
                                     </div>
-                                </div>
-                                <button onclick="deleteSkillRequirement(${s.id})" class="text-rose-600 hover:text-rose-800 font-bold shrink-0">حذف</button>
+                                `).join('')}
                             </div>
-                        `).join('')}
-                    </div>
+                        </div>
+                    `).join('')}
                 </div>
-            `).join('');
+            `;
+            }).join('');
         }
 
         async function addSkillRequirement() {
             const role = document.getElementById('skill-role').value.trim();
+            const group = document.getElementById('skill-group').value.trim();
             const name = document.getElementById('skill-name').value.trim();
             const desc = document.getElementById('skill-desc').value.trim();
             const examId = document.getElementById('skill-linked-exam').value;
@@ -1811,6 +1988,7 @@
 
             const fd = new FormData();
             fd.append('role', role);
+            fd.append('skill_group', group || 'عام');
             fd.append('skill_name', name);
             fd.append('description', desc);
             if (examId) fd.append('linked_exam_id', examId);
@@ -1820,6 +1998,7 @@
             const data = await res.json();
             if (!res.ok) return alert(data.detail || "فشل إضافة المتطلب.");
             document.getElementById('skill-role').value = '';
+            document.getElementById('skill-group').value = '';
             document.getElementById('skill-name').value = '';
             document.getElementById('skill-desc').value = '';
             loadSkills();
@@ -1828,6 +2007,38 @@
         async function deleteSkillRequirement(skillId) {
             if (!confirm("حذف متطلب المهارة هذا؟")) return;
             await apiFetch(`/api/admin/skills/${skillId}`, { method: 'DELETE' });
+            loadSkills();
+        }
+
+        async function downloadSkillsTemplate() {
+            try {
+                const res = await apiFetch('/api/admin/skills/download-template');
+                if (!res.ok) return alert("فشل تحميل القالب: " + await extractErrorMessage(res));
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'skills_matrix_template.xlsx';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            } catch (e) {
+                alert("تعذر تحميل القالب.");
+            }
+        }
+
+        async function uploadSkillsExcel() {
+            const fileInput = document.getElementById('skills-excel-file');
+            const file = fileInput.files[0];
+            if (!file) return;
+            const fd = new FormData();
+            fd.append('file', file);
+            const res = await apiFetch('/api/admin/skills/upload-excel', { method: 'POST', body: fd });
+            const data = await res.json();
+            fileInput.value = '';
+            if (!res.ok) return alert(data.detail || "فشل استيراد الملف.");
+            alert(data.message);
             loadSkills();
         }
 
@@ -1852,23 +2063,31 @@
                 not_assessed: '<span class="text-xs bg-slate-100 text-slate-500 px-3 py-1 rounded-full font-bold">⏳ لم يُختبر بعد</span>',
                 not_linked: '<span class="text-xs bg-slate-100 text-slate-500 px-3 py-1 rounded-full font-bold">مرجعي (غير مرتبط بامتحان)</span>',
             };
+            const byGroup = {};
+            data.skills.forEach(s => { (byGroup[s.skill_group || 'عام'] = byGroup[s.skill_group || 'عام'] || []).push(s); });
+
             cont.innerHTML = `
                 <p class="text-xs text-slate-500 mb-3">المهارات المطلوبة لمسمى: <strong class="text-indigo-700">${data.role}</strong></p>
-                <div class="space-y-2.5">
-                    ${data.skills.map(s => `
-                        <div class="p-4 bg-slate-50/80 border border-slate-200/70 rounded-2xl">
-                            <div class="flex flex-wrap justify-between items-start gap-2">
-                                <div>
-                                    <span class="font-bold text-slate-800">${s.skill_name}</span>
-                                    ${s.description ? `<p class="text-xs text-slate-500 mt-1">${s.description}</p>` : ''}
+                <div class="space-y-5">
+                    ${Object.entries(byGroup).map(([group, items]) => `
+                        <div class="space-y-2.5">
+                            <h4 class="text-sm font-bold text-violet-700 bg-violet-50 inline-block px-3 py-1.5 rounded-full border border-violet-100">📁 ${group}</h4>
+                            ${items.map(s => `
+                                <div class="p-4 bg-slate-50/80 border border-slate-200/70 rounded-2xl">
+                                    <div class="flex flex-wrap justify-between items-start gap-2">
+                                        <div>
+                                            <span class="font-bold text-slate-800">${s.skill_name}</span>
+                                            ${s.description ? `<p class="text-xs text-slate-500 mt-1">${s.description}</p>` : ''}
+                                        </div>
+                                        ${statusBadge[s.status]}
+                                    </div>
+                                    <div class="flex flex-wrap gap-3 mt-2 text-[11px] text-slate-500">
+                                        <span>الحد الأدنى المطلوب: <strong>${s.required_level}</strong></span>
+                                        ${s.achieved_level ? `<span>مستواك الحالي: <strong class="${s.status === 'met' ? 'text-emerald-600' : 'text-amber-600'}">${s.achieved_level} (${s.achieved_pct}%)</strong></span>` : ''}
+                                        ${s.linked_exam_name ? `<span>الامتحان المرتبط: ${s.linked_exam_name}</span>` : ''}
+                                    </div>
                                 </div>
-                                ${statusBadge[s.status]}
-                            </div>
-                            <div class="flex flex-wrap gap-3 mt-2 text-[11px] text-slate-500">
-                                <span>الحد الأدنى المطلوب: <strong>${s.required_level}</strong></span>
-                                ${s.achieved_level ? `<span>مستواك الحالي: <strong class="${s.status === 'met' ? 'text-emerald-600' : 'text-amber-600'}">${s.achieved_level} (${s.achieved_pct}%)</strong></span>` : ''}
-                                ${s.linked_exam_name ? `<span>الامتحان المرتبط: ${s.linked_exam_name}</span>` : ''}
-                            </div>
+                            `).join('')}
                         </div>
                     `).join('')}
                 </div>
@@ -2082,7 +2301,7 @@
 
         // --- Leaderboards ---
         async function loadLeaderboardExams() {
-            const res = await apiFetch('/api/exams');
+            const res = await apiFetch('/api/exams/public-list');
             const exams = await res.json();
             const sel = document.getElementById('lb-exam-select');
             sel.innerHTML = `<option value="">-- اختر دورة لعرض ترتيبها --</option>` + exams.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
