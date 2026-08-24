@@ -257,6 +257,12 @@
                             <button type="button" data-perm="skills" onclick="switchAdminTab('admin-tab-skills')" data-tab="admin-tab-skills" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>🎯</span><span>مصفوفة المهارات</span>
                             </button>
+                            <button type="button" data-perm="skills" onclick="switchAdminTab('admin-tab-skill-assess')" data-tab="admin-tab-skill-assess" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                                <span>🧑‍🔧</span><span>تقييم مهارات فرد</span>
+                            </button>
+                            <button type="button" data-perm="manage" onclick="switchAdminTab('admin-tab-pending')" data-tab="admin-tab-pending" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                                <span>⏳</span><span>المحاولات المعلّقة</span>
+                            </button>
                             <button type="button" data-super-only="1" onclick="switchAdminTab('admin-tab-admins')" data-tab="admin-tab-admins" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>👔</span><span>إدارة حسابات المديرين</span>
                             </button>
@@ -370,6 +376,8 @@
                             <input type="checkbox" id="adm-curr-hide-lb" class="w-4 h-4 text-amber-600"> تعليق ظهور نتائج هذا الامتحان في لوحة الشرف
                         </label>
                         <button onclick="saveExamValidityChanges()" class="bg-gradient-to-r from-slate-700 to-slate-900 hover:from-slate-800 hover:to-black text-white px-3 py-1 rounded text-xs font-bold">حفظ الصلاحية والحالة</button>
+                        <button onclick="openExamTargetingModal()" class="bg-gradient-to-r from-violet-600 to-purple-700 hover:from-violet-700 hover:to-purple-800 text-white px-3 py-1 rounded text-xs font-bold">🎯 تعديل تخصيص الإدارة/الفريق</button>
+                        <button onclick="regradeCurrentExam()" class="bg-gradient-to-r from-teal-600 to-cyan-700 hover:from-teal-700 hover:to-cyan-800 text-white px-3 py-1 rounded text-xs font-bold">🔄 إعادة تصحيح كل النتائج</button>
                         <button onclick="deleteCurrentExam()" class="bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-700 hover:to-red-800 text-white px-3 py-1 rounded text-xs font-bold">🗑 حذف الامتحان نهائيًا</button>
                     </div>
                 </div>
@@ -447,6 +455,9 @@
                     </div>
                 </div>
 
+                <div class="relative">
+                    <input type="text" id="adm-users-search" oninput="filterAdminUsersTable()" placeholder="🔍 بحث برقم SAP أو الاسم..." class="w-full px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                </div>
                 <div class="overflow-x-auto max-h-64">
                     <table class="w-full text-right border-collapse text-xs">
                         <thead class="bg-slate-50/95 backdrop-blur text-slate-500 text-[11px] uppercase tracking-wider sticky top-0 border-b-2 border-slate-200">
@@ -458,7 +469,7 @@
                                 <th class="p-2.5">الفرق</th>
                                 <th class="p-2.5">كلمة المرور</th>
                                 <th class="p-2.5 text-center">إعادة الامتحان</th>
-                                <th class="p-2.5 text-center">حذف</th>
+                                <th class="p-2.5 text-center">إجراءات</th>
                             </tr>
                         </thead>
                         <tbody id="adm-users-table-body" class="divide-y"></tbody>
@@ -483,17 +494,35 @@
                     <h3 class="text-lg font-bold text-slate-800">📊 لوحة التحليلات العامة</h3>
                     <button onclick="loadAnalytics()" class="text-xs font-bold text-indigo-600 hover:underline">🔄 تحديث</button>
                 </div>
+
+                <div class="p-3.5 bg-indigo-50/60 rounded-2xl border border-indigo-100 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                    <span class="text-xs font-bold text-indigo-900 shrink-0">🎛 تصفية:</span>
+                    <select id="analytics-dept-slicer" onchange="loadAnalytics()" class="flex-1 border border-slate-200 px-3 py-2 rounded-xl text-xs bg-white outline-none focus:ring-2 focus:ring-indigo-400 transition-all cursor-pointer">
+                        <option value="">🏢 كل الإدارات</option>
+                    </select>
+                    <select id="analytics-exam-slicer" onchange="loadAnalytics()" class="flex-1 border border-slate-200 px-3 py-2 rounded-xl text-xs bg-white outline-none focus:ring-2 focus:ring-indigo-400 transition-all cursor-pointer">
+                        <option value="">📝 كل الدورات</option>
+                    </select>
+                    <button onclick="resetAnalyticsSlicer()" class="text-xs text-slate-500 hover:text-slate-700 font-bold shrink-0">إعادة ضبط</button>
+                </div>
+
                 <div id="analytics-overview-cards" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
 
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
                     <div>
-                        <h4 class="text-sm font-bold text-slate-700 mb-2">توزيع المستويات الإجمالي (كل الامتحانات)</h4>
+                        <h4 class="text-sm font-bold text-slate-700 mb-2">توزيع المستويات الإجمالي</h4>
                         <div id="analytics-overall-levels" class="space-y-1.5"></div>
                     </div>
                     <div>
                         <h4 class="text-sm font-bold text-slate-700 mb-2">🏆 أفضل 5 أفراد أداءً (متوسط عبر كل امتحاناتهم)</h4>
                         <div id="analytics-top-performers" class="space-y-1.5"></div>
                     </div>
+                </div>
+
+                <div>
+                    <h4 class="text-sm font-bold text-slate-700 mb-2">🔔 التوزيع الطبيعي للنتائج (Normal Distribution)</h4>
+                    <p class="text-[11px] text-slate-400 mb-2">الأعمدة تمثل عدد النتائج الفعلي في كل فئة، والمنحنى يمثل التوزيع الطبيعي النظري بنفس المتوسط والانحراف المعياري للبيانات الحالية.</p>
+                    <div id="analytics-normal-dist"></div>
                 </div>
 
                 <div>
@@ -564,6 +593,37 @@
                 <div id="skills-list-container" class="space-y-4"></div>
             </div>
 
+            <!-- ك-ب. تقييم مهارات فرد يدويًا -->
+            <div id="admin-tab-skill-assess" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
+                <h3 class="text-lg font-bold text-slate-800 border-b pb-2">🧑‍🔧 تقييم مهارات فرد يدويًا</h3>
+                <p class="text-[11px] text-slate-500">ابحث عن الفرد بالاسم أو رقم SAP، ثم حدّد مستوى تحقيقه لأي مهارة يدويًا (حتى لو غير مرتبطة بامتحان)، أو اترك مهارات أخرى تعتمد تلقائيًا على نتيجة الامتحان المرتبط بها.</p>
+                <div class="relative">
+                    <input type="text" id="skill-assess-search" oninput="searchUsersForSkillAssessment()" placeholder="🔍 ابحث بالاسم أو رقم SAP..." class="w-full px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                    <div id="skill-assess-search-results" class="absolute z-20 w-full bg-white border border-slate-200 rounded-xl shadow-xl mt-1 max-h-56 overflow-y-auto hidden"></div>
+                </div>
+                <div id="skill-assess-content"></div>
+            </div>
+
+
+            <!-- ك. المحاولات المعلّقة عبر جميع الامتحانات (لم تُكمل + طلبات إعادة) -->
+            <div id="admin-tab-pending" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-5">
+                <div class="flex justify-between items-center border-b pb-2">
+                    <h3 class="text-lg font-bold text-slate-800">⏳ إدارة المحاولات المعلّقة (كل الامتحانات)</h3>
+                    <button onclick="loadPendingAttempts()" class="text-xs font-bold text-indigo-600 hover:underline">🔄 تحديث</button>
+                </div>
+
+                <div class="space-y-2">
+                    <h4 class="text-sm font-bold text-amber-800">🙋 طلبات إعادة الامتحان المقدَّمة من الأفراد</h4>
+                    <p class="text-[11px] text-slate-500">هؤلاء طلبوا صراحةً إعادة امتحان محظورين منه.</p>
+                    <div id="pending-retake-requests-list" class="space-y-1.5"></div>
+                </div>
+
+                <div class="space-y-2 pt-4 border-t">
+                    <h4 class="text-sm font-bold text-rose-800">⏸ محاولات دخلوا فيها الامتحان ولم يُكملوا (كل الامتحانات)</h4>
+                    <p class="text-[11px] text-slate-500">استهلكوا محاولتهم بمجرد الدخول ولن يستطيعوا إعادة المحاولة إلا بالسماح لهم صراحة.</p>
+                    <div id="pending-in-progress-list" class="space-y-1.5"></div>
+                </div>
+            </div>
 
             <!-- ح. إدارة حسابات المديرين (أدمن مركزي فقط) -->
             <div id="admin-tab-admins" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
@@ -605,6 +665,9 @@
                 <div class="flex flex-col md:flex-row justify-between md:items-center gap-3 border-b pb-4">
                     <h3 class="text-lg sm:text-xl font-bold text-slate-800 flex items-center gap-2">🏆 لوحة الشرف وترتيب الكفاءات</h3>
                     <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        <select id="lb-department-select" onchange="onLeaderboardDeptChange()" class="border border-slate-200 px-3 py-2.5 sm:py-2 rounded-xl text-xs bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-400 transition-all cursor-pointer">
+                            <option value="">🏢 كل الإدارات</option>
+                        </select>
                         <button onclick="loadGeneralLeaderboard()" class="px-3 py-2.5 sm:py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-200 transition-all hover:-translate-y-0.5">الترتيب التراكمي العام</button>
                         <select id="lb-exam-select" onchange="loadExamLeaderboard()" class="border border-slate-200 px-3 py-2.5 sm:py-2 rounded-xl text-xs bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-400 transition-all cursor-pointer"></select>
                     </div>
@@ -696,6 +759,84 @@
         </div>
     </div>
 
+    <!-- نافذة تعديل بيانات مستخدم -->
+    <div id="user-edit-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 space-y-3 max-h-[85vh] overflow-y-auto shadow-2xl">
+            <div class="flex justify-between items-center border-b pb-2">
+                <h3 class="font-bold text-slate-800 text-base">✏️ تعديل بيانات المستخدم</h3>
+                <button onclick="closeUserEditModal()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+            </div>
+            <p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">تغيير رقم SAP سيُحدَّث تلقائيًا في كل نتائجه وفرقه السابقة حتى لا تنقطع.</p>
+            <div>
+                <label class="text-xs text-slate-500 font-bold block mb-1">رقم SAP</label>
+                <input type="text" id="edit-user-sap" class="w-full px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+            </div>
+            <div>
+                <label class="text-xs text-slate-500 font-bold block mb-1">الاسم</label>
+                <input type="text" id="edit-user-name" class="w-full px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                    <label class="text-xs text-slate-500 font-bold block mb-1">الدور الوظيفي</label>
+                    <input type="text" id="edit-user-role" class="w-full px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                </div>
+                <div>
+                    <label class="text-xs text-slate-500 font-bold block mb-1">الإدارة</label>
+                    <input type="text" id="edit-user-dept" class="w-full px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                </div>
+            </div>
+            <button onclick="saveUserEdit()" class="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold py-2.5 rounded-xl transition-all shadow-md shadow-indigo-200">حفظ التعديلات</button>
+        </div>
+    </div>
+
+    <!-- نافذة تعديل صلاحيات مدير -->
+    <div id="sub-admin-edit-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-lg w-full p-6 space-y-3 max-h-[85vh] overflow-y-auto shadow-2xl">
+            <div class="flex justify-between items-center border-b pb-2">
+                <h3 class="font-bold text-slate-800 text-base">✏️ تعديل بيانات وصلاحيات المدير</h3>
+                <button onclick="closeSubAdminEditModal()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <input type="text" id="edit-sub-name" placeholder="اسم المدير" class="px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                <input type="email" id="edit-sub-email" placeholder="البريد الإلكتروني" class="px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+            </div>
+            <input type="password" id="edit-sub-pass" placeholder="كلمة مرور جديدة (اتركه فارغًا للإبقاء عليها كما هي)" class="w-full px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+            <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1.5">الصلاحيات الممنوحة:</label>
+                <div class="flex flex-wrap gap-3 text-xs" id="edit-sub-perms-container">
+                    <label class="flex items-center gap-1.5"><input type="checkbox" name="edit_sub_perm" value="resets"> طلبات استعادة كلمة المرور</label>
+                    <label class="flex items-center gap-1.5"><input type="checkbox" name="edit_sub_perm" value="gallery"> معرض الصور</label>
+                    <label class="flex items-center gap-1.5"><input type="checkbox" name="edit_sub_perm" value="create"> إنشاء دورة</label>
+                    <label class="flex items-center gap-1.5"><input type="checkbox" name="edit_sub_perm" value="manage"> إدارة الامتحانات</label>
+                    <label class="flex items-center gap-1.5"><input type="checkbox" name="edit_sub_perm" value="users"> إدارة المشتركين</label>
+                    <label class="flex items-center gap-1.5"><input type="checkbox" name="edit_sub_perm" value="teams"> إدارة الفرق</label>
+                    <label class="flex items-center gap-1.5"><input type="checkbox" name="edit_sub_perm" value="analytics"> لوحة التحليلات</label>
+                    <label class="flex items-center gap-1.5"><input type="checkbox" name="edit_sub_perm" value="skills"> مصفوفة المهارات</label>
+                </div>
+            </div>
+            <button onclick="saveSubAdminEdit()" class="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold py-2.5 rounded-xl transition-all shadow-md shadow-indigo-200">حفظ التعديلات</button>
+        </div>
+    </div>
+
+    <!-- نافذة تعديل تخصيص الامتحان (الإدارات والفرق) -->
+    <div id="exam-targeting-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-lg w-full p-6 space-y-3 max-h-[85vh] overflow-y-auto shadow-2xl">
+            <div class="flex justify-between items-center border-b pb-2">
+                <h3 class="font-bold text-slate-800 text-base">🎯 تعديل تخصيص الامتحان</h3>
+                <button onclick="closeExamTargetingModal()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+            </div>
+            <div>
+                <label class="text-xs font-bold text-slate-700 block mb-1.5">الإدارات المتاح لها الامتحان:</label>
+                <div id="edit-exam-dept-container" class="grid grid-cols-2 gap-2 text-xs p-3 bg-slate-50 rounded-xl border border-slate-200"></div>
+            </div>
+            <div>
+                <label class="text-xs font-bold text-slate-700 block mb-1.5">الفرق المتاح لها الامتحان:</label>
+                <div id="edit-exam-team-container" class="grid grid-cols-2 gap-2 text-xs p-3 bg-slate-50 rounded-xl border border-slate-200"></div>
+            </div>
+            <button onclick="saveExamTargeting()" class="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold py-2.5 rounded-xl transition-all shadow-md shadow-indigo-200">حفظ التخصيص</button>
+        </div>
+    </div>
+
     <div id="print-area" class="hidden p-8 bg-white text-black text-sm"></div>
 
     <script>
@@ -758,6 +899,7 @@
             });
             if (tabId === 'admin-tab-analytics') loadAnalytics();
             if (tabId === 'admin-tab-skills') loadSkills();
+            if (tabId === 'admin-tab-pending') loadPendingAttempts();
         }
 
         function setSession(user, role) {
@@ -1022,13 +1164,27 @@
                         ${e.can_enter ? `
                             <button onclick="startExamSession(${e.id}, '${e.name}')" class="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-md shadow-indigo-200 hover:-translate-y-0.5">بدء الامتحان الآن</button>
                         ` : `
-                            <span class="text-xs font-bold px-3 py-1.5 rounded-xl ${e.already_submitted ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'}">
-                                ${e.in_progress ? 'بدأت هذا الامتحان ولم تُكمله (يتطلب إذن الإدارة لإعادة الدخول)' : (e.already_submitted ? 'تم إنهاء الاختبار مسبقاً (يتطلب إذن الإدارة للإعادة)' : (e.is_expired ? 'انتهت صلاحية الاختبار' : 'معطل مؤقتاً'))}
-                            </span>
+                            <div class="flex flex-col items-end gap-1.5">
+                                <span class="text-xs font-bold px-3 py-1.5 rounded-xl ${e.already_submitted ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'}">
+                                    ${e.in_progress ? 'بدأت هذا الامتحان ولم تُكمله (يتطلب إذن الإدارة لإعادة الدخول)' : (e.already_submitted ? 'تم إنهاء الاختبار مسبقاً (يتطلب إذن الإدارة للإعادة)' : (e.is_expired ? 'انتهت صلاحية الاختبار' : 'معطل مؤقتاً'))}
+                                </span>
+                                ${(e.already_submitted || e.in_progress) ? `<button onclick="requestExamRetake(${e.id}, this)" class="text-[11px] text-indigo-600 hover:underline font-bold">🔁 طلب إعادة هذا الامتحان من الإدارة</button>` : ''}
+                            </div>
                         `}
                     </div>
                 </div>
             `).join('');
+        }
+
+        async function requestExamRetake(examId, btnEl) {
+            const res = await apiFetch(`/api/exams/${examId}/request-retake`, { method: 'POST' });
+            const data = await res.json();
+            alert(data.message || data.detail);
+            if (res.ok && btnEl) {
+                btnEl.disabled = true;
+                btnEl.innerText = '✔ تم إرسال الطلب، بانتظار مراجعة الإدارة';
+                btnEl.classList.add('opacity-60', 'cursor-not-allowed');
+            }
         }
 
         async function toggleUserHistory() {
@@ -1345,11 +1501,14 @@
             if (exams.length > 0) previewSelectedExam();
         }
 
+        let currentPreviewedExamData = null;
+
         async function previewSelectedExam() {
             const examId = document.getElementById('adm-preview-select').value;
             if (!examId) return;
             const res = await apiFetch(`/api/admin/exams/${examId}/preview`);
             const data = await res.json();
+            currentPreviewedExamData = data;
 
             const controlBar = document.getElementById('adm-exam-control-bar');
             controlBar.classList.remove('hidden');
@@ -1502,6 +1661,73 @@
             alert(data.message);
         }
 
+        // --- تعديل تخصيص الامتحان (الإدارات والفرق) في أي وقت بعد النشر ---
+        async function openExamTargetingModal() {
+            const examId = document.getElementById('adm-preview-select').value;
+            if (!examId || !currentPreviewedExamData) return alert("اختر امتحاناً أولاً.");
+
+            const currentDepts = currentPreviewedExamData.departments || ['الكل'];
+            const currentTeams = currentPreviewedExamData.teams || ['الكل'];
+
+            // الإدارات
+            const deptRes = await apiFetch('/api/admin/departments');
+            const deptData = deptRes.ok ? await deptRes.json() : { departments: [] };
+            const deptCont = document.getElementById('edit-exam-dept-container');
+            let deptHtml = `<label class="flex items-center gap-1.5"><input type="checkbox" name="edit_exam_dept" value="الكل" ${currentDepts.includes('الكل') ? 'checked' : ''}> الكل</label>`;
+            (deptData.departments || []).forEach(d => {
+                deptHtml += `<label class="flex items-center gap-1.5"><input type="checkbox" name="edit_exam_dept" value="${d}" ${currentDepts.includes(d) ? 'checked' : ''}> ${d}</label>`;
+            });
+            deptCont.innerHTML = deptHtml;
+
+            // الفرق
+            const teamRes = await apiFetch('/api/admin/teams');
+            const teams = teamRes.ok ? await teamRes.json() : [];
+            const teamCont = document.getElementById('edit-exam-team-container');
+            let teamHtml = `<label class="flex items-center gap-1.5"><input type="checkbox" name="edit_exam_team" value="الكل" ${currentTeams.includes('الكل') ? 'checked' : ''}> الكل</label>`;
+            teams.forEach(t => {
+                teamHtml += `<label class="flex items-center gap-1.5"><input type="checkbox" name="edit_exam_team" value="${t.name}" ${currentTeams.includes(t.name) ? 'checked' : ''}> ${t.name}</label>`;
+            });
+            teamCont.innerHTML = teamHtml;
+
+            document.getElementById('exam-targeting-modal').classList.remove('hidden');
+        }
+
+        function closeExamTargetingModal() {
+            document.getElementById('exam-targeting-modal').classList.add('hidden');
+        }
+
+        async function saveExamTargeting() {
+            const examId = document.getElementById('adm-preview-select').value;
+            if (!examId) return;
+
+            const depts = Array.from(document.querySelectorAll('input[name="edit_exam_dept"]:checked')).map(cb => cb.value);
+            const teams = Array.from(document.querySelectorAll('input[name="edit_exam_team"]:checked')).map(cb => cb.value);
+
+            const fd = new FormData();
+            fd.append('departments', JSON.stringify(depts.length ? depts : ['الكل']));
+            fd.append('teams', JSON.stringify(teams.length ? teams : ['الكل']));
+
+            const res = await apiFetch(`/api/admin/exams/${examId}/update-targeting`, { method: 'POST', body: fd });
+            const data = await res.json();
+            if (!res.ok) return alert(data.detail || "فشل حفظ التخصيص.");
+            alert(data.message);
+            closeExamTargetingModal();
+            previewSelectedExam();
+        }
+
+        // --- إعادة تصحيح كل نتائج الامتحان (بعد تعديل إجابة سؤال مثلاً) ---
+        async function regradeCurrentExam() {
+            const examId = document.getElementById('adm-preview-select').value;
+            if (!examId) return;
+            if (!confirm("سيتم إعادة حساب نتيجة كل المتدربين لهذا الامتحان بناءً على مفتاح الإجابات الحالي، مع الاحتفاظ بإجابات كل متدرب كما سجّلها فعليًا. هل تريد المتابعة؟")) return;
+
+            const res = await apiFetch(`/api/admin/exams/${examId}/regrade`, { method: 'POST' });
+            const data = await res.json();
+            if (!res.ok) return alert(data.detail || "فشلت إعادة التصحيح.");
+            alert(data.message);
+            loadExamSubmissionsForAdmin(examId);
+        }
+
         async function deleteCurrentExam() {
             const sel = document.getElementById('adm-preview-select');
             const examId = sel.value;
@@ -1527,6 +1753,56 @@
             document.getElementById('adm-submissions-section').classList.add('hidden');
             document.getElementById('adm-in-progress-section').classList.add('hidden');
             loadAdminExamList();
+        }
+
+        // --- صفحة موحّدة لكل المحاولات المعلّقة عبر جميع الامتحانات ---
+        async function loadPendingAttempts() {
+            const res = await apiFetch('/api/admin/pending-attempts');
+            if (!res.ok) return;
+            const data = await res.json();
+
+            const reqCont = document.getElementById('pending-retake-requests-list');
+            if (data.retake_requests.length === 0) {
+                reqCont.innerHTML = '<p class="text-slate-400 text-xs">لا توجد طلبات إعادة معلّقة حاليًا.</p>';
+            } else {
+                reqCont.innerHTML = data.retake_requests.map(r => `
+                    <div class="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs">
+                        <span><strong class="text-slate-800">${r.name}</strong> <span class="font-mono text-slate-500">(SAP: ${r.sap_id})</span> — امتحان: <strong>${r.exam_name}</strong> — بتاريخ: ${r.requested_at}</span>
+                        <div class="flex gap-1.5 shrink-0">
+                            <button onclick="resolveRetakeRequest(${r.request_id}, 'approve')" class="bg-emerald-100 hover:bg-emerald-200 text-emerald-800 px-2.5 py-1 rounded-lg font-bold">✔ موافقة</button>
+                            <button onclick="resolveRetakeRequest(${r.request_id}, 'reject')" class="bg-rose-100 hover:bg-rose-200 text-rose-700 px-2.5 py-1 rounded-lg font-bold">✕ رفض</button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            const progCont = document.getElementById('pending-in-progress-list');
+            if (data.in_progress.length === 0) {
+                progCont.innerHTML = '<p class="text-slate-400 text-xs">لا توجد محاولات مفتوحة حاليًا.</p>';
+            } else {
+                progCont.innerHTML = data.in_progress.map(r => `
+                    <div class="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs">
+                        <span><strong class="text-slate-800">${r.name}</strong> <span class="font-mono text-slate-500">(SAP: ${r.sap_id})</span> — امتحان: <strong>${r.exam_name}</strong> — بدأ في: ${r.started_at}</span>
+                        <button onclick="allowRetakeForExam(${r.exam_id}, '${r.sap_id}')" class="bg-amber-200 hover:bg-amber-300 text-amber-900 px-2.5 py-1 rounded-lg font-bold shrink-0">السماح بإعادة الدخول</button>
+                    </div>
+                `).join('');
+            }
+        }
+
+        async function resolveRetakeRequest(requestId, action) {
+            const res = await apiFetch(`/api/admin/retake-requests/${requestId}/${action}`, { method: 'POST' });
+            const data = await res.json();
+            alert(data.message);
+            loadPendingAttempts();
+        }
+
+        async function allowRetakeForExam(examId, sapId) {
+            const fd = new FormData();
+            fd.append('sap_id', sapId);
+            const res = await apiFetch(`/api/admin/exams/${examId}/allow-retake`, { method: 'POST', body: fd });
+            const data = await res.json();
+            alert(data.message);
+            loadPendingAttempts();
         }
 
         async function loadInProgressUsersForAdmin(examId) {
@@ -1706,10 +1982,22 @@
         }
 
         // --- Admin Users Load ---
+        let lastLoadedUsers = [];
+
         async function loadAdminUsers() {
             const res = await apiFetch('/api/admin/users');
             const users = await res.json();
+            lastLoadedUsers = users;
+            renderUsersTable(users);
+            filterAdminUsersTable();
+        }
+
+        function renderUsersTable(users) {
             const tbody = document.getElementById('adm-users-table-body');
+            if (users.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-slate-400">لا توجد نتائج مطابقة.</td></tr>`;
+                return;
+            }
             tbody.innerHTML = users.map(u => `
                 <tr class="hover:bg-slate-50">
                     <td class="p-2.5 font-mono">${u.sap_id}</td>
@@ -1719,7 +2007,7 @@
                     <td class="p-2.5">
                         <div class="flex flex-wrap gap-1 items-center">
                             ${(u.teams || []).map(t => `<span class="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100 whitespace-nowrap">${t.name}</span>`).join('') || '<span class="text-[10px] text-slate-400">بدون فريق</span>'}
-                            <button onclick="openTeamAssignModal('${u.sap_id}', '${u.name.replace(/'/g, "\\'")}')" class="text-[10px] text-indigo-600 hover:underline font-bold whitespace-nowrap">تعديل</button>
+                            <button onclick="openTeamAssignModal('${u.sap_id}', '${u.name.replace(/'/g, "\\'")}')" class="text-[10px] text-indigo-600 hover:underline font-bold whitespace-nowrap">فرق</button>
                         </div>
                     </td>
                     <td class="p-2.5 font-mono text-indigo-600 font-bold">${u.password}</td>
@@ -1727,10 +2015,23 @@
                         <button onclick="allowUserRetake('${u.sap_id}')" class="bg-amber-100 text-amber-900 px-2 py-1 rounded text-[11px] font-bold hover:bg-amber-200">السماح بالإعادة</button>
                     </td>
                     <td class="p-2.5 text-center">
+                        <button onclick="openEditUserModal('${u.sap_id}')" class="text-indigo-600 hover:text-indigo-800 font-bold ml-2.5">تعديل</button>
                         <button onclick="deleteUser('${u.sap_id}')" class="text-rose-600 hover:text-rose-800 font-bold">حذف</button>
                     </td>
                 </tr>
             `).join('');
+        }
+
+        function filterAdminUsersTable() {
+            const q = (document.getElementById('adm-users-search')?.value || '').trim().toLowerCase();
+            if (!q) {
+                renderUsersTable(lastLoadedUsers);
+                return;
+            }
+            const filtered = lastLoadedUsers.filter(u =>
+                (u.sap_id || '').toLowerCase().includes(q) || (u.name || '').toLowerCase().includes(q)
+            );
+            renderUsersTable(filtered);
         }
 
         async function addSingleUser() {
@@ -1804,6 +2105,47 @@
             loadAdminUsers();
         }
 
+        // --- تعديل بيانات مستخدم موجود ---
+        let editingUserOriginalSap = null;
+
+        function openEditUserModal(sapId) {
+            const u = lastLoadedUsers.find(x => x.sap_id === sapId);
+            if (!u) return;
+            editingUserOriginalSap = sapId;
+            document.getElementById('edit-user-sap').value = u.sap_id;
+            document.getElementById('edit-user-name').value = u.name;
+            document.getElementById('edit-user-role').value = u.role;
+            document.getElementById('edit-user-dept').value = u.department;
+            document.getElementById('user-edit-modal').classList.remove('hidden');
+        }
+
+        function closeUserEditModal() {
+            document.getElementById('user-edit-modal').classList.add('hidden');
+            editingUserOriginalSap = null;
+        }
+
+        async function saveUserEdit() {
+            if (!editingUserOriginalSap) return;
+            const newSap = document.getElementById('edit-user-sap').value.trim();
+            const name = document.getElementById('edit-user-name').value.trim();
+            const role = document.getElementById('edit-user-role').value.trim();
+            const dept = document.getElementById('edit-user-dept').value.trim();
+            if (!newSap || !name || !role || !dept) return alert("يرجى ملء كل الحقول.");
+
+            const fd = new FormData();
+            fd.append('new_sap_id', newSap);
+            fd.append('name', name);
+            fd.append('role', role);
+            fd.append('department', dept);
+
+            const res = await apiFetch(`/api/admin/users/${editingUserOriginalSap}/update`, { method: 'POST', body: fd });
+            const data = await res.json();
+            if (!res.ok) return alert(data.detail || "فشل حفظ التعديلات.");
+            alert(data.message);
+            closeUserEditModal();
+            loadAdminUsers();
+        }
+
         // --- إدارة الفرق ---
         let allTeamsCache = [];
 
@@ -1848,10 +2190,42 @@
 
         // --- لوحة التحليلات ---
         async function loadAnalytics() {
-            const res = await apiFetch('/api/admin/analytics/overview');
+            const deptSel = document.getElementById('analytics-dept-slicer');
+            const examSel = document.getElementById('analytics-exam-slicer');
+            const dept = deptSel?.value || '';
+            const examId = examSel?.value || '';
+
+            const params = new URLSearchParams();
+            if (dept) params.append('department', dept);
+            if (examId) params.append('exam_id', examId);
+            const qs = params.toString();
+
+            const res = await apiFetch(`/api/admin/analytics/overview${qs ? '?' + qs : ''}`);
             if (!res.ok) return;
             const data = await res.json();
 
+            // تعبئة قوائم السلايسر مرة واحدة فقط (أول تحميل) حتى لا تُعاد كتابتها فوق اختيار المستخدم
+            if (deptSel && deptSel.options.length <= 1) {
+                deptSel.innerHTML = '<option value="">🏢 كل الإدارات</option>' +
+                    (data.filters?.departments || []).map(d => `<option value="${d}">${d}</option>`).join('');
+                deptSel.value = dept;
+            }
+            if (examSel && examSel.options.length <= 1) {
+                examSel.innerHTML = '<option value="">📝 كل الدورات</option>' +
+                    (data.filters?.exams || []).map(e => `<option value="${e.id}">${e.name}</option>`).join('');
+                examSel.value = examId;
+            }
+
+            renderAnalyticsData(data, dept);
+        }
+
+        function resetAnalyticsSlicer() {
+            document.getElementById('analytics-dept-slicer').value = '';
+            document.getElementById('analytics-exam-slicer').value = '';
+            loadAnalytics();
+        }
+
+        function renderAnalyticsData(data, dept) {
             document.getElementById('analytics-overview-cards').innerHTML = `
                 <div class="p-4 bg-gradient-to-br from-indigo-50 to-violet-50 rounded-2xl border border-indigo-100 text-center">
                     <div class="text-2xl font-black text-indigo-700">${data.total_exams}</div>
@@ -1897,6 +2271,8 @@
                     <span class="w-20 shrink-0 text-slate-500 font-mono">${l.count} (${l.pct}%)</span>
                 </div>
             `).join('');
+
+            renderNormalDistributionChart(data.score_distribution);
 
             document.getElementById('analytics-top-performers').innerHTML = data.top_performers.length === 0
                 ? '<p class="text-slate-400 text-xs">لا توجد بيانات كافية بعد.</p>'
@@ -1970,7 +2346,163 @@
                 `).join('');
         }
 
+        // --- رسم مخطط التوزيع الطبيعي (هيستوجرام الأعداد الفعلية + منحنى Gaussian نظري) ---
+        function renderNormalDistributionChart(dist) {
+            const cont = document.getElementById('analytics-normal-dist');
+            if (!cont) return;
+            if (!dist || !dist.histogram || dist.histogram.length === 0 || dist.mean === null) {
+                cont.innerHTML = '<p class="text-slate-400 text-xs">لا توجد بيانات كافية بعد لرسم التوزيع (يلزم نتيجتان على الأقل).</p>';
+                return;
+            }
+
+            const W = 700, H = 260, padL = 40, padR = 20, padT = 20, padB = 40;
+            const plotW = W - padL - padR, plotH = H - padT - padB;
+            const counts = dist.histogram.map(h => h.count);
+            const expected = dist.normal_curve.map(n => n.expected_count);
+            const maxY = Math.max(1, ...counts, ...expected) * 1.15;
+            const n = dist.histogram.length;
+            const barW = plotW / n;
+
+            const xForIndex = (i) => padL + i * barW;
+            const yForVal = (v) => padT + plotH - (v / maxY) * plotH;
+
+            const bars = dist.histogram.map((h, i) => {
+                const bh = (h.count / maxY) * plotH;
+                return `<rect x="${xForIndex(i) + barW * 0.12}" y="${padT + plotH - bh}" width="${barW * 0.76}" height="${bh}" rx="3" fill="#6366f1" fill-opacity="0.75"></rect>
+                        <text x="${xForIndex(i) + barW / 2}" y="${padT + plotH + 16}" text-anchor="middle" font-size="9" fill="#64748b">${h.range}</text>
+                        ${h.count > 0 ? `<text x="${xForIndex(i) + barW / 2}" y="${padT + plotH - bh - 5}" text-anchor="middle" font-size="10" font-weight="bold" fill="#4338ca">${h.count}</text>` : ''}`;
+            }).join('');
+
+            const curvePoints = dist.normal_curve.map((pt, i) => {
+                const x = xForIndex(i) + barW / 2;
+                const y = yForVal(pt.expected_count);
+                return `${x},${y}`;
+            }).join(' ');
+
+            cont.innerHTML = `
+                <div class="p-3 bg-slate-50/60 border border-slate-200 rounded-2xl">
+                    <div class="flex flex-wrap gap-4 text-[11px] text-slate-500 mb-2 px-2">
+                        <span>المتوسط: <strong class="text-indigo-700">${dist.mean}%</strong></span>
+                        <span>الانحراف المعياري: <strong class="text-indigo-700">${dist.std_dev}%</strong></span>
+                        <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-sm bg-indigo-500 opacity-75"></span> عدد النتائج الفعلي</span>
+                        <span class="flex items-center gap-1"><span class="inline-block w-3 h-0.5 bg-rose-500"></span> منحنى التوزيع الطبيعي النظري</span>
+                    </div>
+                    <svg viewBox="0 0 ${W} ${H}" class="w-full h-auto">
+                        ${bars}
+                        <polyline points="${curvePoints}" fill="none" stroke="#f43f5e" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></polyline>
+                        ${dist.normal_curve.map((pt, i) => `<circle cx="${xForIndex(i) + barW / 2}" cy="${yForVal(pt.expected_count)}" r="2.5" fill="#f43f5e"></circle>`).join('')}
+                    </svg>
+                </div>
+            `;
+        }
+
         // --- مصفوفة المهارات (إدارة) ---
+        // --- تقييم مهارات فرد يدويًا ---
+        let skillAssessSearchTimer = null;
+        let skillAssessCurrentSap = null;
+
+        function searchUsersForSkillAssessment() {
+            clearTimeout(skillAssessSearchTimer);
+            const q = document.getElementById('skill-assess-search').value.trim();
+            const resultsBox = document.getElementById('skill-assess-search-results');
+            if (!q) {
+                resultsBox.classList.add('hidden');
+                return;
+            }
+            skillAssessSearchTimer = setTimeout(async () => {
+                const res = await apiFetch(`/api/admin/skills/search-users?q=${encodeURIComponent(q)}`);
+                if (!res.ok) return;
+                const users = await res.json();
+                if (users.length === 0) {
+                    resultsBox.innerHTML = '<p class="p-3 text-xs text-slate-400">لا توجد نتائج مطابقة.</p>';
+                } else {
+                    resultsBox.innerHTML = users.map(u => `
+                        <button type="button" onclick="selectUserForSkillAssessment('${u.sap_id}', '${u.name.replace(/'/g, "\\'")}')" class="w-full text-right px-3 py-2.5 hover:bg-indigo-50 border-b border-slate-100 last:border-0 text-xs">
+                            <span class="font-bold text-slate-800">${u.name}</span>
+                            <span class="text-slate-400 font-mono"> (SAP: ${u.sap_id})</span>
+                            <span class="block text-[10px] text-slate-400">${u.role} — ${u.department}</span>
+                        </button>
+                    `).join('');
+                }
+                resultsBox.classList.remove('hidden');
+            }, 300);
+        }
+
+        async function selectUserForSkillAssessment(sapId, name) {
+            skillAssessCurrentSap = sapId;
+            document.getElementById('skill-assess-search-results').classList.add('hidden');
+            document.getElementById('skill-assess-search').value = `${name} (${sapId})`;
+            await loadSkillAssessmentForUser(sapId, name);
+        }
+
+        async function loadSkillAssessmentForUser(sapId, name) {
+            const cont = document.getElementById('skill-assess-content');
+            cont.innerHTML = '<p class="text-slate-400 text-xs text-center py-6">جاري التحميل...</p>';
+            const res = await apiFetch(`/api/user/${sapId}/skill-matrix`);
+            if (!res.ok) {
+                cont.innerHTML = '<p class="text-rose-500 text-xs text-center py-6">تعذر تحميل مهارات هذا الفرد.</p>';
+                return;
+            }
+            const data = await res.json();
+            if (data.skills.length === 0) {
+                cont.innerHTML = `<p class="text-slate-400 text-sm text-center py-8">لا توجد متطلبات مهارات محددة حاليًا لمسمى "${data.role}" الوظيفي.</p>`;
+                return;
+            }
+
+            const levelOptions = ['المستوى 1 (مبتدئ)', 'المستوى 2 (متوسط)', 'المستوى 3 (متقدم)', 'المستوى 4 (خبير)'];
+            const byGroup = {};
+            data.skills.forEach(s => { (byGroup[s.skill_group || 'عام'] = byGroup[s.skill_group || 'عام'] || []).push(s); });
+
+            cont.innerHTML = `
+                <p class="text-xs text-slate-500 mb-3">مهارات <strong class="text-indigo-700">${name}</strong> — المسمى الوظيفي: <strong>${data.role}</strong></p>
+                <div class="space-y-4">
+                    ${Object.entries(byGroup).map(([group, items]) => `
+                        <div class="space-y-2">
+                            <h5 class="text-xs font-bold text-violet-700 bg-violet-50 inline-block px-2.5 py-1 rounded-full border border-violet-100">📁 ${group}</h5>
+                            ${items.map(s => `
+                                <div class="p-3.5 bg-slate-50/80 border border-slate-200/70 rounded-2xl">
+                                    <div class="flex flex-wrap justify-between items-start gap-2">
+                                        <div>
+                                            <span class="font-bold text-slate-800 text-sm">${s.skill_name}</span>
+                                            ${s.description ? `<p class="text-[11px] text-slate-500 mt-0.5">${s.description}</p>` : ''}
+                                            <div class="flex flex-wrap gap-1.5 mt-1.5 text-[10px]">
+                                                <span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100">الحد الأدنى: ${s.required_level}</span>
+                                                ${s.linked_exam_name ? `<span class="bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">امتحان مرتبط: ${s.linked_exam_name}</span>` : ''}
+                                                ${s.source === 'manual' ? `<span class="bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full border border-amber-100">✋ تقييم يدوي حالي</span>` : (s.source === 'exam' ? `<span class="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-100">📝 من نتيجة الامتحان (${s.achieved_pct}%)</span>` : '')}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="flex flex-wrap items-center gap-2 mt-2.5 pt-2.5 border-t border-slate-100">
+                                        <select id="assess-level-${s.id}" class="px-2.5 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-400">
+                                            <option value="">-- بدون تقييم يدوي (تلقائي) --</option>
+                                            ${levelOptions.map(lvl => `<option value="${lvl}" ${s.source === 'manual' && s.achieved_level === lvl ? 'selected' : ''}>${lvl}</option>`).join('')}
+                                        </select>
+                                        <button onclick="saveSkillAssessment(${s.id})" class="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all">حفظ التقييم</button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        async function saveSkillAssessment(skillId) {
+            if (!skillAssessCurrentSap) return;
+            const level = document.getElementById(`assess-level-${skillId}`).value;
+
+            const fd = new FormData();
+            fd.append('skill_requirement_id', skillId);
+            if (level) fd.append('achieved_level', level);
+
+            const res = await apiFetch(`/api/admin/skills/user/${skillAssessCurrentSap}/override`, { method: 'POST', body: fd });
+            const data = await res.json();
+            if (!res.ok) return alert(data.detail || "فشل حفظ التقييم.");
+            alert(data.message);
+            const nameMatch = document.getElementById('skill-assess-search').value;
+            loadSkillAssessmentForUser(skillAssessCurrentSap, nameMatch);
+        }
+
         async function loadSkillLinkedExamOptions() {
             // نعتمد على قائمة الامتحانات المُحمّلة أصلاً في شاشة "إدارة الامتحانات"
             const select = document.getElementById('skill-linked-exam');
@@ -2256,9 +2788,12 @@
         }
 
         // --- إدارة حسابات المديرين (أدمن مركزي فقط) ---
+        let lastLoadedSubAdmins = [];
+
         async function loadSubAdmins() {
             const res = await apiFetch('/api/admin/admins');
             const admins = await res.json();
+            lastLoadedSubAdmins = admins;
             const cont = document.getElementById('adm-sub-admins-list');
             if (!cont) return;
             if (admins.length === 0) {
@@ -2279,6 +2814,7 @@
                             ${a.permissions.length ? a.permissions.map(p => `<span class="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100">${permLabels[p] || p}</span>`).join('') : '<span class="text-[10px] text-slate-400">بدون صلاحيات محددة</span>'}
                         </div>
                     </div>
+                    <button onclick="openEditSubAdminModal('${a.sap_id}')" class="text-indigo-600 hover:text-indigo-800 font-bold text-xs shrink-0 ml-2">تعديل</button>
                     <button onclick="deleteSubAdmin('${a.sap_id}')" class="text-rose-600 hover:text-rose-800 font-bold text-xs shrink-0">حذف الحساب</button>
                 </div>
             `).join('');
@@ -2314,6 +2850,50 @@
         async function deleteSubAdmin(sapId) {
             if (!confirm(`هل أنت متأكد من حذف حساب المدير رقم ${sapId}؟`)) return;
             await apiFetch(`/api/admin/admins/${sapId}`, { method: 'DELETE' });
+            loadSubAdmins();
+        }
+
+        // --- تعديل بيانات وصلاحيات مدير موجود ---
+        let editingSubAdminSap = null;
+
+        function openEditSubAdminModal(sapId) {
+            const a = lastLoadedSubAdmins.find(x => x.sap_id === sapId);
+            if (!a) return;
+            editingSubAdminSap = sapId;
+            document.getElementById('edit-sub-name').value = a.name;
+            document.getElementById('edit-sub-email').value = a.email;
+            document.getElementById('edit-sub-pass').value = '';
+            document.querySelectorAll('input[name="edit_sub_perm"]').forEach(cb => {
+                cb.checked = a.permissions.includes(cb.value);
+            });
+            document.getElementById('sub-admin-edit-modal').classList.remove('hidden');
+        }
+
+        function closeSubAdminEditModal() {
+            document.getElementById('sub-admin-edit-modal').classList.add('hidden');
+            editingSubAdminSap = null;
+        }
+
+        async function saveSubAdminEdit() {
+            if (!editingSubAdminSap) return;
+            const name = document.getElementById('edit-sub-name').value.trim();
+            const email = document.getElementById('edit-sub-email').value.trim();
+            const pass = document.getElementById('edit-sub-pass').value.trim();
+            if (!name || !email) return alert("يرجى ملء الاسم والبريد الإلكتروني.");
+
+            const perms = Array.from(document.querySelectorAll('input[name="edit_sub_perm"]:checked')).map(cb => cb.value);
+
+            const fd = new FormData();
+            fd.append('name', name);
+            fd.append('email', email);
+            fd.append('permissions', JSON.stringify(perms));
+            if (pass) fd.append('password', pass);
+
+            const res = await apiFetch(`/api/admin/admins/${editingSubAdminSap}/update`, { method: 'POST', body: fd });
+            const data = await res.json();
+            if (!res.ok) return alert(data.detail || "فشل حفظ التعديلات.");
+            alert(data.message);
+            closeSubAdminEditModal();
             loadSubAdmins();
         }
 
@@ -2417,10 +2997,22 @@
             const exams = await res.json();
             const sel = document.getElementById('lb-exam-select');
             sel.innerHTML = `<option value="">-- اختر دورة لعرض ترتيبها --</option>` + exams.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
+
+            const deptRes = await apiFetch('/api/departments/public-list');
+            const deptData = await deptRes.json();
+            const deptSel = document.getElementById('lb-department-select');
+            deptSel.innerHTML = `<option value="">🏢 كل الإدارات</option>` + (deptData.departments || []).map(d => `<option value="${d}">${d}</option>`).join('');
+        }
+
+        function onLeaderboardDeptChange() {
+            const examId = document.getElementById('lb-exam-select').value;
+            if (examId) loadExamLeaderboard(); else loadGeneralLeaderboard();
         }
 
         async function loadGeneralLeaderboard() {
-            const res = await apiFetch('/api/leaderboard/general');
+            const dept = document.getElementById('lb-department-select')?.value || '';
+            const url = dept ? `/api/leaderboard/general?department=${encodeURIComponent(dept)}` : '/api/leaderboard/general';
+            const res = await apiFetch(url);
             const data = await res.json();
             document.getElementById('lb-head').innerHTML = `
                 <tr>
@@ -2429,12 +3021,14 @@
                     <th class="p-3">اسم المشترك</th>
                     <th class="p-3 hidden sm:table-cell">الإدارة</th>
                     <th class="p-3 hidden sm:table-cell">الدور</th>
-                    <th class="p-3">متوسط التقييم</th>
+                    <th class="p-3">متوسط أعلى تقييم</th>
                     <th class="p-3">المستوى التراكمي</th>
                     <th class="p-3 hidden sm:table-cell">الدورات المكتملة</th>
                 </tr>
             `;
-            document.getElementById('lb-body').innerHTML = data.map(r => `
+            document.getElementById('lb-body').innerHTML = data.length === 0
+                ? `<tr><td colspan="8" class="p-6 text-center text-slate-400 text-sm">لا توجد نتائج${dept ? ' لهذه الإدارة' : ''} بعد.</td></tr>`
+                : data.map(r => `
                 <tr class="hover:bg-indigo-50/40 transition-colors">
                     <td class="p-3 sticky right-0 bg-white z-10"><span class="inline-flex items-center justify-center w-7 h-7 rounded-full ${r.rank <= 3 ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white' : 'bg-slate-100 text-indigo-600'} font-bold text-xs">${r.rank}</span></td>
                     <td class="p-3 font-mono text-slate-500 text-xs">${r.sap_id}</td>
@@ -2451,7 +3045,11 @@
         async function loadExamLeaderboard() {
             const examId = document.getElementById('lb-exam-select').value;
             if (!examId) return loadGeneralLeaderboard();
-            const res = await apiFetch(`/api/leaderboard/exam/${examId}`);
+            const dept = document.getElementById('lb-department-select')?.value || '';
+            const url = dept
+                ? `/api/leaderboard/exam/${examId}?department=${encodeURIComponent(dept)}`
+                : `/api/leaderboard/exam/${examId}`;
+            const res = await apiFetch(url);
             const data = await res.json();
             document.getElementById('lb-head').innerHTML = `
                 <tr>
@@ -2460,13 +3058,15 @@
                     <th class="p-3">اسم المشترك</th>
                     <th class="p-3 hidden sm:table-cell">الإدارة</th>
                     <th class="p-3 hidden sm:table-cell">الدور</th>
-                    <th class="p-3">الدرجة</th>
+                    <th class="p-3">أعلى درجة</th>
                     <th class="p-3">النسبة</th>
                     <th class="p-3">المستوى</th>
                     <th class="p-3 hidden sm:table-cell">التاريخ</th>
                 </tr>
             `;
-            document.getElementById('lb-body').innerHTML = data.map(r => `
+            document.getElementById('lb-body').innerHTML = data.length === 0
+                ? `<tr><td colspan="9" class="p-6 text-center text-slate-400 text-sm">لا توجد نتائج${dept ? ' لهذه الإدارة' : ''} بعد.</td></tr>`
+                : data.map(r => `
                 <tr class="hover:bg-indigo-50/40 transition-colors">
                     <td class="p-3 sticky right-0 bg-white z-10"><span class="inline-flex items-center justify-center w-7 h-7 rounded-full ${r.rank <= 3 ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white' : 'bg-slate-100 text-indigo-600'} font-bold text-xs">${r.rank}</span></td>
                     <td class="p-3 font-mono text-slate-500 text-xs">${r.sap_id}</td>
