@@ -359,6 +359,7 @@
                         <button onclick="printExamA4(false)" class="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white px-3 py-2 rounded-xl text-xs font-bold">🖨 طباعة فارغ (A4)</button>
                         <button onclick="printExamA4(true)" class="bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-700 hover:to-fuchsia-700 text-white px-3 py-2 rounded-xl text-xs font-bold">🖨 طباعة نموذج الإجابة (A4)</button>
                         <button onclick="downloadAdminResults()" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-3 py-2 rounded-xl text-xs font-bold">تصدير Excel</button>
+                        <button onclick="downloadNonAttendeesReport()" class="bg-gradient-to-r from-rose-600 to-orange-600 hover:from-rose-700 hover:to-orange-700 text-white px-3 py-2 rounded-xl text-xs font-bold">📋 من لم يؤدِ الامتحان</button>
                     </div>
                 </div>
 
@@ -374,6 +375,9 @@
                         </div>
                         <label class="flex items-center gap-1.5 text-xs font-bold text-amber-800">
                             <input type="checkbox" id="adm-curr-hide-lb" class="w-4 h-4 text-amber-600"> تعليق ظهور نتائج هذا الامتحان في لوحة الشرف
+                        </label>
+                        <label class="flex items-center gap-1.5 text-xs font-bold text-emerald-800">
+                            <input type="checkbox" id="adm-curr-allow-review" class="w-4 h-4 text-emerald-600"> السماح للمتحنين بمراجعة تفاصيل إجاباتهم (الصحيحة والخاطئة)
                         </label>
                         <button onclick="saveExamValidityChanges()" class="bg-gradient-to-r from-slate-700 to-slate-900 hover:from-slate-800 hover:to-black text-white px-3 py-1 rounded text-xs font-bold">حفظ الصلاحية والحالة</button>
                         <button onclick="openExamTargetingModal()" class="bg-gradient-to-r from-violet-600 to-purple-700 hover:from-violet-700 hover:to-purple-800 text-white px-3 py-1 rounded text-xs font-bold">🎯 تعديل تخصيص الإدارة/الفريق</button>
@@ -837,6 +841,17 @@
         </div>
     </div>
 
+    <!-- نافذة مراجعة إجابات المتحن التفصيلية -->
+    <div id="answer-review-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-2xl w-full p-6 space-y-3 max-h-[85vh] overflow-y-auto shadow-2xl">
+            <div class="flex justify-between items-center border-b pb-2">
+                <h3 id="answer-review-title" class="font-bold text-slate-800 text-base">📋 مراجعة إجاباتي</h3>
+                <button onclick="closeAnswerReviewModal()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+            </div>
+            <div id="answer-review-content"></div>
+        </div>
+    </div>
+
     <div id="print-area" class="hidden p-8 bg-white text-black text-sm"></div>
 
     <script>
@@ -1209,9 +1224,51 @@
                             <span>النسبة: <strong class="text-indigo-600">${h.percentage}</strong></span>
                             <span>المستوى: <strong class="text-emerald-700">${h.overall_level}</strong></span>
                         </div>
+                        ${h.allow_answer_review ? `<button onclick="openMyAnswerReview(${h.exam_id})" class="text-[11px] text-indigo-600 hover:underline font-bold">📋 مراجعة إجاباتي التفصيلية</button>` : ''}
                     </div>
                 `).join('');
             }
+        }
+
+        async function openMyAnswerReview(examId) {
+            const modal = document.getElementById('answer-review-modal');
+            const cont = document.getElementById('answer-review-content');
+            cont.innerHTML = '<p class="text-slate-400 text-xs text-center py-6">جاري التحميل...</p>';
+            modal.classList.remove('hidden');
+
+            const res = await apiFetch(`/api/exams/${examId}/my-review`);
+            const data = await res.json();
+            if (!res.ok) {
+                cont.innerHTML = `<p class="text-rose-500 text-xs text-center py-6">${data.detail || 'تعذر تحميل تفاصيل الإجابات.'}</p>`;
+                return;
+            }
+
+            document.getElementById('answer-review-title').innerText = `📋 مراجعة إجاباتي — ${data.exam_name}`;
+            cont.innerHTML = `
+                <div class="flex flex-wrap gap-3 text-xs bg-indigo-50 border border-indigo-100 rounded-xl p-3 mb-3">
+                    <span>الدرجة: <strong>${data.total_score}/${data.total_questions}</strong></span>
+                    <span>النسبة: <strong class="text-indigo-700">${data.total_pct}%</strong></span>
+                    <span>المستوى: <strong class="text-emerald-700">${data.overall_level}</strong></span>
+                </div>
+                <div class="space-y-2.5">
+                    ${data.answers.map((a, i) => `
+                        <div class="p-3.5 rounded-2xl border ${a.is_correct ? 'bg-emerald-50/60 border-emerald-200' : 'bg-rose-50/60 border-rose-200'}">
+                            <div class="flex justify-between items-start gap-2">
+                                <span class="text-xs font-bold text-slate-800">${i + 1}. ${a.question}</span>
+                                <span class="text-sm shrink-0">${a.is_correct ? '✅' : '❌'}</span>
+                            </div>
+                            <div class="text-[11px] mt-2 space-y-1">
+                                <div><span class="text-slate-500">إجابتك: </span><strong class="${a.is_correct ? 'text-emerald-700' : 'text-rose-700'}">${a.given.join('، ') || '(لم تُجب)'}</strong></div>
+                                ${!a.is_correct ? `<div><span class="text-slate-500">الإجابة الصحيحة: </span><strong class="text-emerald-700">${a.correct.join('، ')}</strong></div>` : ''}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function closeAnswerReviewModal() {
+            document.getElementById('answer-review-modal').classList.add('hidden');
         }
 
         async function startExamSession(examId, examName) {
@@ -1515,6 +1572,7 @@
             document.getElementById('adm-curr-active').checked = data.is_active;
             document.getElementById('adm-curr-validity').value = data.valid_until || '';
             document.getElementById('adm-curr-hide-lb').checked = !!data.hide_leaderboard;
+            document.getElementById('adm-curr-allow-review').checked = !!data.allow_answer_review;
 
             loadExamSubmissionsForAdmin(examId);
             loadInProgressUsersForAdmin(examId);
@@ -1640,11 +1698,13 @@
             const isActive = document.getElementById('adm-curr-active').checked ? 1 : 0;
             const validity = document.getElementById('adm-curr-validity').value;
             const hideLb = document.getElementById('adm-curr-hide-lb').checked ? 1 : 0;
+            const allowReview = document.getElementById('adm-curr-allow-review').checked ? 1 : 0;
 
             const fd = new FormData();
             fd.append('is_active', isActive);
             fd.append('valid_until', validity);
             fd.append('hide_leaderboard', hideLb);
+            fd.append('allow_answer_review', allowReview);
 
             let res;
             try {
@@ -2991,6 +3051,26 @@
             }
         }
 
+        async function downloadNonAttendeesReport() {
+            const examId = document.getElementById('adm-preview-select').value;
+            if (!examId) return alert("اختر امتحاناً أولاً.");
+            try {
+                const res = await apiFetch(`/api/admin/exams/${examId}/export-non-attendees`);
+                if (!res.ok) return alert("فشل تحميل التقرير: " + await extractErrorMessage(res));
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `non_attendees_exam_${examId}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            } catch (e) {
+                alert("تعذر تحميل التقرير.");
+            }
+        }
+
         // --- Leaderboards ---
         async function loadLeaderboardExams() {
             const res = await apiFetch('/api/exams/public-list');
@@ -3017,7 +3097,6 @@
             document.getElementById('lb-head').innerHTML = `
                 <tr>
                     <th class="p-3 sticky right-0 bg-slate-50 z-10">الترتيب</th>
-                    <th class="p-3">رقم SAP</th>
                     <th class="p-3">اسم المشترك</th>
                     <th class="p-3 hidden sm:table-cell">الإدارة</th>
                     <th class="p-3 hidden sm:table-cell">الدور</th>
@@ -3027,11 +3106,10 @@
                 </tr>
             `;
             document.getElementById('lb-body').innerHTML = data.length === 0
-                ? `<tr><td colspan="8" class="p-6 text-center text-slate-400 text-sm">لا توجد نتائج${dept ? ' لهذه الإدارة' : ''} بعد.</td></tr>`
+                ? `<tr><td colspan="7" class="p-6 text-center text-slate-400 text-sm">لا توجد نتائج${dept ? ' لهذه الإدارة' : ''} بعد.</td></tr>`
                 : data.map(r => `
                 <tr class="hover:bg-indigo-50/40 transition-colors">
                     <td class="p-3 sticky right-0 bg-white z-10"><span class="inline-flex items-center justify-center w-7 h-7 rounded-full ${r.rank <= 3 ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white' : 'bg-slate-100 text-indigo-600'} font-bold text-xs">${r.rank}</span></td>
-                    <td class="p-3 font-mono text-slate-500 text-xs">${r.sap_id}</td>
                     <td class="p-3 font-semibold">${r.name}</td>
                     <td class="p-3 text-slate-600 hidden sm:table-cell">${r.department}</td>
                     <td class="p-3 text-slate-600 hidden sm:table-cell">${r.role}</td>
@@ -3054,7 +3132,6 @@
             document.getElementById('lb-head').innerHTML = `
                 <tr>
                     <th class="p-3 sticky right-0 bg-slate-50 z-10">الترتيب</th>
-                    <th class="p-3">رقم SAP</th>
                     <th class="p-3">اسم المشترك</th>
                     <th class="p-3 hidden sm:table-cell">الإدارة</th>
                     <th class="p-3 hidden sm:table-cell">الدور</th>
@@ -3065,11 +3142,10 @@
                 </tr>
             `;
             document.getElementById('lb-body').innerHTML = data.length === 0
-                ? `<tr><td colspan="9" class="p-6 text-center text-slate-400 text-sm">لا توجد نتائج${dept ? ' لهذه الإدارة' : ''} بعد.</td></tr>`
+                ? `<tr><td colspan="8" class="p-6 text-center text-slate-400 text-sm">لا توجد نتائج${dept ? ' لهذه الإدارة' : ''} بعد.</td></tr>`
                 : data.map(r => `
                 <tr class="hover:bg-indigo-50/40 transition-colors">
                     <td class="p-3 sticky right-0 bg-white z-10"><span class="inline-flex items-center justify-center w-7 h-7 rounded-full ${r.rank <= 3 ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white' : 'bg-slate-100 text-indigo-600'} font-bold text-xs">${r.rank}</span></td>
-                    <td class="p-3 font-mono text-slate-500 text-xs">${r.sap_id}</td>
                     <td class="p-3 font-semibold">${r.name}</td>
                     <td class="p-3 text-slate-600 hidden sm:table-cell">${r.department}</td>
                     <td class="p-3 text-slate-600 hidden sm:table-cell">${r.role}</td>
