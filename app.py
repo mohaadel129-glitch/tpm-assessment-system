@@ -317,6 +317,19 @@ def init_db_tables():
         except Exception:
             pass
 
+        # ترحيل: إضافة عمود allow_answer_review لجدول الامتحانات (السماح للمتحن بمراجعة
+        # تفاصيل إجاباته: إجابته الصحيحة والخاطئة والإجابة الصحيحة المفترضة لكل سؤال)
+        try:
+            if is_pg:
+                c.execute("ALTER TABLE exams ADD COLUMN IF NOT EXISTS allow_answer_review INTEGER DEFAULT 0")
+            else:
+                c.execute("PRAGMA table_info(exams)")
+                cols = [r[1] for r in c.fetchall()]
+                if "allow_answer_review" not in cols:
+                    c.execute("ALTER TABLE exams ADD COLUMN allow_answer_review INTEGER DEFAULT 0")
+        except Exception:
+            pass
+
         # ترحيل: إضافة عمود teams لجدول الامتحانات (تخصيص الامتحان لفرق معينة)
         try:
             if is_pg:
@@ -1406,16 +1419,17 @@ async def update_exam_validity(
     is_active: int = Form(...),
     valid_until: Optional[str] = Form(None),
     hide_leaderboard: int = Form(0),
+    allow_answer_review: int = Form(0),
     _admin: Dict[str, object] = Depends(require_permission("manage")),
 ):
     conn, is_pg = get_db()
     c = conn.cursor()
     q = (
-        "UPDATE exams SET is_active = %s, valid_until = %s, hide_leaderboard = %s WHERE id = %s"
+        "UPDATE exams SET is_active = %s, valid_until = %s, hide_leaderboard = %s, allow_answer_review = %s WHERE id = %s"
         if is_pg
-        else "UPDATE exams SET is_active = ?, valid_until = ?, hide_leaderboard = ? WHERE id = ?"
+        else "UPDATE exams SET is_active = ?, valid_until = ?, hide_leaderboard = ?, allow_answer_review = ? WHERE id = ?"
     )
-    c.execute(q, (is_active, valid_until if valid_until else None, hide_leaderboard, exam_id))
+    c.execute(q, (is_active, valid_until if valid_until else None, hide_leaderboard, allow_answer_review, exam_id))
     conn.commit()
     conn.close()
     return {"status": "success", "message": "تم تحديث صلاحية الامتحان."}
@@ -1826,9 +1840,9 @@ async def preview_exam(
     conn, is_pg = get_db()
     c = conn.cursor()
     q_exam = (
-        "SELECT name, duration_minutes, departments, is_active, valid_until, hide_leaderboard, teams FROM exams WHERE id = %s"
+        "SELECT name, duration_minutes, departments, is_active, valid_until, hide_leaderboard, teams, allow_answer_review FROM exams WHERE id = %s"
         if is_pg
-        else "SELECT name, duration_minutes, departments, is_active, valid_until, hide_leaderboard, teams FROM exams WHERE id = ?"
+        else "SELECT name, duration_minutes, departments, is_active, valid_until, hide_leaderboard, teams, allow_answer_review FROM exams WHERE id = ?"
     )
     c.execute(q_exam, (exam_id,))
     exam = c.fetchone()
@@ -1859,6 +1873,7 @@ async def preview_exam(
         "valid_until": exam[4],
         "hide_leaderboard": bool(exam[5]) if exam[5] is not None else False,
         "teams": json.loads(exam[6]) if exam[6] else ["الكل"],
+        "allow_answer_review": bool(exam[7]) if exam[7] is not None else False,
         "questions": questions,
     }
 
@@ -1915,7 +1930,8 @@ async def regrade_exam_submissions(
 ):
     """يعيد تصحيح كل النتائج المسجّلة لهذا الامتحان بناءً على الإجابات الصحيحة الحالية للأسئلة
     (مفيد بعد تعديل إجابة سؤال بالخطأ). يستخدم إجابة كل متدرب كما سجّلها وقت التسليم، ويعيد
-    مقارنتها بالمفتاح الصحيح الحالي فقط للأسئلة التي ما زالت موجودة في الامتحان."""
+    مقارنتها بالمفتاح الصحيح الحالي. أي سؤال حُذف منذ التسليم يُستبعد بالكامل من إعادة التصحيح
+    (لا يُحتسب ضمن عدد الأسئلة أو الدرجة)، فتُحسب النتيجة الجديدة على أساس الأسئلة الحالية فقط."""
     conn, is_pg = get_db()
     c = conn.cursor()
 
@@ -1956,30 +1972,31 @@ async def regrade_exam_submissions(
         branch_stats: Dict[str, Dict[str, int]] = {}
         total_correct = 0
         refreshed_details = []
+        excluded_deleted = 0
 
         for d in details:
             q_id = d.get("question_id")
-            branch = d.get("branch", "")
             given_set = set(d.get("given", []))
             cur = current_questions.get(q_id)
 
-            if cur is not None:
-                # السؤال ما زال موجودًا: نعيد التصحيح بمقارنة إجابة المتدرب بالمفتاح الحالي
-                correct_set = cur["correct"]
-                is_correct = bool(correct_set) and given_set == correct_set
-                branch = cur["branch"]
-                refreshed_details.append({
-                    "question_id": q_id,
-                    "branch": branch,
-                    "question": cur["question"],
-                    "given": sorted(given_set),
-                    "correct": sorted(correct_set),
-                    "is_correct": is_correct,
-                })
-            else:
-                # السؤال حُذف منذ ذلك الحين: نبقي على النتيجة الأصلية المسجّلة له كما هي
-                is_correct = bool(d.get("is_correct"))
-                refreshed_details.append(d)
+            if cur is None:
+                # السؤال حُذف منذ ذلك الحين: يُستبعد تمامًا من إعادة التصحيح ولا يُحتسب
+                # ضمن عدد الأسئلة أو الدرجة، حتى تعكس النتيجة الأسئلة الحالية فقط
+                excluded_deleted += 1
+                continue
+
+            # السؤال ما زال موجودًا: نعيد التصحيح بمقارنة إجابة المتدرب بالمفتاح الحالي
+            correct_set = cur["correct"]
+            is_correct = bool(correct_set) and given_set == correct_set
+            branch = cur["branch"]
+            refreshed_details.append({
+                "question_id": q_id,
+                "branch": branch,
+                "question": cur["question"],
+                "given": sorted(given_set),
+                "correct": sorted(correct_set),
+                "is_correct": is_correct,
+            })
 
             branch_stats.setdefault(branch, {"total": 0, "correct": 0})
             branch_stats[branch]["total"] += 1
@@ -1989,6 +2006,7 @@ async def regrade_exam_submissions(
 
         total_q = len(refreshed_details)
         if total_q == 0:
+            # كل أسئلة هذه المحاولة اتحذفت، لا يوجد أساس لإعادة تصحيحها
             continue
         overall_pct = (total_correct / total_q) * 100
         overall_lvl = get_level(overall_pct)
@@ -2328,6 +2346,67 @@ async def submit_exam(
     }
 
 
+@app.get("/api/exams/{exam_id}/my-review")
+async def get_my_exam_review(
+    exam_id: int, user: Dict[str, object] = Depends(get_current_user)
+):
+    """يعرض للمتحن تفصيل إجاباته على امتحان أدّاه: إجابته الصحيحة والخاطئة، والإجابة الصحيحة
+    المفترضة لكل سؤال، بشرط أن يكون الأدمن قد فعّل خاصية مراجعة الإجابات لهذا الامتحان تحديدًا."""
+    sap_id = str(user["sap_id"])
+    conn, is_pg = get_db()
+    c = conn.cursor()
+
+    q_exam = (
+        "SELECT name, allow_answer_review FROM exams WHERE id = %s"
+        if is_pg
+        else "SELECT name, allow_answer_review FROM exams WHERE id = ?"
+    )
+    c.execute(q_exam, (exam_id,))
+    exam = c.fetchone()
+    if not exam:
+        conn.close()
+        raise HTTPException(status_code=404, detail="الامتحان غير موجود.")
+    if not exam[1]:
+        conn.close()
+        raise HTTPException(
+            status_code=403, detail="مراجعة تفاصيل الإجابات غير متاحة لهذا الامتحان حاليًا."
+        )
+
+    q_sub = (
+        """SELECT answers_detail, total_score, total_questions, total_pct, overall_level, submitted_at
+           FROM submissions WHERE exam_id = %s AND sap_id = %s ORDER BY submitted_at DESC LIMIT 1"""
+        if is_pg
+        else """SELECT answers_detail, total_score, total_questions, total_pct, overall_level, submitted_at
+           FROM submissions WHERE exam_id = ? AND sap_id = ? ORDER BY submitted_at DESC LIMIT 1"""
+    )
+    c.execute(q_sub, (exam_id, sap_id))
+    sub = c.fetchone()
+    conn.close()
+
+    if not sub:
+        raise HTTPException(status_code=404, detail="لا توجد نتيجة مسجّلة لك في هذا الامتحان.")
+    if not sub[0]:
+        raise HTTPException(
+            status_code=404,
+            detail="تفاصيل الإجابات غير متاحة لهذه النتيجة (نتيجة قديمة قبل تفعيل هذه الميزة).",
+        )
+
+    try:
+        answers = json.loads(sub[0])
+    except Exception:
+        answers = []
+
+    return {
+        "exam_name": exam[0],
+        "total_score": sub[1],
+        "total_questions": sub[2],
+        "total_pct": round(sub[3], 1),
+        "overall_level": sub[4],
+        "submitted_at": str(sub[5]),
+        "answers": answers,
+    }
+
+
 @app.get("/api/admin/exams/{exam_id}/in-progress-users")
 async def get_in_progress_users(
     exam_id: int, _admin: Dict[str, object] = Depends(require_permission("manage"))
@@ -2581,10 +2660,10 @@ async def get_user_history(sap_id: str, authorization: Optional[str] = Header(No
     conn, is_pg = get_db()
     c = conn.cursor()
     q = (
-        """SELECT s.id, e.name, s.total_score, s.total_questions, s.total_pct, s.overall_level, s.branch_details, s.submitted_at 
+        """SELECT s.id, e.name, s.total_score, s.total_questions, s.total_pct, s.overall_level, s.branch_details, s.submitted_at, s.exam_id, e.allow_answer_review
            FROM submissions s LEFT JOIN exams e ON s.exam_id = e.id WHERE s.sap_id = %s ORDER BY s.submitted_at DESC"""
         if is_pg
-        else """SELECT s.id, e.name, s.total_score, s.total_questions, s.total_pct, s.overall_level, s.branch_details, s.submitted_at 
+        else """SELECT s.id, e.name, s.total_score, s.total_questions, s.total_pct, s.overall_level, s.branch_details, s.submitted_at, s.exam_id, e.allow_answer_review
            FROM submissions s LEFT JOIN exams e ON s.exam_id = e.id WHERE s.sap_id = ? ORDER BY s.submitted_at DESC"""
     )
     c.execute(q, (sap_id.strip(),))
@@ -2599,6 +2678,8 @@ async def get_user_history(sap_id: str, authorization: Optional[str] = Header(No
             "overall_level": r[5],
             "branches": json.loads(r[6]),
             "date": str(r[7]),
+            "exam_id": r[8],
+            "allow_answer_review": bool(r[9]) if r[9] is not None else False,
         }
         for r in rows
     ]
@@ -2641,7 +2722,6 @@ async def get_exam_leaderboard(exam_id: int, department: Optional[str] = None):
     return [
         {
             "rank": i + 1,
-            "sap_id": r[0],
             "name": r[1],
             "role": r[2] or "-",
             "department": r[3] or "-",
@@ -2717,7 +2797,6 @@ async def get_general_leaderboard(department: Optional[str] = None):
     return [
         {
             "rank": i + 1,
-            "sap_id": r[0],
             "name": r[1],
             "role": r[2] or "-",
             "department": r[3] or "-",
@@ -2727,6 +2806,77 @@ async def get_general_leaderboard(department: Optional[str] = None):
         }
         for i, r in enumerate(results)
     ]
+
+
+@app.get("/api/admin/exams/{exam_id}/export-non-attendees")
+async def export_non_attendees(
+    exam_id: int, _admin: Dict[str, object] = Depends(require_permission("manage"))
+):
+    """يصدّر ملف إكسل بأسماء وأرقام SAP وإدارات الأفراد المستحقين لهذا الامتحان (حسب تخصيصه
+    الحالي للإدارات/الفرق) والذين لم يؤدّوه بعد إطلاقًا."""
+    conn, is_pg = get_db()
+    c = conn.cursor()
+
+    q_exam = (
+        "SELECT name, departments, teams FROM exams WHERE id = %s"
+        if is_pg
+        else "SELECT name, departments, teams FROM exams WHERE id = ?"
+    )
+    c.execute(q_exam, (exam_id,))
+    exam = c.fetchone()
+    if not exam:
+        conn.close()
+        raise HTTPException(status_code=404, detail="الامتحان غير موجود.")
+    exam_name, depts_json, teams_json = exam
+    target_depts = json.loads(depts_json) if depts_json else ["الكل"]
+    target_teams = json.loads(teams_json) if teams_json else ["الكل"]
+
+    c.execute("SELECT sap_id, name, department, role FROM users ORDER BY department ASC, name ASC")
+    all_users = c.fetchall()
+
+    c.execute("""SELECT ut.sap_id, t.name FROM user_teams ut JOIN teams t ON ut.team_id = t.id""")
+    user_teams_map: Dict[str, set] = {}
+    for sap_id, team_name in c.fetchall():
+        user_teams_map.setdefault(sap_id, set()).add(team_name)
+
+    q_sub = (
+        "SELECT DISTINCT sap_id FROM submissions WHERE exam_id = %s"
+        if is_pg
+        else "SELECT DISTINCT sap_id FROM submissions WHERE exam_id = ?"
+    )
+    c.execute(q_sub, (exam_id,))
+    attendees = set(r[0] for r in c.fetchall())
+    conn.close()
+
+    non_attendees = []
+    for sap_id, name, dept, role in all_users:
+        if sap_id in attendees:
+            continue
+        dept_ok = "الكل" in target_depts or (dept in target_depts) or dept == "عام"
+        user_team_names = user_teams_map.get(sap_id, set())
+        team_ok = "الكل" in target_teams or bool(user_team_names.intersection(target_teams))
+        if dept_ok and team_ok:
+            non_attendees.append({
+                "رقم SAP": sap_id,
+                "الاسم": name,
+                "الإدارة": dept,
+                "الدور الوظيفي": role,
+            })
+
+    df = pd.DataFrame(non_attendees) if non_attendees else pd.DataFrame(
+        columns=["رقم SAP", "الاسم", "الإدارة", "الدور الوظيفي"]
+    )
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="لم يؤدوا الامتحان")
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename=non_attendees_exam_{exam_id}.xlsx"
+        },
+    )
 
 
 @app.get("/api/admin/export-results/{exam_id}")
