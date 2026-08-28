@@ -16,6 +16,14 @@ from typing import Dict, List, Optional
 
 import cloudinary
 import cloudinary.uploader
+import arabic_reshaper
+from bidi.algorithm import get_display
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.units import cm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen import canvas
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, Response, UploadFile
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -435,6 +443,23 @@ def init_db_tables():
             UNIQUE(sap_id, skill_requirement_id)
         )""")
 
+        # ترحيل: أعمدة مصدر التدريب المقترح ومدة صلاحية المهارة (لتنبيهات التجديد الدورية)
+        for col, coldef in [
+            ("training_resource_url", "TEXT"),
+            ("training_resource_note", "TEXT"),
+            ("validity_months", "INTEGER"),
+        ]:
+            try:
+                if is_pg:
+                    c.execute(f"ALTER TABLE skill_requirements ADD COLUMN IF NOT EXISTS {col} {coldef}")
+                else:
+                    c.execute("PRAGMA table_info(skill_requirements)")
+                    cols = [r[1] for r in c.fetchall()]
+                    if col not in cols:
+                        c.execute(f"ALTER TABLE skill_requirements ADD COLUMN {col} {coldef}")
+            except Exception:
+                pass
+
         # ملاحظة: تم حذف الإدراج التلقائي لمستخدم تجريبي هنا نهائيًا لمنع رجوعه بعد الحذف
 
         conn.commit()
@@ -501,6 +526,77 @@ def normalize_arabic(text: str) -> str:
     t = t.replace("ى", "ي")
     t = t.replace("ة", "ه")
     return t.lower()
+
+
+# ==================== شهادات الاجتياز (PDF بدعم اللغة العربية) ====================
+CERTIFICATE_ELIGIBLE_LEVELS = {"المستوى 3 (متقدم)", "المستوى 4 (خبير)"}
+_ARABIC_FONT_REGISTERED = False
+
+
+def ensure_arabic_font():
+    """يسجّل خط Amiri العربي مرة واحدة فقط لاستخدامه في توليد ملفات PDF (الشهادات)."""
+    global _ARABIC_FONT_REGISTERED
+    if _ARABIC_FONT_REGISTERED:
+        return
+    font_path = Path(__file__).parent / "fonts" / "Amiri-Regular.ttf"
+    if not font_path.exists():
+        raise HTTPException(
+            status_code=500,
+            detail="خط الشهادات العربي غير موجود على السيرفر (ملف fonts/Amiri-Regular.ttf مفقود من مجلد المشروع).",
+        )
+    pdfmetrics.registerFont(TTFont("Amiri", str(font_path)))
+    _ARABIC_FONT_REGISTERED = True
+
+
+def shape_arabic(text: str) -> str:
+    """يهيّئ نصًا عربيًا (بما فيه أرقام/إنجليزي مختلط) للعرض الصحيح داخل PDF."""
+    reshaped = arabic_reshaper.reshape(str(text))
+    return get_display(reshaped)
+
+
+def generate_certificate_pdf(
+    user_name: str, exam_name: str, level: str, pct: float, cert_id: int, date_str: str
+) -> bytes:
+    ensure_arabic_font()
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=landscape(A4))
+    W, H = landscape(A4)
+
+    c.setFillColor(colors.HexColor("#F8FAFC"))
+    c.rect(0, 0, W, H, fill=1, stroke=0)
+    c.setStrokeColor(colors.HexColor("#4F46E5"))
+    c.setLineWidth(3)
+    c.rect(1 * cm, 1 * cm, W - 2 * cm, H - 2 * cm, fill=0, stroke=1)
+    c.setStrokeColor(colors.HexColor("#C7D2FE"))
+    c.setLineWidth(1)
+    c.rect(1.3 * cm, 1.3 * cm, W - 2.6 * cm, H - 2.6 * cm, fill=0, stroke=1)
+
+    def draw_center(text: str, size: int, y: float, color: str = "#0F172A", bold: bool = False):
+        c.setFont("Amiri", size)
+        c.setFillColor(colors.HexColor(color))
+        shaped = shape_arabic(text)
+        tw = c.stringWidth(shaped, "Amiri", size)
+        x = (W - tw) / 2
+        c.drawString(x, y, shaped)
+        if bold:
+            c.drawString(x + 0.35, y, shaped)  # محاكاة الخط العريض برسم مزدوج بإزاحة بسيطة
+
+    draw_center("شهادة اجتياز", 32, H - 4.2 * cm, "#4F46E5", bold=True)
+
+    c.setStrokeColor(colors.HexColor("#C7D2FE"))
+    c.setLineWidth(1.2)
+    c.line(W / 2 - 3 * cm, H - 5.0 * cm, W / 2 + 3 * cm, H - 5.0 * cm)
+
+    draw_center("تُمنح هذه الشهادة إلى", 15, H - 6.6 * cm, "#64748B")
+    draw_center(user_name, 27, H - 8.2 * cm, "#0F172A", bold=True)
+    draw_center(f"لاجتيازه امتحان: {exam_name}", 17, H - 9.9 * cm, "#334155")
+    draw_center(f"بمستوى: {level}    —    نسبة: {pct:.1f}٪", 16, H - 11.3 * cm, "#059669", bold=True)
+    draw_center(f"بتاريخ: {date_str[:10]}", 12, H - 12.8 * cm, "#94A3B8")
+    draw_center(f"رقم الشهادة: {cert_id}", 10, 1.8 * cm, "#CBD5E1")
+
+    c.showPage()
+    c.save()
+    return buf.getvalue()
 
 
 @app.get("/api/health")
@@ -2407,6 +2503,100 @@ async def get_my_exam_review(
     }
 
 
+def _fetch_best_submission_for_certificate(c, is_pg, exam_id: int, sap_id: str):
+    q_best = (
+        """SELECT id, total_pct, overall_level, submitted_at FROM submissions
+           WHERE exam_id = %s AND sap_id = %s ORDER BY total_pct DESC LIMIT 1"""
+        if is_pg
+        else """SELECT id, total_pct, overall_level, submitted_at FROM submissions
+           WHERE exam_id = ? AND sap_id = ? ORDER BY total_pct DESC LIMIT 1"""
+    )
+    c.execute(q_best, (exam_id, sap_id))
+    return c.fetchone()
+
+
+@app.get("/api/exams/{exam_id}/certificate")
+async def get_my_certificate(
+    exam_id: int, user: Dict[str, object] = Depends(get_current_user)
+):
+    """يصدر شهادة PDF قابلة للتنزيل للفرد نفسه، بشرط تحقيقه المستوى 3 (متقدم) أو المستوى 4 (خبير)
+    على الأقل في أفضل محاولة له بهذا الامتحان."""
+    sap_id = str(user["sap_id"])
+    conn, is_pg = get_db()
+    c = conn.cursor()
+
+    q_exam = "SELECT name FROM exams WHERE id = %s" if is_pg else "SELECT name FROM exams WHERE id = ?"
+    c.execute(q_exam, (exam_id,))
+    exam = c.fetchone()
+    if not exam:
+        conn.close()
+        raise HTTPException(status_code=404, detail="الامتحان غير موجود.")
+
+    q_user = "SELECT name FROM users WHERE sap_id = %s" if is_pg else "SELECT name FROM users WHERE sap_id = ?"
+    c.execute(q_user, (sap_id,))
+    urow = c.fetchone()
+    user_name = urow[0] if urow else sap_id
+
+    best = _fetch_best_submission_for_certificate(c, is_pg, exam_id, sap_id)
+    conn.close()
+
+    if not best:
+        raise HTTPException(status_code=404, detail="لا توجد نتيجة مسجّلة لك في هذا الامتحان.")
+    sub_id, pct, level, submitted_at = best
+    if level not in CERTIFICATE_ELIGIBLE_LEVELS:
+        raise HTTPException(
+            status_code=403,
+            detail="الشهادة متاحة فقط لمن حقق المستوى 3 (متقدم) أو المستوى 4 (خبير) على الأقل.",
+        )
+
+    pdf_bytes = generate_certificate_pdf(user_name, exam[0], level, pct, sub_id, str(submitted_at))
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=certificate_{sub_id}.pdf"},
+    )
+
+
+@app.get("/api/admin/exams/{exam_id}/certificate/{sap_id}")
+async def get_certificate_for_user_admin(
+    exam_id: int, sap_id: str, _admin: Dict[str, object] = Depends(require_permission("manage"))
+):
+    """يسمح للأدمن باستخراج شهادة أي فرد مستحق مباشرة من شاشة إدارة نتائج الامتحان."""
+    conn, is_pg = get_db()
+    c = conn.cursor()
+
+    q_exam = "SELECT name FROM exams WHERE id = %s" if is_pg else "SELECT name FROM exams WHERE id = ?"
+    c.execute(q_exam, (exam_id,))
+    exam = c.fetchone()
+    if not exam:
+        conn.close()
+        raise HTTPException(status_code=404, detail="الامتحان غير موجود.")
+
+    q_user = "SELECT name FROM users WHERE sap_id = %s" if is_pg else "SELECT name FROM users WHERE sap_id = ?"
+    c.execute(q_user, (sap_id.strip(),))
+    urow = c.fetchone()
+    user_name = urow[0] if urow else sap_id
+
+    best = _fetch_best_submission_for_certificate(c, is_pg, exam_id, sap_id.strip())
+    conn.close()
+
+    if not best:
+        raise HTTPException(status_code=404, detail="لا توجد نتيجة مسجّلة لهذا الفرد في هذا الامتحان.")
+    sub_id, pct, level, submitted_at = best
+    if level not in CERTIFICATE_ELIGIBLE_LEVELS:
+        raise HTTPException(
+            status_code=403,
+            detail="الشهادة متاحة فقط لمن حقق المستوى 3 (متقدم) أو المستوى 4 (خبير) على الأقل.",
+        )
+
+    pdf_bytes = generate_certificate_pdf(user_name, exam[0], level, pct, sub_id, str(submitted_at))
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=certificate_{sub_id}.pdf"},
+    )
+
+
 @app.get("/api/admin/exams/{exam_id}/in-progress-users")
 async def get_in_progress_users(
     exam_id: int, _admin: Dict[str, object] = Depends(require_permission("manage"))
@@ -2971,7 +3161,8 @@ async def list_skill_requirements(
     conn, is_pg = get_db()
     c = conn.cursor()
     c.execute(
-        """SELECT sr.id, sr.role, sr.skill_name, sr.description, sr.linked_exam_id, e.name, sr.required_level, sr.skill_group
+        """SELECT sr.id, sr.role, sr.skill_name, sr.description, sr.linked_exam_id, e.name, sr.required_level,
+                  sr.skill_group, sr.training_resource_url, sr.training_resource_note, sr.validity_months
            FROM skill_requirements sr LEFT JOIN exams e ON sr.linked_exam_id = e.id
            ORDER BY sr.role ASC, sr.skill_group ASC, sr.id ASC"""
     )
@@ -2987,6 +3178,9 @@ async def list_skill_requirements(
             "linked_exam_name": r[5],
             "required_level": r[6],
             "skill_group": r[7] or "عام",
+            "training_resource_url": r[8] or "",
+            "training_resource_note": r[9] or "",
+            "validity_months": r[10],
         }
         for r in rows
     ]
@@ -3000,17 +3194,23 @@ async def add_skill_requirement(
     linked_exam_id: Optional[str] = Form(None),
     required_level: str = Form("المستوى 2 (متوسط)"),
     skill_group: str = Form("عام"),
+    training_resource_url: str = Form(""),
+    training_resource_note: str = Form(""),
+    validity_months: Optional[str] = Form(None),
     _admin: Dict[str, object] = Depends(require_permission("skills")),
 ):
     exam_id_val = int(linked_exam_id) if linked_exam_id and linked_exam_id.strip() else None
+    validity_val = int(validity_months) if validity_months and validity_months.strip() else None
     conn, is_pg = get_db()
     c = conn.cursor()
     q = (
-        """INSERT INTO skill_requirements (role, skill_group, skill_name, description, linked_exam_id, required_level)
-           VALUES (%s, %s, %s, %s, %s, %s)"""
+        """INSERT INTO skill_requirements (role, skill_group, skill_name, description, linked_exam_id,
+           required_level, training_resource_url, training_resource_note, validity_months)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
         if is_pg
-        else """INSERT INTO skill_requirements (role, skill_group, skill_name, description, linked_exam_id, required_level)
-           VALUES (?, ?, ?, ?, ?, ?)"""
+        else """INSERT INTO skill_requirements (role, skill_group, skill_name, description, linked_exam_id,
+           required_level, training_resource_url, training_resource_note, validity_months)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"""
     )
     c.execute(q, (
         role.strip(),
@@ -3019,6 +3219,9 @@ async def add_skill_requirement(
         description.strip(),
         exam_id_val,
         required_level.strip(),
+        training_resource_url.strip(),
+        training_resource_note.strip(),
+        validity_val,
     ))
     conn.commit()
     conn.close()
@@ -3037,6 +3240,9 @@ async def download_skills_template(
             "الوصف": "معرفة إجراءات السلامة الأساسية في المصنع",
             "الحد الأدنى للمستوى": "المستوى 2 (متوسط)",
             "اسم الامتحان المرتبط (اختياري)": "",
+            "رابط مصدر تدريب مقترح (اختياري)": "https://example.com/safety-course",
+            "اسم المدرّب/ملاحظة (اختياري)": "المهندس أحمد - قسم السلامة",
+            "مدة الصلاحية بالشهور (اختياري)": 12,
         },
         {
             "المسمى الوظيفي": "فني صيانة",
@@ -3045,6 +3251,9 @@ async def download_skills_template(
             "الوصف": "",
             "الحد الأدنى للمستوى": "المستوى 3 (متقدم)",
             "اسم الامتحان المرتبط (اختياري)": "",
+            "رابط مصدر تدريب مقترح (اختياري)": "",
+            "اسم المدرّب/ملاحظة (اختياري)": "",
+            "مدة الصلاحية بالشهور (اختياري)": "",
         },
     ])
     output = io.BytesIO()
@@ -3074,11 +3283,13 @@ async def upload_skills_excel(
         exam_name_to_id = {name: eid for eid, name in c.fetchall()}
 
         q = (
-            """INSERT INTO skill_requirements (role, skill_group, skill_name, description, linked_exam_id, required_level)
-               VALUES (%s, %s, %s, %s, %s, %s)"""
+            """INSERT INTO skill_requirements (role, skill_group, skill_name, description, linked_exam_id,
+               required_level, training_resource_url, training_resource_note, validity_months)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
             if is_pg
-            else """INSERT INTO skill_requirements (role, skill_group, skill_name, description, linked_exam_id, required_level)
-               VALUES (?, ?, ?, ?, ?, ?)"""
+            else """INSERT INTO skill_requirements (role, skill_group, skill_name, description, linked_exam_id,
+               required_level, training_resource_url, training_resource_note, validity_months)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"""
         )
 
         added = 0
@@ -3101,7 +3312,22 @@ async def upload_skills_excel(
             exam_name = str(row.get("اسم الامتحان المرتبط (اختياري)", "") or "").strip()
             linked_exam_id = exam_name_to_id.get(exam_name) if exam_name and exam_name.lower() != "nan" else None
 
-            c.execute(q, (role, skill_group, skill_name, description, linked_exam_id, required_level))
+            resource_url = str(row.get("رابط مصدر تدريب مقترح (اختياري)", "") or "").strip()
+            if resource_url.lower() == "nan":
+                resource_url = ""
+            resource_note = str(row.get("اسم المدرّب/ملاحظة (اختياري)", "") or "").strip()
+            if resource_note.lower() == "nan":
+                resource_note = ""
+            validity_raw = row.get("مدة الصلاحية بالشهور (اختياري)", None)
+            try:
+                validity_val = int(validity_raw) if validity_raw and str(validity_raw).lower() != "nan" else None
+            except Exception:
+                validity_val = None
+
+            c.execute(q, (
+                role, skill_group, skill_name, description, linked_exam_id, required_level,
+                resource_url, resource_note, validity_val,
+            ))
             added += 1
 
         conn.commit()
@@ -3123,17 +3349,23 @@ async def update_skill_requirement(
     description: str = Form(""),
     linked_exam_id: Optional[str] = Form(None),
     required_level: str = Form("المستوى 2 (متوسط)"),
+    training_resource_url: str = Form(""),
+    training_resource_note: str = Form(""),
+    validity_months: Optional[str] = Form(None),
     _admin: Dict[str, object] = Depends(require_permission("skills")),
 ):
     exam_id_val = int(linked_exam_id) if linked_exam_id and linked_exam_id.strip() else None
+    validity_val = int(validity_months) if validity_months and validity_months.strip() else None
     conn, is_pg = get_db()
     c = conn.cursor()
     q = (
         """UPDATE skill_requirements SET role = %s, skill_group = %s, skill_name = %s,
-           description = %s, linked_exam_id = %s, required_level = %s WHERE id = %s"""
+           description = %s, linked_exam_id = %s, required_level = %s,
+           training_resource_url = %s, training_resource_note = %s, validity_months = %s WHERE id = %s"""
         if is_pg
         else """UPDATE skill_requirements SET role = ?, skill_group = ?, skill_name = ?,
-           description = ?, linked_exam_id = ?, required_level = ? WHERE id = ?"""
+           description = ?, linked_exam_id = ?, required_level = ?,
+           training_resource_url = ?, training_resource_note = ?, validity_months = ? WHERE id = ?"""
     )
     c.execute(q, (
         role.strip(),
@@ -3142,6 +3374,9 @@ async def update_skill_requirement(
         description.strip(),
         exam_id_val,
         required_level.strip(),
+        training_resource_url.strip(),
+        training_resource_note.strip(),
+        validity_val,
         skill_id,
     ))
     conn.commit()
@@ -3189,11 +3424,13 @@ async def get_user_skill_matrix(sap_id: str, authorization: Optional[str] = Head
     role = urow[0]
 
     q_skills = (
-        """SELECT sr.id, sr.role, sr.skill_name, sr.description, sr.linked_exam_id, e.name, sr.required_level, sr.skill_group
+        """SELECT sr.id, sr.role, sr.skill_name, sr.description, sr.linked_exam_id, e.name, sr.required_level,
+                  sr.skill_group, sr.training_resource_url, sr.training_resource_note, sr.validity_months
            FROM skill_requirements sr LEFT JOIN exams e ON sr.linked_exam_id = e.id
            ORDER BY sr.skill_group ASC, sr.id ASC"""
         if is_pg
-        else """SELECT sr.id, sr.role, sr.skill_name, sr.description, sr.linked_exam_id, e.name, sr.required_level, sr.skill_group
+        else """SELECT sr.id, sr.role, sr.skill_name, sr.description, sr.linked_exam_id, e.name, sr.required_level,
+                  sr.skill_group, sr.training_resource_url, sr.training_resource_note, sr.validity_months
            FROM skill_requirements sr LEFT JOIN exams e ON sr.linked_exam_id = e.id
            ORDER BY sr.skill_group ASC, sr.id ASC"""
     )
@@ -3205,15 +3442,17 @@ async def get_user_skill_matrix(sap_id: str, authorization: Optional[str] = Head
 
     # نجلب أي تقييمات يدوية مسجّلة لهذا الفرد (تجاوز نتيجة الامتحان أو تقييم مهارة غير مرتبطة بامتحان أصلًا)
     q_overrides = (
-        "SELECT skill_requirement_id, achieved_level, note FROM skill_overrides WHERE sap_id = %s"
+        "SELECT skill_requirement_id, achieved_level, note, updated_at FROM skill_overrides WHERE sap_id = %s"
         if is_pg
-        else "SELECT skill_requirement_id, achieved_level, note FROM skill_overrides WHERE sap_id = ?"
+        else "SELECT skill_requirement_id, achieved_level, note, updated_at FROM skill_overrides WHERE sap_id = ?"
     )
     c.execute(q_overrides, (sap_id.strip(),))
-    overrides = {row[0]: {"achieved_level": row[1], "note": row[2]} for row in c.fetchall()}
+    overrides = {row[0]: {"achieved_level": row[1], "note": row[2], "updated_at": row[3]} for row in c.fetchall()}
 
+    now = datetime.now()
     result = []
-    for sk_id, sk_role, skill_name, description, linked_exam_id, exam_name, required_level, skill_group in skills:
+    for (sk_id, sk_role, skill_name, description, linked_exam_id, exam_name, required_level,
+         skill_group, training_url, training_note, validity_months) in skills:
         item = {
             "id": sk_id,
             "skill_name": skill_name,
@@ -3222,47 +3461,152 @@ async def get_user_skill_matrix(sap_id: str, authorization: Optional[str] = Head
             "linked_exam_name": exam_name,
             "required_level": required_level,
             "skill_group": skill_group or "عام",
+            "training_resource_url": training_url or "",
+            "training_resource_note": training_note or "",
+            "validity_months": validity_months,
             "status": "not_linked",
             "achieved_level": None,
             "achieved_pct": None,
+            "achieved_at": None,
+            "expires_at": None,
+            "renewal_status": None,
             "source": None,
             "note": None,
         }
 
         override = overrides.get(sk_id)
+        achieved_at_raw = None
         if override and override["achieved_level"]:
             # التقييم اليدوي له الأولوية دائمًا على نتيجة الامتحان التلقائية
             achieved_level = override["achieved_level"]
             item["achieved_level"] = achieved_level
             item["source"] = "manual"
             item["note"] = override.get("note") or ""
+            achieved_at_raw = override.get("updated_at")
             achieved_idx = LEVEL_ORDER.index(achieved_level) if achieved_level in LEVEL_ORDER else -1
             required_idx = LEVEL_ORDER.index(required_level) if required_level in LEVEL_ORDER else 0
             item["status"] = "met" if achieved_idx >= required_idx else "below"
         elif linked_exam_id:
             q_best = (
-                """SELECT overall_level, total_pct FROM submissions
+                """SELECT overall_level, total_pct, submitted_at FROM submissions
                    WHERE exam_id = %s AND sap_id = %s ORDER BY total_pct DESC LIMIT 1"""
                 if is_pg
-                else """SELECT overall_level, total_pct FROM submissions
+                else """SELECT overall_level, total_pct, submitted_at FROM submissions
                    WHERE exam_id = ? AND sap_id = ? ORDER BY total_pct DESC LIMIT 1"""
             )
             c.execute(q_best, (linked_exam_id, sap_id.strip()))
             best = c.fetchone()
             if best:
-                achieved_level, achieved_pct = best
+                achieved_level, achieved_pct, submitted_at = best
                 item["achieved_level"] = achieved_level
                 item["achieved_pct"] = round(achieved_pct, 1)
                 item["source"] = "exam"
+                achieved_at_raw = submitted_at
                 achieved_idx = LEVEL_ORDER.index(achieved_level) if achieved_level in LEVEL_ORDER else -1
                 required_idx = LEVEL_ORDER.index(required_level) if required_level in LEVEL_ORDER else 0
                 item["status"] = "met" if achieved_idx >= required_idx else "below"
             else:
                 item["status"] = "not_assessed"
+
+        # حساب تاريخ انتهاء صلاحية المهارة (لو مُحدَّدة مدة صلاحية ولها تاريخ إنجاز فعلي)
+        if achieved_at_raw and validity_months:
+            try:
+                achieved_dt = datetime.fromisoformat(str(achieved_at_raw)[:19])
+                expires_dt = achieved_dt + timedelta(days=validity_months * 30)
+                item["achieved_at"] = achieved_dt.strftime("%Y-%m-%d")
+                item["expires_at"] = expires_dt.strftime("%Y-%m-%d")
+                days_left = (expires_dt - now).days
+                if days_left < 0:
+                    item["renewal_status"] = "expired"
+                elif days_left <= 30:
+                    item["renewal_status"] = "expiring_soon"
+                else:
+                    item["renewal_status"] = "valid"
+            except Exception:
+                pass
         result.append(item)
 
     conn.close()
     return {"role": role, "skills": result}
+
+
+@app.get("/api/admin/skills/expiring")
+async def get_expiring_skills(
+    _admin: Dict[str, object] = Depends(require_permission("skills"))
+):
+    """يرصد كل المهارات المحقَّقة (يدويًا أو عبر امتحان) لكل الأفراد، والتي انتهت صلاحيتها أو
+    ستنتهي خلال 30 يومًا، بناءً على مدة الصلاحية المحددة لكل مهارة تحتاج تجديدًا دوريًا."""
+    conn, is_pg = get_db()
+    c = conn.cursor()
+
+    c.execute(
+        """SELECT id, role, skill_name, linked_exam_id, required_level, validity_months
+           FROM skill_requirements WHERE validity_months IS NOT NULL AND validity_months > 0"""
+    )
+    skills_with_validity = c.fetchall()
+    if not skills_with_validity:
+        conn.close()
+        return []
+
+    c.execute("SELECT sap_id, name, role FROM users")
+    all_users = c.fetchall()
+
+    now = datetime.now()
+    results = []
+
+    for sk_id, sk_role, skill_name, linked_exam_id, required_level, validity_months in skills_with_validity:
+        norm_role = normalize_arabic(sk_role)
+        matching_users = [u for u in all_users if normalize_arabic(u[2]) == norm_role]
+
+        for sap_id, user_name, _ in matching_users:
+            achieved_level, achieved_at_raw = None, None
+
+            q_ov = (
+                "SELECT achieved_level, updated_at FROM skill_overrides WHERE sap_id = %s AND skill_requirement_id = %s"
+                if is_pg
+                else "SELECT achieved_level, updated_at FROM skill_overrides WHERE sap_id = ? AND skill_requirement_id = ?"
+            )
+            c.execute(q_ov, (sap_id, sk_id))
+            ov = c.fetchone()
+            if ov and ov[0]:
+                achieved_level, achieved_at_raw = ov[0], ov[1]
+            elif linked_exam_id:
+                q_best = (
+                    """SELECT overall_level, submitted_at FROM submissions
+                       WHERE exam_id = %s AND sap_id = %s ORDER BY total_pct DESC LIMIT 1"""
+                    if is_pg
+                    else """SELECT overall_level, submitted_at FROM submissions
+                       WHERE exam_id = ? AND sap_id = ? ORDER BY total_pct DESC LIMIT 1"""
+                )
+                c.execute(q_best, (linked_exam_id, sap_id))
+                best = c.fetchone()
+                if best:
+                    achieved_level, achieved_at_raw = best
+
+            if not achieved_level or not achieved_at_raw:
+                continue
+
+            try:
+                achieved_dt = datetime.fromisoformat(str(achieved_at_raw)[:19])
+            except Exception:
+                continue
+            expires_dt = achieved_dt + timedelta(days=validity_months * 30)
+            days_left = (expires_dt - now).days
+            if days_left <= 30:
+                results.append({
+                    "sap_id": sap_id,
+                    "name": user_name,
+                    "role": sk_role,
+                    "skill_name": skill_name,
+                    "achieved_at": achieved_dt.strftime("%Y-%m-%d"),
+                    "expires_at": expires_dt.strftime("%Y-%m-%d"),
+                    "days_left": days_left,
+                    "status": "expired" if days_left < 0 else "expiring_soon",
+                })
+
+    conn.close()
+    results.sort(key=lambda x: x["days_left"])
+    return results
 
 
 @app.get("/api/admin/skills/search-users")
@@ -3401,6 +3745,39 @@ async def get_analytics_overview(
         for lvl in LEVEL_ORDER
     ]
 
+    # مقارنة الأداء عبر الفترات الزمنية (شهريًا)، على نفس بيانات الفلترة الحالية (الإدارة/الامتحان)
+    # بحيث لو حدد الأدمن إدارة معينة، يشوف مباشرة هل أداء هذه الإدارة تحديدًا يتحسن أو يتراجع شهريًا
+    monthly_map: Dict[str, Dict[str, object]] = {}
+    for r in rows:
+        month_key = str(r[7])[:7]  # YYYY-MM
+        if month_key not in monthly_map:
+            monthly_map[month_key] = {"pcts": [], "passing": 0}
+        monthly_map[month_key]["pcts"].append(r[5])
+        if r[5] >= 60:
+            monthly_map[month_key]["passing"] += 1
+
+    monthly_trend = []
+    for month_key in sorted(monthly_map.keys()):
+        data = monthly_map[month_key]
+        n = len(data["pcts"])
+        monthly_trend.append({
+            "month": month_key,
+            "submissions": n,
+            "avg_pct": round(sum(data["pcts"]) / n, 1) if n else 0,
+            "pass_rate": round((data["passing"] / n) * 100, 1) if n else 0,
+        })
+
+    # اتجاه الأداء: مقارنة متوسط آخر شهرين مقابل ما قبلهما لتلخيص "هل يتحسن أم يتراجع؟"
+    trend_direction = None
+    if len(monthly_trend) >= 2:
+        recent_avg = monthly_trend[-1]["avg_pct"]
+        previous_avg = monthly_trend[-2]["avg_pct"]
+        diff = round(recent_avg - previous_avg, 1)
+        trend_direction = {
+            "diff": diff,
+            "direction": "up" if diff > 0.5 else ("down" if diff < -0.5 else "flat"),
+        }
+
     # التوزيع الطبيعي (Normal / Gaussian Distribution) محسوبًا على النسب المئوية الفعلية للنتائج
     score_histogram = []
     normal_curve = []
@@ -3536,6 +3913,8 @@ async def get_analytics_overview(
         "submissions_last_7d": submissions_last_7d,
         "submissions_last_30d": submissions_last_30d,
         "overall_level_distribution": overall_level_distribution,
+        "monthly_trend": monthly_trend,
+        "trend_direction": trend_direction,
         "score_distribution": {
             "mean": round(mean_pct, 1) if mean_pct is not None else None,
             "std_dev": round(std_pct, 1) if std_pct is not None else None,
