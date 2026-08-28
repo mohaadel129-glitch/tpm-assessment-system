@@ -6,3 +6,6 @@ pandas
 openpyxl
 psycopg2-binary
 cloudinary
+reportlab
+arabic-reshaper
+python-bidi
