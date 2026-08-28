@@ -524,6 +524,13 @@
                 </div>
 
                 <div>
+                    <h4 class="text-sm font-bold text-slate-700 mb-2">📅 مقارنة الأداء عبر الفترات الزمنية (شهريًا)</h4>
+                    <p class="text-[11px] text-slate-400 mb-2">يعكس هذا الرسم بيانات السلايسر الحالي — لو حددت إدارة معينة، سيعرض اتجاه أداء هذه الإدارة تحديدًا شهرًا بشهر.</p>
+                    <div id="analytics-trend-summary" class="mb-2"></div>
+                    <div id="analytics-monthly-trend"></div>
+                </div>
+
+                <div>
                     <h4 class="text-sm font-bold text-slate-700 mb-2">🔔 التوزيع الطبيعي للنتائج (Normal Distribution)</h4>
                     <p class="text-[11px] text-slate-400 mb-2">الأعمدة تمثل عدد النتائج الفعلي في كل فئة، والمنحنى يمثل التوزيع الطبيعي النظري بنفس المتوسط والانحراف المعياري للبيانات الحالية.</p>
                     <div id="analytics-normal-dist"></div>
@@ -592,8 +599,19 @@
                             <option value="المستوى 4 (خبير)">الحد الأدنى: المستوى 4 (خبير)</option>
                         </select>
                     </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <input type="text" id="skill-training-url" placeholder="رابط مصدر تدريب مقترح (اختياري)" class="px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                        <input type="text" id="skill-training-note" placeholder="اسم المدرّب/ملاحظة (اختياري)" class="px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                        <input type="number" min="1" id="skill-validity-months" placeholder="مدة الصلاحية بالشهور (اتركه فارغًا لمهارة دائمة)" class="px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                    </div>
                     <button onclick="addSkillRequirement()" class="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-200">إضافة المتطلب</button>
                 </div>
+
+                <div id="skills-expiring-section" class="hidden p-4 bg-rose-50/60 border border-rose-200 rounded-2xl space-y-2">
+                    <h4 class="text-sm font-bold text-rose-800">⏰ مهارات تحتاج تجديدًا قريبًا أو منتهية الصلاحية</h4>
+                    <div id="skills-expiring-list" class="space-y-1.5"></div>
+                </div>
+
                 <div id="skills-list-container" class="space-y-4"></div>
             </div>
 
@@ -757,6 +775,20 @@
                         <option value="المستوى 3 (متقدم)">المستوى 3 (متقدم)</option>
                         <option value="المستوى 4 (خبير)">المستوى 4 (خبير)</option>
                     </select>
+                </div>
+            </div>
+            <div>
+                <label class="text-xs text-slate-500 font-bold block mb-1">رابط مصدر تدريب مقترح (اختياري)</label>
+                <input type="text" id="edit-skill-training-url" class="w-full px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                    <label class="text-xs text-slate-500 font-bold block mb-1">اسم المدرّب/ملاحظة (اختياري)</label>
+                    <input type="text" id="edit-skill-training-note" class="w-full px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                </div>
+                <div>
+                    <label class="text-xs text-slate-500 font-bold block mb-1">مدة الصلاحية بالشهور (اختياري)</label>
+                    <input type="number" min="1" id="edit-skill-validity-months" class="w-full px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
                 </div>
             </div>
             <button onclick="saveSkillEdit()" class="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold py-2.5 rounded-xl transition-all shadow-md shadow-indigo-200">حفظ التعديلات</button>
@@ -1213,7 +1245,9 @@
                     cont.innerHTML = '<p class="text-slate-500 text-xs">لم تقم بخوض أي اختبارات حتى الآن.</p>';
                     return;
                 }
-                cont.innerHTML = list.map(h => `
+                cont.innerHTML = list.map(h => {
+                    const certEligible = h.overall_level === 'المستوى 3 (متقدم)' || h.overall_level === 'المستوى 4 (خبير)';
+                    return `
                     <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
                         <div class="flex justify-between items-center">
                             <span class="font-bold text-slate-800 text-sm">${h.exam_name}</span>
@@ -1224,9 +1258,13 @@
                             <span>النسبة: <strong class="text-indigo-600">${h.percentage}</strong></span>
                             <span>المستوى: <strong class="text-emerald-700">${h.overall_level}</strong></span>
                         </div>
-                        ${h.allow_answer_review ? `<button onclick="openMyAnswerReview(${h.exam_id})" class="text-[11px] text-indigo-600 hover:underline font-bold">📋 مراجعة إجاباتي التفصيلية</button>` : ''}
+                        <div class="flex items-center gap-3">
+                            ${h.allow_answer_review ? `<button onclick="openMyAnswerReview(${h.exam_id})" class="text-[11px] text-indigo-600 hover:underline font-bold">📋 مراجعة إجاباتي التفصيلية</button>` : ''}
+                            ${certEligible ? `<button onclick="downloadMyCertificate(${h.exam_id}, this)" class="text-[11px] text-amber-700 hover:underline font-bold">🎓 تنزيل شهادة الاجتياز</button>` : ''}
+                        </div>
                     </div>
-                `).join('');
+                `;
+                }).join('');
             }
         }
 
@@ -1269,6 +1307,62 @@
 
         function closeAnswerReviewModal() {
             document.getElementById('answer-review-modal').classList.add('hidden');
+        }
+
+        async function downloadMyCertificate(examId, btnEl) {
+            const original = btnEl.innerText;
+            btnEl.innerText = '⏳ جاري التجهيز...';
+            btnEl.disabled = true;
+            try {
+                const res = await apiFetch(`/api/exams/${examId}/certificate`);
+                if (!res.ok) {
+                    const data = await res.json();
+                    alert(data.detail || 'تعذر تحميل الشهادة.');
+                    return;
+                }
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `certificate_${examId}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            } catch (e) {
+                alert('تعذر تحميل الشهادة.');
+            } finally {
+                btnEl.innerText = original;
+                btnEl.disabled = false;
+            }
+        }
+
+        async function downloadAdminCertificate(examId, sapId, btnEl) {
+            const original = btnEl.innerText;
+            btnEl.innerText = '⏳';
+            btnEl.disabled = true;
+            try {
+                const res = await apiFetch(`/api/admin/exams/${examId}/certificate/${sapId}`);
+                if (!res.ok) {
+                    const data = await res.json();
+                    alert(data.detail || 'تعذر تحميل الشهادة.');
+                    return;
+                }
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `certificate_${sapId}_${examId}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            } catch (e) {
+                alert('تعذر تحميل الشهادة.');
+            } finally {
+                btnEl.innerText = original;
+                btnEl.disabled = false;
+            }
         }
 
         async function startExamSession(examId, examName) {
@@ -1910,7 +2004,9 @@
                     updateBulkRetakeBar();
                     return;
                 }
-                tbody.innerHTML = subs.map(s => `
+                tbody.innerHTML = subs.map(s => {
+                    const certEligible = s.level === 'المستوى 3 (متقدم)' || s.level === 'المستوى 4 (خبير)';
+                    return `
                     <tr class="hover:bg-slate-50 ${s.hidden ? 'opacity-50' : ''}">
                         <td class="p-2.5 text-center">
                             <input type="checkbox" class="bulk-retake-cb" value="${s.sap_id}" onchange="updateBulkRetakeBar()">
@@ -1925,12 +2021,14 @@
                         </td>
                         <td class="p-2.5 text-center">
                             <button onclick="toggleSubmissionHidden(${s.submission_id}, ${s.hidden ? 0 : 1}, '${examId}')" class="bg-amber-100 text-amber-900 px-2 py-1 rounded text-[11px] font-bold hover:bg-amber-200">${s.hidden ? 'إظهار' : 'تعليق'}</button>
+                            ${certEligible ? `<button onclick="downloadAdminCertificate(${examId}, '${s.sap_id}', this)" class="bg-violet-100 text-violet-800 px-2 py-1 rounded text-[11px] font-bold hover:bg-violet-200 mr-1">🎓 شهادة</button>` : ''}
                         </td>
                         <td class="p-2.5 text-center">
                             <button onclick="deleteSubmission(${s.submission_id}, '${examId}')" class="text-rose-600 hover:text-rose-800 font-bold">حذف</button>
                         </td>
                     </tr>
-                `).join('');
+                `;
+                }).join('');
                 updateBulkRetakeBar();
             } catch (e) {
                 section.classList.add('hidden');
@@ -2333,6 +2431,7 @@
             `).join('');
 
             renderNormalDistributionChart(data.score_distribution);
+            renderMonthlyTrendChart(data.monthly_trend, data.trend_direction);
 
             document.getElementById('analytics-top-performers').innerHTML = data.top_performers.length === 0
                 ? '<p class="text-slate-400 text-xs">لا توجد بيانات كافية بعد.</p>'
@@ -2456,6 +2555,60 @@
             `;
         }
 
+        // --- رسم بياني لمقارنة الأداء عبر الفترات الزمنية (اتجاه شهري) ---
+        function renderMonthlyTrendChart(trend, direction) {
+            const summaryEl = document.getElementById('analytics-trend-summary');
+            const cont = document.getElementById('analytics-monthly-trend');
+            if (!cont) return;
+
+            if (direction) {
+                const arrow = direction.direction === 'up' ? '📈' : (direction.direction === 'down' ? '📉' : '➖');
+                const color = direction.direction === 'up' ? 'text-emerald-700 bg-emerald-50 border-emerald-100' : (direction.direction === 'down' ? 'text-rose-700 bg-rose-50 border-rose-100' : 'text-slate-500 bg-slate-50 border-slate-200');
+                const label = direction.direction === 'up' ? 'تحسّن' : (direction.direction === 'down' ? 'تراجع' : 'شبه ثابت');
+                summaryEl.innerHTML = `<span class="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full border ${color}">${arrow} الأداء ${label} عن الشهر السابق (${direction.diff > 0 ? '+' : ''}${direction.diff}%)</span>`;
+            } else {
+                summaryEl.innerHTML = '';
+            }
+
+            if (!trend || trend.length === 0) {
+                cont.innerHTML = '<p class="text-slate-400 text-xs">لا توجد بيانات كافية بعد (تحتاج نتائج مسجّلة بتواريخ مختلفة).</p>';
+                return;
+            }
+
+            const W = 700, H = 240, padL = 45, padR = 20, padT = 20, padB = 40;
+            const plotW = W - padL - padR, plotH = H - padT - padB;
+            const n = trend.length;
+            const maxSubs = Math.max(1, ...trend.map(t => t.submissions)) * 1.2;
+            const barW = plotW / n;
+
+            const xForIndex = (i) => padL + i * barW;
+            const yForPct = (v) => padT + plotH - (v / 100) * plotH;
+            const yForCount = (v) => padT + plotH - (v / maxSubs) * plotH;
+
+            const bars = trend.map((t, i) => {
+                const bh = (t.submissions / maxSubs) * plotH;
+                return `<rect x="${xForIndex(i) + barW * 0.15}" y="${padT + plotH - bh}" width="${barW * 0.7}" height="${bh}" rx="3" fill="#C7D2FE"></rect>
+                        <text x="${xForIndex(i) + barW / 2}" y="${padT + plotH + 16}" text-anchor="middle" font-size="9" fill="#64748b">${t.month}</text>`;
+            }).join('');
+
+            const linePoints = trend.map((t, i) => `${xForIndex(i) + barW / 2},${yForPct(t.avg_pct)}`).join(' ');
+
+            cont.innerHTML = `
+                <div class="p-3 bg-slate-50/60 border border-slate-200 rounded-2xl">
+                    <div class="flex flex-wrap gap-4 text-[11px] text-slate-500 mb-2 px-2">
+                        <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-sm bg-indigo-200"></span> عدد المحاولات الشهرية</span>
+                        <span class="flex items-center gap-1"><span class="inline-block w-3 h-0.5 bg-indigo-600"></span> متوسط النسبة الشهري (%)</span>
+                    </div>
+                    <svg viewBox="0 0 ${W} ${H}" class="w-full h-auto">
+                        ${bars}
+                        <polyline points="${linePoints}" fill="none" stroke="#4F46E5" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></polyline>
+                        ${trend.map((t, i) => `<circle cx="${xForIndex(i) + barW / 2}" cy="${yForPct(t.avg_pct)}" r="3" fill="#4F46E5"></circle>
+                                                <text x="${xForIndex(i) + barW / 2}" y="${yForPct(t.avg_pct) - 8}" text-anchor="middle" font-size="10" font-weight="bold" fill="#4338ca">${t.avg_pct}%</text>`).join('')}
+                    </svg>
+                </div>
+            `;
+        }
+
         // --- مصفوفة المهارات (إدارة) ---
         // --- تقييم مهارات فرد يدويًا ---
         let skillAssessSearchTimer = null;
@@ -2529,6 +2682,8 @@
                                                 <span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100">الحد الأدنى: ${s.required_level}</span>
                                                 ${s.linked_exam_name ? `<span class="bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">امتحان مرتبط: ${s.linked_exam_name}</span>` : ''}
                                                 ${s.source === 'manual' ? `<span class="bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full border border-amber-100">✋ تقييم يدوي حالي</span>` : (s.source === 'exam' ? `<span class="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-100">📝 من نتيجة الامتحان (${s.achieved_pct}%)</span>` : '')}
+                                                ${s.renewal_status === 'expired' ? `<span class="bg-rose-50 text-rose-700 px-2 py-0.5 rounded-full border border-rose-100">⛔ منتهية الصلاحية (${s.expires_at})</span>` : ''}
+                                                ${s.renewal_status === 'expiring_soon' ? `<span class="bg-orange-50 text-orange-700 px-2 py-0.5 rounded-full border border-orange-100">⏰ تنتهي قريبًا (${s.expires_at})</span>` : ''}
                                             </div>
                                         </div>
                                     </div>
@@ -2577,6 +2732,7 @@
 
         async function loadSkills() {
             await loadSkillLinkedExamOptions();
+            loadExpiringSkills();
             const res = await apiFetch('/api/admin/skills');
             if (!res.ok) return;
             const skills = await res.json();
@@ -2607,6 +2763,8 @@
                                             <div class="flex flex-wrap gap-1.5 mt-1.5">
                                                 <span class="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100">الحد الأدنى: ${s.required_level}</span>
                                                 ${s.linked_exam_name ? `<span class="text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-100">مرتبط بامتحان: ${s.linked_exam_name}</span>` : `<span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">غير مرتبط بامتحان</span>`}
+                                                ${s.training_resource_url ? `<a href="${s.training_resource_url}" target="_blank" class="text-[10px] bg-sky-50 text-sky-700 px-2 py-0.5 rounded-full border border-sky-100 hover:underline">🔗 مصدر تدريب</a>` : ''}
+                                                ${s.validity_months ? `<span class="text-[10px] bg-orange-50 text-orange-700 px-2 py-0.5 rounded-full border border-orange-100">🔄 تجديد كل ${s.validity_months} شهر</span>` : ''}
                                             </div>
                                         </div>
                                         <div class="flex items-center gap-2.5 shrink-0">
@@ -2623,6 +2781,28 @@
             }).join('');
         }
 
+        async function loadExpiringSkills() {
+            const res = await apiFetch('/api/admin/skills/expiring');
+            if (!res.ok) return;
+            const rows = await res.json();
+            const section = document.getElementById('skills-expiring-section');
+            const list = document.getElementById('skills-expiring-list');
+            if (rows.length === 0) {
+                section.classList.add('hidden');
+                return;
+            }
+            section.classList.remove('hidden');
+            list.innerHTML = rows.map(r => `
+                <div class="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-white border border-rose-200 rounded-xl text-xs">
+                    <span><strong class="text-slate-800">${r.name}</strong> <span class="font-mono text-slate-500">(SAP: ${r.sap_id})</span> — مهارة: <strong>${r.skill_name}</strong></span>
+                    <span class="font-bold ${r.status === 'expired' ? 'text-rose-700' : 'text-amber-700'}">
+                        ${r.status === 'expired' ? `⛔ منتهية منذ ${Math.abs(r.days_left)} يوم` : `⏰ تنتهي خلال ${r.days_left} يوم`}
+                        (${r.expires_at})
+                    </span>
+                </div>
+            `).join('');
+        }
+
         async function addSkillRequirement() {
             const role = document.getElementById('skill-role').value.trim();
             const group = document.getElementById('skill-group').value.trim();
@@ -2630,6 +2810,9 @@
             const desc = document.getElementById('skill-desc').value.trim();
             const examId = document.getElementById('skill-linked-exam').value;
             const level = document.getElementById('skill-required-level').value;
+            const trainingUrl = document.getElementById('skill-training-url').value.trim();
+            const trainingNote = document.getElementById('skill-training-note').value.trim();
+            const validityMonths = document.getElementById('skill-validity-months').value.trim();
             if (!role || !name) return alert("يرجى كتابة المسمى الوظيفي واسم المهارة.");
 
             const fd = new FormData();
@@ -2639,6 +2822,9 @@
             fd.append('description', desc);
             if (examId) fd.append('linked_exam_id', examId);
             fd.append('required_level', level);
+            fd.append('training_resource_url', trainingUrl);
+            fd.append('training_resource_note', trainingNote);
+            if (validityMonths) fd.append('validity_months', validityMonths);
 
             const res = await apiFetch('/api/admin/skills/add', { method: 'POST', body: fd });
             const data = await res.json();
@@ -2647,6 +2833,9 @@
             document.getElementById('skill-group').value = '';
             document.getElementById('skill-name').value = '';
             document.getElementById('skill-desc').value = '';
+            document.getElementById('skill-training-url').value = '';
+            document.getElementById('skill-training-note').value = '';
+            document.getElementById('skill-validity-months').value = '';
             loadSkills();
         }
 
@@ -2669,6 +2858,9 @@
             document.getElementById('edit-skill-name').value = s.skill_name;
             document.getElementById('edit-skill-desc').value = s.description || '';
             document.getElementById('edit-skill-required-level').value = s.required_level;
+            document.getElementById('edit-skill-training-url').value = s.training_resource_url || '';
+            document.getElementById('edit-skill-training-note').value = s.training_resource_note || '';
+            document.getElementById('edit-skill-validity-months').value = s.validity_months || '';
 
             const select = document.getElementById('edit-skill-linked-exam');
             const sourceSelect = document.getElementById('adm-preview-select');
@@ -2695,6 +2887,9 @@
             const desc = document.getElementById('edit-skill-desc').value.trim();
             const examId = document.getElementById('edit-skill-linked-exam').value;
             const level = document.getElementById('edit-skill-required-level').value;
+            const trainingUrl = document.getElementById('edit-skill-training-url').value.trim();
+            const trainingNote = document.getElementById('edit-skill-training-note').value.trim();
+            const validityMonths = document.getElementById('edit-skill-validity-months').value.trim();
             if (!role || !name) return alert("يرجى كتابة المسمى الوظيفي واسم المهارة.");
 
             const fd = new FormData();
@@ -2704,6 +2899,9 @@
             fd.append('description', desc);
             if (examId) fd.append('linked_exam_id', examId);
             fd.append('required_level', level);
+            fd.append('training_resource_url', trainingUrl);
+            fd.append('training_resource_note', trainingNote);
+            if (validityMonths) fd.append('validity_months', validityMonths);
 
             const res = await apiFetch(`/api/admin/skills/${editingSkillId}/update`, { method: 'POST', body: fd });
             const data = await res.json();
@@ -2786,9 +2984,23 @@
                                     </div>
                                     <div class="flex flex-wrap gap-3 mt-2 text-[11px] text-slate-500">
                                         <span>الحد الأدنى المطلوب: <strong>${s.required_level}</strong></span>
-                                        ${s.achieved_level ? `<span>مستواك الحالي: <strong class="${s.status === 'met' ? 'text-emerald-600' : 'text-amber-600'}">${s.achieved_level} (${s.achieved_pct}%)</strong></span>` : ''}
+                                        ${s.achieved_level ? `<span>مستواك الحالي: <strong class="${s.status === 'met' ? 'text-emerald-600' : 'text-amber-600'}">${s.achieved_level}${s.achieved_pct ? ` (${s.achieved_pct}%)` : ''}</strong></span>` : ''}
                                         ${s.linked_exam_name ? `<span>الامتحان المرتبط: ${s.linked_exam_name}</span>` : ''}
                                     </div>
+                                    ${s.renewal_status ? `
+                                        <div class="mt-1.5 text-[11px] font-bold ${s.renewal_status === 'expired' ? 'text-rose-600' : (s.renewal_status === 'expiring_soon' ? 'text-amber-600' : 'text-slate-400')}">
+                                            ${s.renewal_status === 'expired' ? `⛔ انتهت صلاحية هذا التقييم بتاريخ ${s.expires_at} — يحتاج إعادة تقييم` : ''}
+                                            ${s.renewal_status === 'expiring_soon' ? `⏰ ستنتهي صلاحية هذا التقييم بتاريخ ${s.expires_at} قريبًا` : ''}
+                                            ${s.renewal_status === 'valid' ? `صالحة حتى: ${s.expires_at}` : ''}
+                                        </div>
+                                    ` : ''}
+                                    ${(s.status === 'below' || s.status === 'not_assessed') && (s.training_resource_url || s.training_resource_note) ? `
+                                        <div class="mt-2 pt-2 border-t border-slate-200 text-[11px]">
+                                            <span class="text-slate-500 font-bold">📚 مصدر تدريب مقترح: </span>
+                                            ${s.training_resource_url ? `<a href="${s.training_resource_url}" target="_blank" class="text-sky-600 hover:underline font-bold">فتح الرابط</a>` : ''}
+                                            ${s.training_resource_note ? `<span class="text-slate-500"> — ${s.training_resource_note}</span>` : ''}
+                                        </div>
+                                    ` : ''}
                                 </div>
                             `).join('')}
                         </div>
