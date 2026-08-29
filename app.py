@@ -590,9 +590,9 @@ def generate_certificate_pdf(
     c.setLineWidth(1)
     c.rect(1.3 * cm, 1.3 * cm, W - 2.6 * cm, H - 2.6 * cm, fill=0, stroke=1)
 
-    # --- اللوجوهات: أعلى اليسار وأعلى اليمين ---
-    logo_size = 2.6 * cm
-    logo_y = H - 2.2 * cm - logo_size
+    # --- اللوجوهات: أعلى اليسار وأعلى اليمين (بحجم أكبر) ---
+    logo_size = 3.6 * cm
+    logo_y = H - 1.8 * cm - logo_size
     logo1_path = _find_asset_image("logo 1", "logo1", "Logo 1", "Logo1")
     logo2_path = _find_asset_image("logo 2", "logo2", "Logo 2", "Logo2")
     if logo1_path:
@@ -614,54 +614,84 @@ def generate_certificate_pdf(
         except Exception:
             pass
 
-    # --- صورة صاحب الشهادة: دائرية في أعلى المنتصف (لو الملف موجود باسم رقم الساب) ---
+    # --- صورة صاحب الشهادة: مستطيلة أكبر على الجانب الأيسر بجوار النص ---
     photo_path = _find_asset_image(sap_id) if sap_id else None
+    photo_w, photo_h = 4.8 * cm, 6.4 * cm
+    photo_x = 2.2 * cm
+    photo_y = 5.0 * cm
     if photo_path:
         try:
-            r = 1.7 * cm
-            cx = W / 2
-            cy = H - 3.0 * cm - r
             c.saveState()
-            clip_path = c.beginPath()
-            clip_path.circle(cx, cy, r)
-            c.clipPath(clip_path, stroke=0, fill=0)
+            c.setFillColor(colors.white)
+            c.roundRect(
+                photo_x - 0.15 * cm, photo_y - 0.15 * cm,
+                photo_w + 0.3 * cm, photo_h + 0.3 * cm,
+                0.25 * cm, fill=1, stroke=0,
+            )
             c.drawImage(
-                ImageReader(str(photo_path)), cx - r, cy - r,
-                width=2 * r, height=2 * r,
+                ImageReader(str(photo_path)), photo_x, photo_y,
+                width=photo_w, height=photo_h,
                 preserveAspectRatio=True, anchor="c", mask="auto",
             )
-            c.restoreState()
             c.setStrokeColor(colors.HexColor("#4F46E5"))
             c.setLineWidth(1.5)
-            c.circle(cx, cy, r, stroke=1, fill=0)
+            c.roundRect(photo_x, photo_y, photo_w, photo_h, 0.15 * cm, fill=0, stroke=1)
+            c.restoreState()
         except Exception:
             photo_path = None
 
-    # لو فيه صورة شخصية، ننزّل باقي محتوى الشهادة تحتها عشان مفيش تداخل
-    offset = 3.1 * cm if photo_path else 0
+    # لو فيه صورة شخصية على اليسار، بننقل مركز النص لليمين شوية عشان مايتقابلش معاها
+    text_center_x = ((photo_x + photo_w + 2.3 * cm) + (W - 2 * cm)) / 2 if photo_path else W / 2
 
-    def draw_center(text: str, size: int, y: float, color: str = "#0F172A", bold: bool = False):
+    def draw_center(text: str, size: int, y: float, color: str = "#0F172A", bold: bool = False, cx: float = None):
         c.setFont("Amiri", size)
         c.setFillColor(colors.HexColor(color))
         shaped = shape_arabic(text)
         tw = c.stringWidth(shaped, "Amiri", size)
-        x = (W - tw) / 2
+        center = cx if cx is not None else text_center_x
+        x = center - tw / 2
         c.drawString(x, y, shaped)
         if bold:
             c.drawString(x + 0.35, y, shaped)  # محاكاة الخط العريض برسم مزدوج بإزاحة بسيطة
 
-    draw_center("شهادة اجتياز", 32, H - 4.2 * cm - offset, "#4F46E5", bold=True)
+    # اسم الجهة المانحة
+    draw_center("شركة العربي المتحدة — مصنع فوم بنها", 13, H - 6.2 * cm, "#4338CA", bold=True)
+
+    draw_center("شهادة اجتياز", 32, H - 8.0 * cm, "#4F46E5", bold=True)
 
     c.setStrokeColor(colors.HexColor("#C7D2FE"))
     c.setLineWidth(1.2)
-    c.line(W / 2 - 3 * cm, H - 5.0 * cm - offset, W / 2 + 3 * cm, H - 5.0 * cm - offset)
+    c.line(text_center_x - 3 * cm, H - 8.9 * cm, text_center_x + 3 * cm, H - 8.9 * cm)
 
-    draw_center("تُمنح هذه الشهادة إلى", 15, H - 6.6 * cm - offset, "#64748B")
-    draw_center(user_name, 27, H - 8.2 * cm - offset, "#0F172A", bold=True)
-    draw_center(f"لاجتيازه امتحان: {exam_name}", 17, H - 9.9 * cm - offset, "#334155")
-    draw_center(f"بمستوى: {level}    —    نسبة: {pct:.1f}٪", 16, H - 11.3 * cm - offset, "#059669", bold=True)
-    draw_center(f"بتاريخ: {date_str[:10]}", 12, H - 12.8 * cm - offset, "#94A3B8")
-    draw_center(f"رقم الشهادة: {cert_id}", 10, 1.8 * cm, "#CBD5E1")
+    draw_center("تُمنح هذه الشهادة إلى", 15, H - 10.3 * cm, "#64748B")
+    draw_center(user_name, 27, H - 12.1 * cm, "#0F172A", bold=True)
+    draw_center("نتقدم لسيادته بخالص التهنئة والتقدير على هذا الإنجاز المتميز", 13, H - 13.6 * cm, "#B45309")
+    draw_center(f"لاجتيازه امتحان: {exam_name}", 17, H - 15.0 * cm, "#334155")
+    draw_center(f"بمستوى: {level}    —    نسبة: {pct:.1f}٪", 16, H - 16.3 * cm, "#059669", bold=True)
+    draw_center(f"بتاريخ: {date_str[:10]}", 12, H - 17.6 * cm, "#94A3B8")
+    draw_center(f"رقم الشهادة: {cert_id}", 10, 1.8 * cm, "#CBD5E1", cx=W / 2)
+
+    # --- اعتماد المدير: صورة توقيع/ختم أسفل يمين الشهادة (اختيارية) ---
+    manager_sig_path = _find_asset_image(
+        "manager signature", "director signature", "signature",
+        "توقيع المدير", "اعتماد المدير", "Manager Signature",
+    )
+    if manager_sig_path:
+        try:
+            sig_w, sig_h = 4.0 * cm, 2.2 * cm
+            sig_x = W - 2.3 * cm - sig_w
+            sig_y = 2.6 * cm
+            c.drawImage(
+                ImageReader(str(manager_sig_path)), sig_x, sig_y,
+                width=sig_w, height=sig_h,
+                preserveAspectRatio=True, anchor="c", mask="auto",
+            )
+            c.setStrokeColor(colors.HexColor("#CBD5E1"))
+            c.setLineWidth(1)
+            c.line(sig_x, sig_y - 0.15 * cm, sig_x + sig_w, sig_y - 0.15 * cm)
+            draw_center("اعتماد المدير", 10, sig_y - 0.6 * cm, "#64748B", cx=sig_x + sig_w / 2)
+        except Exception:
+            pass
 
     c.showPage()
     c.save()
