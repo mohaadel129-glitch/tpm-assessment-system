@@ -26,7 +26,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, Response, UploadFile
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import pandas as pd
@@ -551,6 +551,18 @@ def _find_asset_image(*possible_names: str) -> Optional[Path]:
     return None
 
 
+@app.get("/api/public/logo/{which}")
+def get_public_logo(which: int):
+    """يعرض اللوجو (1 أو 2) للواجهة الأمامية — مثلًا في صفحة تسجيل الدخول،
+    من غير ما نفتح مجلد assets بالكامل للعامة (لأنه فيه صور شخصية للأفراد)."""
+    if which not in (1, 2):
+        raise HTTPException(status_code=404, detail="Not found")
+    path = _find_asset_image(f"logo {which}", f"logo{which}", f"Logo {which}", f"Logo{which}")
+    if not path:
+        raise HTTPException(status_code=404, detail="Logo not found")
+    return FileResponse(str(path))
+
+
 def ensure_arabic_font():
     """يسجّل خط Amiri العربي مرة واحدة فقط لاستخدامه في توليد ملفات PDF (الشهادات)."""
     global _ARABIC_FONT_REGISTERED
@@ -601,14 +613,36 @@ def generate_certificate_pdf(
     c = canvas.Canvas(buf, pagesize=landscape(A4))
     W, H = landscape(A4)
 
-    c.setFillColor(colors.HexColor("#F8FAFC"))
+    # ==================== باليتة ألوان فاخرة (كحلي / ذهبي / رمادي أنيق) ====================
+    NAVY = "#0F2A5C"
+    NAVY_SOFT = "#1E3A6B"
+    GOLD = "#B8860B"
+    GOLD_LIGHT = "#D4A937"
+    SLATE = "#374151"
+    MUTED = "#8B95A8"
+
+    c.setFillColor(colors.HexColor("#FAF9F5"))
     c.rect(0, 0, W, H, fill=1, stroke=0)
-    c.setStrokeColor(colors.HexColor("#4F46E5"))
-    c.setLineWidth(3)
-    c.rect(1 * cm, 1 * cm, W - 2 * cm, H - 2 * cm, fill=0, stroke=1)
-    c.setStrokeColor(colors.HexColor("#C7D2FE"))
+
+    # إطار مزدوج أنيق: كحلي خارجي سميك + ذهبي داخلي رفيع
+    c.setStrokeColor(colors.HexColor(NAVY))
+    c.setLineWidth(3.2)
+    c.rect(0.9 * cm, 0.9 * cm, W - 1.8 * cm, H - 1.8 * cm, fill=0, stroke=1)
+    c.setStrokeColor(colors.HexColor(GOLD))
     c.setLineWidth(1)
-    c.rect(1.3 * cm, 1.3 * cm, W - 2.6 * cm, H - 2.6 * cm, fill=0, stroke=1)
+    c.rect(1.25 * cm, 1.25 * cm, W - 2.5 * cm, H - 2.5 * cm, fill=0, stroke=1)
+
+    # زخارف الزوايا الذهبية (لمسة فاخرة مميزة)
+    def draw_corner(x: float, y: float, hx: int, hy: int, length: float = 1.5 * cm):
+        c.setStrokeColor(colors.HexColor(GOLD))
+        c.setLineWidth(2.4)
+        c.line(x, y, x + hx * length, y)
+        c.line(x, y, x, y + hy * length)
+
+    draw_corner(1.7 * cm, H - 1.7 * cm, 1, -1)
+    draw_corner(W - 1.7 * cm, H - 1.7 * cm, -1, -1)
+    draw_corner(1.7 * cm, 1.7 * cm, 1, 1)
+    draw_corner(W - 1.7 * cm, 1.7 * cm, -1, 1)
 
     # --- اللوجوهات: أعلى اليسار وأعلى اليمين (مساحة أكبر) ---
     logo_size = 4.2 * cm
@@ -634,7 +668,7 @@ def generate_certificate_pdf(
         except Exception:
             pass
 
-    # --- صورة صاحب الشهادة: مستطيلة على الجانب الأيسر، مرفوعة قليلًا لأعلى ---
+    # --- صورة صاحب الشهادة: مستطيلة على الجانب الأيسر بإطار ذهبي فاخر ---
     photo_path = _find_asset_image(sap_id) if sap_id else None
     photo_w, photo_h = 4.8 * cm, 6.4 * cm
     photo_x = 2.2 * cm
@@ -644,8 +678,8 @@ def generate_certificate_pdf(
             c.saveState()
             c.setFillColor(colors.white)
             c.roundRect(
-                photo_x - 0.15 * cm, photo_y - 0.15 * cm,
-                photo_w + 0.3 * cm, photo_h + 0.3 * cm,
+                photo_x - 0.18 * cm, photo_y - 0.18 * cm,
+                photo_w + 0.36 * cm, photo_h + 0.36 * cm,
                 0.25 * cm, fill=1, stroke=0,
             )
             c.drawImage(
@@ -653,9 +687,16 @@ def generate_certificate_pdf(
                 width=photo_w, height=photo_h,
                 preserveAspectRatio=True, anchor="c", mask="auto",
             )
-            c.setStrokeColor(colors.HexColor("#4F46E5"))
-            c.setLineWidth(1.5)
+            c.setStrokeColor(colors.HexColor(GOLD))
+            c.setLineWidth(2)
             c.roundRect(photo_x, photo_y, photo_w, photo_h, 0.15 * cm, fill=0, stroke=1)
+            c.setStrokeColor(colors.HexColor(NAVY))
+            c.setLineWidth(0.7)
+            c.roundRect(
+                photo_x - 0.18 * cm, photo_y - 0.18 * cm,
+                photo_w + 0.36 * cm, photo_h + 0.36 * cm,
+                0.28 * cm, fill=0, stroke=1,
+            )
             c.restoreState()
         except Exception:
             photo_path = None
@@ -664,7 +705,7 @@ def generate_certificate_pdf(
     text_center_x = ((photo_x + photo_w + 2.3 * cm) + (W - 2 * cm)) / 2 if photo_path else W / 2
     text_max_width = (W - 2.2 * cm) - (photo_x + photo_w + 2.3 * cm) if photo_path else (W - 5 * cm)
 
-    def draw_center(text: str, size: int, y: float, color: str = "#0F172A", cx: float = None):
+    def draw_center(text: str, size: int, y: float, color: str = SLATE, cx: float = None):
         c.setFont("Amiri", size)
         c.setFillColor(colors.HexColor(color))
         shaped = shape_arabic(text)
@@ -673,7 +714,7 @@ def generate_certificate_pdf(
         x = center - tw / 2
         c.drawString(x, y, shaped)
 
-    def draw_center_thick(text: str, size: int, y: float, color: str = "#0F172A", cx: float = None):
+    def draw_center_thick(text: str, size: int, y: float, color: str = NAVY, cx: float = None):
         """نص عريض وسميك بمحاكاة الخط الثقيل عبر رسم متعدد بإزاحات دقيقة
         (الخط العربي المتاح على السيرفر بوزن Regular فقط بدون نسخة Bold)."""
         c.setFont("Amiri", size)
@@ -682,47 +723,60 @@ def generate_certificate_pdf(
         tw = c.stringWidth(shaped, "Amiri", size)
         center = cx if cx is not None else text_center_x
         x = center - tw / 2
-        for dx, dy in [(0, 0), (0.6, 0), (-0.6, 0), (0, 0.45), (0, -0.45), (0.4, 0.3), (-0.4, -0.3), (0.4, -0.3), (-0.4, 0.3)]:
+        for dx, dy in [(0, 0), (0.65, 0), (-0.65, 0), (0, 0.5), (0, -0.5), (0.45, 0.35), (-0.45, -0.35), (0.45, -0.35), (-0.45, 0.35)]:
             c.drawString(x + dx, y + dy, shaped)
 
+    def draw_diamond(cx: float, cy: float, r: float, color: str):
+        c.setFillColor(colors.HexColor(color))
+        p = c.beginPath()
+        p.moveTo(cx, cy + r)
+        p.lineTo(cx + r, cy)
+        p.lineTo(cx, cy - r)
+        p.lineTo(cx - r, cy)
+        p.close()
+        c.drawPath(p, fill=1, stroke=0)
+
     # ==================== محتوى الشهادة (نص متدفق مع التفاف تلقائي للأسطر الطويلة) ====================
-    y = H - 5.6 * cm  # بداية الكلام مرفوعة لأعلى قليلًا
+    y = H - 5.5 * cm  # بداية الكلام مرفوعة لأعلى قليلًا
 
-    draw_center_thick("شهادة اجتياز", 32, y, "#4F46E5")
-    y -= 1.55 * cm
+    draw_center_thick("شهادة اجتياز", 38, y, NAVY)
+    y -= 1.85 * cm
 
-    c.setStrokeColor(colors.HexColor("#C7D2FE"))
-    c.setLineWidth(1.2)
-    c.line(text_center_x - 3 * cm, y, text_center_x + 3 * cm, y)
-    y -= 0.95 * cm
+    # فاصل مزخرف: خط ذهبي مزدوج + معين صغير في المنتصف
+    c.setStrokeColor(colors.HexColor(GOLD))
+    c.setLineWidth(1.4)
+    c.line(text_center_x - 3.4 * cm, y, text_center_x - 0.28 * cm, y)
+    c.line(text_center_x + 0.28 * cm, y, text_center_x + 3.4 * cm, y)
+    draw_diamond(text_center_x, y, 0.16 * cm, GOLD)
+    y -= 1.05 * cm
 
     intro_text = (
         "يسر شركة العربي المتحدة للاستثمار الصناعي والتجاري - مصنع فوم بنها "
         "بمنح هذه الشهادة إلى الزميل الفاضل /"
     )
-    for line in _wrap_arabic_lines(intro_text, "Amiri", 14, text_max_width):
-        draw_center(line, 14, y, "#334155")
-        y -= 0.68 * cm
+    for line in _wrap_arabic_lines(intro_text, "Amiri", 15.5, text_max_width):
+        draw_center(line, 15.5, y, SLATE)
+        y -= 0.75 * cm
+
+    y -= 0.2 * cm
+    # اسم الزميل: خط عريض وسميك وأكبر حجمًا
+    for line in _wrap_arabic_lines(user_name, "Amiri", 30, text_max_width):
+        draw_center_thick(line, 30, y, NAVY)
+        y -= 1.42 * cm
 
     y -= 0.15 * cm
-    # اسم الزميل: خط عريض وسميك وأكبر حجمًا
-    for line in _wrap_arabic_lines(user_name, "Amiri", 26, text_max_width):
-        draw_center_thick(line, 26, y, "#0F172A")
-        y -= 1.25 * cm
-
-    y -= 0.1 * cm
     outro_text = (
         f"وذلك لاجتيازه دورة / {exam_name} والحصول على مستوى / {level} "
         f"ونسبة / {pct:.1f}٪ ، متمنين له دوام التوفيق والنجاح."
     )
-    for line in _wrap_arabic_lines(outro_text, "Amiri", 14, text_max_width):
-        draw_center(line, 14, y, "#334155")
-        y -= 0.68 * cm
+    for line in _wrap_arabic_lines(outro_text, "Amiri", 15.5, text_max_width):
+        draw_center(line, 15.5, y, SLATE)
+        y -= 0.75 * cm
 
-    y -= 0.45 * cm
-    draw_center(f"بتاريخ: {date_str[:10]}", 12, y, "#94A3B8")
+    y -= 0.5 * cm
+    draw_center(f"بتاريخ: {date_str[:10]}", 13, y, MUTED)
 
-    draw_center(f"رقم الشهادة: {cert_id}", 10, 1.8 * cm, "#CBD5E1", cx=W / 2)
+    draw_center(f"رقم الشهادة: {cert_id}", 11, 1.8 * cm, MUTED, cx=W / 2)
 
     # --- اعتماد المدير: صورة توقيع/ختم أسفل يسار الشهادة (اختيارية) ---
     manager_sig_path = _find_asset_image(
@@ -739,10 +793,10 @@ def generate_certificate_pdf(
                 width=sig_w, height=sig_h,
                 preserveAspectRatio=True, anchor="c", mask="auto",
             )
-            c.setStrokeColor(colors.HexColor("#CBD5E1"))
-            c.setLineWidth(1)
+            c.setStrokeColor(colors.HexColor(GOLD))
+            c.setLineWidth(1.2)
             c.line(sig_x, sig_y - 0.15 * cm, sig_x + sig_w, sig_y - 0.15 * cm)
-            draw_center("اعتماد المدير", 10, sig_y - 0.6 * cm, "#64748B", cx=sig_x + sig_w / 2)
+            draw_center("اعتماد المدير", 10.5, sig_y - 0.62 * cm, MUTED, cx=sig_x + sig_w / 2)
         except Exception:
             pass
 
