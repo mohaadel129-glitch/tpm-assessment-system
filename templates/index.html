@@ -60,6 +60,14 @@
             #print-area { position: absolute; left: 0; top: 0; width: 100%; }
             .no-print { display: none !important; }
         }
+
+        /* خلفيات زخرفية متحركة لصفحة تسجيل الدخول */
+        @keyframes floatBlob { 0%,100%{ transform: translate(0,0) scale(1);} 50%{ transform: translate(10px,-14px) scale(1.06);} }
+        .animate-float{ animation: floatBlob 7s ease-in-out infinite; }
+        .animate-float-slow{ animation: floatBlob 11s ease-in-out infinite; }
+
+        .login-tab-active{ background:#fff; color:#4338ca; box-shadow:0 4px 12px -4px rgba(79,70,229,.35); }
+        .login-tab-inactive{ color:#64748b; }
     </style>
 </head>
 <body class="app-bg text-slate-800 min-h-screen">
@@ -86,42 +94,97 @@
     <div class="max-w-6xl mx-auto p-4 md:p-8">
 
         <!-- 1. تسجيل دخول الأفراد -->
-        <div id="view-login-user" class="view-panel max-w-md mx-auto bg-white/95 backdrop-blur-sm p-8 sm:p-10 rounded-3xl shadow-2xl shadow-slate-300/30 border border-slate-200/70 mt-8">
-            <h2 class="text-2xl font-extrabold text-slate-800 mb-6 text-center tracking-tight">تسجيل دخول الممتحن</h2>
-            <form onsubmit="handleUserLogin(event)" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-semibold text-slate-700 mb-1">رقم الساب (SAP ID)</label>
-                    <input type="text" id="user-login-sap" required class="w-full px-4 py-3 border border-slate-200 bg-slate-50/60 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 focus:bg-white transition-all" placeholder="مثال: 1001">
+        <div id="view-login-user" class="view-panel relative max-w-md mx-auto mt-6">
+            <div class="absolute -top-16 -right-14 w-56 h-56 bg-gradient-to-br from-indigo-400/30 to-violet-400/20 rounded-full blur-3xl animate-float pointer-events-none"></div>
+            <div class="absolute -bottom-20 -left-14 w-64 h-64 bg-gradient-to-tr from-amber-300/25 to-orange-300/15 rounded-full blur-3xl animate-float-slow pointer-events-none"></div>
+
+            <div class="relative bg-white/85 backdrop-blur-xl p-8 sm:p-10 rounded-[2rem] shadow-2xl shadow-indigo-200/40 border border-white/60 ring-1 ring-slate-900/5">
+                <div class="flex items-center justify-center gap-6 mb-4">
+                    <img src="/api/public/logo/1" alt="Logo 1" class="h-14 w-14 object-contain drop-shadow-md" onerror="this.style.display='none'">
+                    <div class="w-px h-10 bg-slate-200"></div>
+                    <img src="/api/public/logo/2" alt="Logo 2" class="h-14 w-14 object-contain drop-shadow-md" onerror="this.style.display='none'">
                 </div>
-                <div>
-                    <label class="block text-sm font-semibold text-slate-700 mb-1">كلمة المرور</label>
-                    <input type="password" id="user-login-pass" required class="w-full px-4 py-3 border border-slate-200 bg-slate-50/60 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 focus:bg-white transition-all" placeholder="••••••">
+                <p class="text-center text-[11px] font-bold text-slate-400 tracking-wide mb-6">شركة العربي المتحدة للاستثمار الصناعي والتجاري — مصنع فوم بنها</p>
+
+                <div class="flex bg-slate-100 rounded-2xl p-1 mb-6 text-sm font-bold">
+                    <button type="button" class="flex-1 py-2 rounded-xl login-tab-active transition-all">دخول الأفراد</button>
+                    <button type="button" onclick="switchView('view-login-admin')" class="flex-1 py-2 rounded-xl login-tab-inactive hover:text-slate-700 transition-colors">دخول الإدارة</button>
                 </div>
-                <button type="submit" class="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold py-3.5 rounded-2xl transition-all shadow-lg shadow-indigo-300/50 hover:shadow-xl hover:-translate-y-0.5">تسجيل الدخول</button>
-            </form>
-            <div class="mt-4 text-center">
-                <button onclick="requestPasswordResetModal()" class="text-xs text-indigo-600 hover:underline font-bold">نسيت كلمة المرور؟ (طلب استعادة من الإدارة)</button>
+
+                <h2 class="text-2xl font-display font-extrabold text-slate-800 mb-1 text-center tracking-tight">تسجيل دخول الممتحن</h2>
+                <p class="text-center text-xs text-slate-400 mb-6">أدخل بياناتك للوصول إلى منصة الامتحانات</p>
+
+                <form onsubmit="handleUserLogin(event)" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">رقم الساب (SAP ID)</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 right-4 flex items-center text-slate-400 pointer-events-none">🆔</span>
+                            <input type="text" id="user-login-sap" required class="w-full pr-11 pl-4 py-3.5 border border-slate-200 bg-slate-50/60 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 focus:bg-white transition-all" placeholder="مثال: 1001">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">كلمة المرور</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 right-4 flex items-center text-slate-400 pointer-events-none">🔒</span>
+                            <input type="password" id="user-login-pass" required class="w-full pr-11 pl-4 py-3.5 border border-slate-200 bg-slate-50/60 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 focus:bg-white transition-all" placeholder="••••••">
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-600 bg-[length:200%_auto] hover:bg-right text-white font-bold py-3.5 rounded-2xl transition-all duration-500 shadow-lg shadow-indigo-300/50 hover:shadow-xl hover:-translate-y-0.5">تسجيل الدخول</button>
+                </form>
+                <div class="mt-4 text-center">
+                    <button onclick="requestPasswordResetModal()" class="text-xs text-indigo-600 hover:underline font-bold">نسيت كلمة المرور؟ (طلب استعادة من الإدارة)</button>
+                </div>
             </div>
+            <p class="text-center text-[11px] text-slate-400 font-semibold mt-5">تصميم وإعداد: م. محمد عادل</p>
         </div>
 
         <!-- 2. تسجيل دخول الإدارة -->
-        <div id="view-login-admin" class="view-panel hidden max-w-md mx-auto bg-white/95 backdrop-blur-sm p-8 sm:p-10 rounded-3xl shadow-2xl shadow-slate-300/30 border border-slate-200/70 mt-8">
-            <h2 class="text-2xl font-extrabold text-slate-800 mb-6 text-center tracking-tight">بوابة الإدارة المركزية</h2>
-            <form onsubmit="handleAdminLogin(event)" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-semibold text-slate-700 mb-1">رقم الساب (SAP ID)</label>
-                    <input type="text" id="admin-login-sap" required class="w-full px-4 py-3 border border-slate-200 bg-slate-50/60 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 focus:bg-white transition-all" placeholder="ADMIN01">
+        <div id="view-login-admin" class="view-panel hidden relative max-w-md mx-auto mt-6">
+            <div class="absolute -top-16 -left-14 w-56 h-56 bg-gradient-to-br from-slate-400/25 to-indigo-400/15 rounded-full blur-3xl animate-float pointer-events-none"></div>
+            <div class="absolute -bottom-20 -right-14 w-64 h-64 bg-gradient-to-tr from-slate-300/25 to-slate-500/10 rounded-full blur-3xl animate-float-slow pointer-events-none"></div>
+
+            <div class="relative bg-white/85 backdrop-blur-xl p-8 sm:p-10 rounded-[2rem] shadow-2xl shadow-slate-300/40 border border-white/60 ring-1 ring-slate-900/5">
+                <div class="flex items-center justify-center gap-6 mb-4">
+                    <img src="/api/public/logo/1" alt="Logo 1" class="h-14 w-14 object-contain drop-shadow-md" onerror="this.style.display='none'">
+                    <div class="w-px h-10 bg-slate-200"></div>
+                    <img src="/api/public/logo/2" alt="Logo 2" class="h-14 w-14 object-contain drop-shadow-md" onerror="this.style.display='none'">
                 </div>
-                <div>
-                    <label class="block text-sm font-semibold text-slate-700 mb-1">ايميل الشركة</label>
-                    <input type="email" id="admin-login-email" required class="w-full px-4 py-3 border border-slate-200 bg-slate-50/60 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 focus:bg-white transition-all" placeholder="admin@company.com">
+                <p class="text-center text-[11px] font-bold text-slate-400 tracking-wide mb-6">شركة العربي المتحدة للاستثمار الصناعي والتجاري — مصنع فوم بنها</p>
+
+                <div class="flex bg-slate-100 rounded-2xl p-1 mb-6 text-sm font-bold">
+                    <button type="button" onclick="switchView('view-login-user')" class="flex-1 py-2 rounded-xl login-tab-inactive hover:text-slate-700 transition-colors">دخول الأفراد</button>
+                    <button type="button" class="flex-1 py-2 rounded-xl login-tab-active transition-all">دخول الإدارة</button>
                 </div>
-                <div>
-                    <label class="block text-sm font-semibold text-slate-700 mb-1">كلمة المرور</label>
-                    <input type="password" id="admin-login-pass" required class="w-full px-4 py-3 border border-slate-200 bg-slate-50/60 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 focus:bg-white transition-all" placeholder="Admin@2026">
-                </div>
-                <button type="submit" class="w-full bg-gradient-to-r from-slate-800 to-slate-950 hover:from-slate-900 hover:to-black text-white font-bold py-3.5 rounded-2xl transition-all shadow-lg shadow-slate-400/40 hover:shadow-xl hover:-translate-y-0.5">دخول الإدارة</button>
-            </form>
+
+                <h2 class="text-2xl font-display font-extrabold text-slate-800 mb-1 text-center tracking-tight">بوابة الإدارة المركزية</h2>
+                <p class="text-center text-xs text-slate-400 mb-6">وصول خاص بفريق الإدارة والتحكم في المنصة</p>
+
+                <form onsubmit="handleAdminLogin(event)" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">رقم الساب (SAP ID)</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 right-4 flex items-center text-slate-400 pointer-events-none">🆔</span>
+                            <input type="text" id="admin-login-sap" required class="w-full pr-11 pl-4 py-3.5 border border-slate-200 bg-slate-50/60 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 focus:bg-white transition-all" placeholder="ADMIN01">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">ايميل الشركة</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 right-4 flex items-center text-slate-400 pointer-events-none">✉️</span>
+                            <input type="email" id="admin-login-email" required class="w-full pr-11 pl-4 py-3.5 border border-slate-200 bg-slate-50/60 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 focus:bg-white transition-all" placeholder="admin@company.com">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">كلمة المرور</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 right-4 flex items-center text-slate-400 pointer-events-none">🔒</span>
+                            <input type="password" id="admin-login-pass" required class="w-full pr-11 pl-4 py-3.5 border border-slate-200 bg-slate-50/60 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 focus:bg-white transition-all" placeholder="Admin@2026">
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full bg-gradient-to-r from-slate-800 via-slate-900 to-black bg-[length:200%_auto] hover:bg-right text-white font-bold py-3.5 rounded-2xl transition-all duration-500 shadow-lg shadow-slate-400/40 hover:shadow-xl hover:-translate-y-0.5">دخول الإدارة</button>
+                </form>
+            </div>
+            <p class="text-center text-[11px] text-slate-400 font-semibold mt-5">تصميم وإعداد: م. محمد عادل</p>
         </div>
 
         <!-- 3. لوحة تحكم المستخدم (الامتحانات + سجل النتائج) -->
