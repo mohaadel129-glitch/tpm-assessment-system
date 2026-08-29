@@ -572,6 +572,26 @@ def shape_arabic(text: str) -> str:
     return get_display(reshaped)
 
 
+def _wrap_arabic_lines(text: str, font_name: str, size: int, max_width: float) -> List[str]:
+    """يقسّم نصًا عربيًا طويلًا إلى أسطر متعددة بحيث لا يتجاوز عرض أي سطر max_width،
+    مع إعادة تهيئة (reshape) كل سطر على حدة بشكل صحيح."""
+    words = text.split(" ")
+    lines: List[str] = []
+    current = ""
+    for w in words:
+        candidate = (current + " " + w).strip()
+        shaped = shape_arabic(candidate)
+        width = pdfmetrics.stringWidth(shaped, font_name, size)
+        if width <= max_width or not current:
+            current = candidate
+        else:
+            lines.append(current)
+            current = w
+    if current:
+        lines.append(current)
+    return lines
+
+
 def generate_certificate_pdf(
     user_name: str, exam_name: str, level: str, pct: float, cert_id: int, date_str: str,
     sap_id: str = "",
@@ -590,9 +610,9 @@ def generate_certificate_pdf(
     c.setLineWidth(1)
     c.rect(1.3 * cm, 1.3 * cm, W - 2.6 * cm, H - 2.6 * cm, fill=0, stroke=1)
 
-    # --- اللوجوهات: أعلى اليسار وأعلى اليمين (بحجم أكبر) ---
-    logo_size = 3.6 * cm
-    logo_y = H - 1.8 * cm - logo_size
+    # --- اللوجوهات: أعلى اليسار وأعلى اليمين (مساحة أكبر) ---
+    logo_size = 4.2 * cm
+    logo_y = H - 1.7 * cm - logo_size
     logo1_path = _find_asset_image("logo 1", "logo1", "Logo 1", "Logo1")
     logo2_path = _find_asset_image("logo 2", "logo2", "Logo 2", "Logo2")
     if logo1_path:
@@ -614,11 +634,11 @@ def generate_certificate_pdf(
         except Exception:
             pass
 
-    # --- صورة صاحب الشهادة: مستطيلة أكبر على الجانب الأيسر بجوار النص ---
+    # --- صورة صاحب الشهادة: مستطيلة على الجانب الأيسر، مرفوعة قليلًا لأعلى ---
     photo_path = _find_asset_image(sap_id) if sap_id else None
     photo_w, photo_h = 4.8 * cm, 6.4 * cm
     photo_x = 2.2 * cm
-    photo_y = 5.0 * cm
+    photo_y = 6.4 * cm
     if photo_path:
         try:
             c.saveState()
@@ -642,8 +662,9 @@ def generate_certificate_pdf(
 
     # لو فيه صورة شخصية على اليسار، بننقل مركز النص لليمين شوية عشان مايتقابلش معاها
     text_center_x = ((photo_x + photo_w + 2.3 * cm) + (W - 2 * cm)) / 2 if photo_path else W / 2
+    text_max_width = (W - 2.2 * cm) - (photo_x + photo_w + 2.3 * cm) if photo_path else (W - 5 * cm)
 
-    def draw_center(text: str, size: int, y: float, color: str = "#0F172A", bold: bool = False, cx: float = None):
+    def draw_center(text: str, size: int, y: float, color: str = "#0F172A", cx: float = None):
         c.setFont("Amiri", size)
         c.setFillColor(colors.HexColor(color))
         shaped = shape_arabic(text)
@@ -651,27 +672,59 @@ def generate_certificate_pdf(
         center = cx if cx is not None else text_center_x
         x = center - tw / 2
         c.drawString(x, y, shaped)
-        if bold:
-            c.drawString(x + 0.35, y, shaped)  # محاكاة الخط العريض برسم مزدوج بإزاحة بسيطة
 
-    # اسم الجهة المانحة
-    draw_center("شركة العربي المتحدة — مصنع فوم بنها", 13, H - 6.2 * cm, "#4338CA", bold=True)
+    def draw_center_thick(text: str, size: int, y: float, color: str = "#0F172A", cx: float = None):
+        """نص عريض وسميك بمحاكاة الخط الثقيل عبر رسم متعدد بإزاحات دقيقة
+        (الخط العربي المتاح على السيرفر بوزن Regular فقط بدون نسخة Bold)."""
+        c.setFont("Amiri", size)
+        c.setFillColor(colors.HexColor(color))
+        shaped = shape_arabic(text)
+        tw = c.stringWidth(shaped, "Amiri", size)
+        center = cx if cx is not None else text_center_x
+        x = center - tw / 2
+        for dx, dy in [(0, 0), (0.6, 0), (-0.6, 0), (0, 0.45), (0, -0.45), (0.4, 0.3), (-0.4, -0.3), (0.4, -0.3), (-0.4, 0.3)]:
+            c.drawString(x + dx, y + dy, shaped)
 
-    draw_center("شهادة اجتياز", 32, H - 8.0 * cm, "#4F46E5", bold=True)
+    # ==================== محتوى الشهادة (نص متدفق مع التفاف تلقائي للأسطر الطويلة) ====================
+    y = H - 5.6 * cm  # بداية الكلام مرفوعة لأعلى قليلًا
+
+    draw_center_thick("شهادة اجتياز", 32, y, "#4F46E5")
+    y -= 1.55 * cm
 
     c.setStrokeColor(colors.HexColor("#C7D2FE"))
     c.setLineWidth(1.2)
-    c.line(text_center_x - 3 * cm, H - 8.9 * cm, text_center_x + 3 * cm, H - 8.9 * cm)
+    c.line(text_center_x - 3 * cm, y, text_center_x + 3 * cm, y)
+    y -= 0.95 * cm
 
-    draw_center("تُمنح هذه الشهادة إلى", 15, H - 10.3 * cm, "#64748B")
-    draw_center(user_name, 27, H - 12.1 * cm, "#0F172A", bold=True)
-    draw_center("نتقدم لسيادته بخالص التهنئة والتقدير على هذا الإنجاز المتميز", 13, H - 13.6 * cm, "#B45309")
-    draw_center(f"لاجتيازه امتحان: {exam_name}", 17, H - 15.0 * cm, "#334155")
-    draw_center(f"بمستوى: {level}    —    نسبة: {pct:.1f}٪", 16, H - 16.3 * cm, "#059669", bold=True)
-    draw_center(f"بتاريخ: {date_str[:10]}", 12, H - 17.6 * cm, "#94A3B8")
+    intro_text = (
+        "يسر شركة العربي المتحدة للاستثمار الصناعي والتجاري - مصنع فوم بنها "
+        "بمنح هذه الشهادة إلى الزميل الفاضل /"
+    )
+    for line in _wrap_arabic_lines(intro_text, "Amiri", 14, text_max_width):
+        draw_center(line, 14, y, "#334155")
+        y -= 0.68 * cm
+
+    y -= 0.15 * cm
+    # اسم الزميل: خط عريض وسميك وأكبر حجمًا
+    for line in _wrap_arabic_lines(user_name, "Amiri", 26, text_max_width):
+        draw_center_thick(line, 26, y, "#0F172A")
+        y -= 1.25 * cm
+
+    y -= 0.1 * cm
+    outro_text = (
+        f"وذلك لاجتيازه دورة / {exam_name} والحصول على مستوى / {level} "
+        f"ونسبة / {pct:.1f}٪ ، متمنين له دوام التوفيق والنجاح."
+    )
+    for line in _wrap_arabic_lines(outro_text, "Amiri", 14, text_max_width):
+        draw_center(line, 14, y, "#334155")
+        y -= 0.68 * cm
+
+    y -= 0.45 * cm
+    draw_center(f"بتاريخ: {date_str[:10]}", 12, y, "#94A3B8")
+
     draw_center(f"رقم الشهادة: {cert_id}", 10, 1.8 * cm, "#CBD5E1", cx=W / 2)
 
-    # --- اعتماد المدير: صورة توقيع/ختم أسفل يمين الشهادة (اختيارية) ---
+    # --- اعتماد المدير: صورة توقيع/ختم أسفل يسار الشهادة (اختيارية) ---
     manager_sig_path = _find_asset_image(
         "manager signature", "director signature", "signature",
         "توقيع المدير", "اعتماد المدير", "Manager Signature",
@@ -679,7 +732,7 @@ def generate_certificate_pdf(
     if manager_sig_path:
         try:
             sig_w, sig_h = 4.0 * cm, 2.2 * cm
-            sig_x = W - 2.3 * cm - sig_w
+            sig_x = 2.3 * cm
             sig_y = 2.6 * cm
             c.drawImage(
                 ImageReader(str(manager_sig_path)), sig_x, sig_y,
