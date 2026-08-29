@@ -753,46 +753,54 @@ def generate_certificate_pdf(
         p.close()
         c.drawPath(p, fill=1, stroke=0)
 
-    def _measure(text: str, size: float) -> tuple:
+    def _measure(text: str, size: float, font: str = "Amiri") -> tuple:
         shaped = shape_arabic(text)
-        return shaped, c.stringWidth(shaped, "Amiri", size)
+        return shaped, c.stringWidth(shaped, font, size)
 
     def draw_rtl_segments(segments, y: float, max_width: float, cx: float = None):
-        """يرسم سطرًا من عدة أجزاء بألوان/أوزان مختلفة، مرتبة من اليمين لليسار
+        """يرسم سطرًا من عدة أجزاء بألوان/أوزان/خطوط مختلفة، مرتبة من اليمين لليسار
         (الجزء الأول في القراءة يكون أقصى اليمين)، مع تصغير تلقائي للخط لو النص طويل
-        عشان يفضل في سطر واحد زي ما هو مطلوب بالظبط."""
+        عشان يفضل في سطر واحد زي ما هو مطلوب بالظبط.
+        كل جزء (segment) عبارة عن: (نص, حجم, لون, سميك؟, اسم_الخط)."""
         center = cx if cx is not None else text_center_x
         scale = 1.0
         rendered = []
         while True:
             rendered = []
             total_w = 0.0
-            for text, size, color, thick in segments:
+            for text, size, color, thick, font in segments:
                 sz = size * scale
-                shaped, w = _measure(text, sz)
-                rendered.append((shaped, sz, color, thick, w))
+                shaped, w = _measure(text, sz, font)
+                rendered.append((shaped, sz, color, thick, font, w))
                 total_w += w
             if total_w <= max_width or scale <= 0.55:
                 break
             scale -= 0.05
         x_right = center + total_w / 2
-        for shaped, sz, color, thick, w in rendered:
+        for shaped, sz, color, thick, font, w in rendered:
             x_left = x_right - w
-            c.setFont("Amiri", sz)
+            c.setFont(font, sz)
             c.setFillColor(colors.HexColor(color))
-            if thick:
+            if thick and font == "Amiri":
                 for dx, dy in [(0, 0), (0.55, 0), (-0.55, 0), (0, 0.4), (0, -0.4), (0.4, 0.3), (-0.4, -0.3)]:
                     c.drawString(x_left + dx, y + dy, shaped)
+            elif thick:
+                c.drawString(x_left, y, shaped)
+                c.drawString(x_left + 0.35, y, shaped)
             else:
                 c.drawString(x_left, y, shaped)
             x_right -= w
         return scale
 
+    def _to_arabic_numerals(s: str) -> str:
+        return s.translate(str.maketrans("0123456789.", "٠١٢٣٤٥٦٧٨٩٫"))
+
     # ==================== محتوى الشهادة: 6 أسطر ثابتة بألوان مميزة لكل عنصر ====================
-    NAME_COLOR = "#9F1239"      # اسم الزميل: لون مميز (خمري) وخط سميك
-    COURSE_COLOR = "#1D4ED8"    # اسم الدورة: أزرق ملكي عريض
-    LEVEL_COLOR = "#047857"     # المستوى والنسبة: أخضر زمردي عريض
-    WISH_COLOR = "#92400E"      # سطر التهنئة الختامي
+    NAME_COLOR = "#9F1239"      # اسم الزميل واسم الدورة: لون مميز (خمري) وخط مميز
+    LEVEL_COLOR = "#047857"     # المستوى والنسبة: أخضر زمردي (بدون سماكة)
+
+    _name_font = "NameFont" if _name_font_available() else "Amiri"
+    _name_size = 31 if _name_font == "NameFont" else 29
 
     y = H - 5.5 * cm  # بداية الكلام مرفوعة لأعلى قليلًا
 
@@ -809,52 +817,50 @@ def generate_certificate_pdf(
 
     # السطر الأول: يسر شركة العربي المتحدة...
     draw_rtl_segments(
-        [("يسر شركة العربي المتحدة للاستثمار الصناعي والتجاري - مصنع فوم بنها", 14.5, SLATE, False)],
+        [("يسر شركة العربي المتحدة للاستثمار الصناعي والتجاري - مصنع فوم بنها", 14.5, SLATE, False, "Amiri")],
         y, text_max_width,
     )
     y -= 0.78 * cm
 
     # السطر الثاني: منح هذه الشهادة إلى الزميل الفاضل /
     draw_rtl_segments(
-        [("منح هذه الشهادة إلى الزميل الفاضل /", 15.5, SLATE, False)],
+        [("منح هذه الشهادة إلى الزميل الفاضل /", 15.5, SLATE, False, "Amiri")],
         y, text_max_width,
     )
-    y -= 1.05 * cm
+    y -= 1.4 * cm  # مسافة أكبر شوية قبل الاسم عشان ميبقاش ملتصق بالسطر اللي قبله
 
-    # السطر الثالث: اسم الزميل (لون مميز وخط عريض وسميك)
-    _name_font = "NameFont" if _name_font_available() else "Amiri"
-    _name_size = 31 if _name_font == "NameFont" else 29
+    # السطر الثالث: اسم الزميل (لون مميز وخط مميز)
     for line in _wrap_arabic_lines(user_name, _name_font, _name_size, text_max_width):
         draw_center_thick(line, _name_size, y, NAME_COLOR, font=_name_font)
         y -= 1.42 * cm
 
     y -= 0.15 * cm
 
-    # السطر الرابع: وذلك لاجتيازه دورة / اسم الدورة (اسم الدورة بلون مميز وخط عريض)
+    # السطر الرابع: وذلك لاجتيازه دورة / اسم الدورة (بنفس خط ولون الاسم)
     draw_rtl_segments(
         [
-            ("وذلك لاجتيازه دورة / ", 15, SLATE, False),
-            (exam_name, 16, COURSE_COLOR, True),
+            ("وذلك لاجتيازه دورة / ", 15, SLATE, False, "Amiri"),
+            (exam_name, _name_size - 10 if _name_font == "NameFont" else 16, NAME_COLOR, True, _name_font),
         ],
         y, text_max_width,
     )
     y -= 0.95 * cm
 
-    # السطر الخامس: والحصول على مستوى / ... ونسبة / ... (بلون مميز وخط عريض)
+    # السطر الخامس: والحصول على مستوى / ... ونسبة / ... (مميز باللون فقط، من غير سماكة، والنسبة بأرقام عربية)
     draw_rtl_segments(
         [
-            ("والحصول على مستوى / ", 15, SLATE, False),
-            (level, 16, LEVEL_COLOR, True),
-            ("  ونسبة / ", 15, SLATE, False),
-            (f"{pct:.1f}٪", 16, LEVEL_COLOR, True),
+            ("والحصول على مستوى / ", 15, SLATE, False, "Amiri"),
+            (level, 15.5, LEVEL_COLOR, False, "Amiri"),
+            ("  ونسبة / ", 15, SLATE, False, "Amiri"),
+            (_to_arabic_numerals(f"{pct:.1f}") + "٪", 15.5, LEVEL_COLOR, False, "Amiri"),
         ],
         y, text_max_width,
     )
     y -= 0.95 * cm
 
-    # السطر السادس: متمنين له دوام التوفيق والنجاح
+    # السطر السادس: متمنين له دوام التوفيق والنجاح (بنفس لون النص الطبيعي)
     draw_rtl_segments(
-        [("متمنين له دوام التوفيق والنجاح", 14.5, WISH_COLOR, False)],
+        [("متمنين له دوام التوفيق والنجاح", 14.5, SLATE, False, "Amiri")],
         y, text_max_width,
     )
     y -= 0.85 * cm
