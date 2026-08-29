@@ -24,6 +24,7 @@ from reportlab.lib.units import cm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, Response, UploadFile
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -532,6 +533,23 @@ def normalize_arabic(text: str) -> str:
 CERTIFICATE_ELIGIBLE_LEVELS = {"المستوى 3 (متقدم)", "المستوى 4 (خبير)"}
 _ARABIC_FONT_REGISTERED = False
 
+# مجلد الصور (اللوجوهات وصور الأفراد) المرفوع بجوار ملف الكود مباشرة
+ASSETS_DIR = BASE_DIR / "assets"
+IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".PNG", ".JPG", ".JPEG"]
+
+
+def _find_asset_image(*possible_names: str) -> Optional[Path]:
+    """يبحث عن ملف صورة داخل مجلد assets بأي من الأسماء المحتملة وأي امتداد شائع.
+    يُستخدم للوجوهات (logo 1 / logo 2) ولصور الأفراد (باسم رقم الساب)."""
+    if not ASSETS_DIR.exists():
+        return None
+    for name in possible_names:
+        for ext in IMAGE_EXTENSIONS:
+            candidate = ASSETS_DIR / f"{name}{ext}"
+            if candidate.exists():
+                return candidate
+    return None
+
 
 def ensure_arabic_font():
     """يسجّل خط Amiri العربي مرة واحدة فقط لاستخدامه في توليد ملفات PDF (الشهادات)."""
@@ -555,7 +573,8 @@ def shape_arabic(text: str) -> str:
 
 
 def generate_certificate_pdf(
-    user_name: str, exam_name: str, level: str, pct: float, cert_id: int, date_str: str
+    user_name: str, exam_name: str, level: str, pct: float, cert_id: int, date_str: str,
+    sap_id: str = "",
 ) -> bytes:
     ensure_arabic_font()
     buf = io.BytesIO()
@@ -571,6 +590,56 @@ def generate_certificate_pdf(
     c.setLineWidth(1)
     c.rect(1.3 * cm, 1.3 * cm, W - 2.6 * cm, H - 2.6 * cm, fill=0, stroke=1)
 
+    # --- اللوجوهات: أعلى اليسار وأعلى اليمين ---
+    logo_size = 2.6 * cm
+    logo_y = H - 2.2 * cm - logo_size
+    logo1_path = _find_asset_image("logo 1", "logo1", "Logo 1", "Logo1")
+    logo2_path = _find_asset_image("logo 2", "logo2", "Logo 2", "Logo2")
+    if logo1_path:
+        try:
+            c.drawImage(
+                ImageReader(str(logo1_path)), 2 * cm, logo_y,
+                width=logo_size, height=logo_size,
+                preserveAspectRatio=True, anchor="c", mask="auto",
+            )
+        except Exception:
+            pass
+    if logo2_path:
+        try:
+            c.drawImage(
+                ImageReader(str(logo2_path)), W - 2 * cm - logo_size, logo_y,
+                width=logo_size, height=logo_size,
+                preserveAspectRatio=True, anchor="c", mask="auto",
+            )
+        except Exception:
+            pass
+
+    # --- صورة صاحب الشهادة: دائرية في أعلى المنتصف (لو الملف موجود باسم رقم الساب) ---
+    photo_path = _find_asset_image(sap_id) if sap_id else None
+    if photo_path:
+        try:
+            r = 1.7 * cm
+            cx = W / 2
+            cy = H - 3.0 * cm - r
+            c.saveState()
+            clip_path = c.beginPath()
+            clip_path.circle(cx, cy, r)
+            c.clipPath(clip_path, stroke=0, fill=0)
+            c.drawImage(
+                ImageReader(str(photo_path)), cx - r, cy - r,
+                width=2 * r, height=2 * r,
+                preserveAspectRatio=True, anchor="c", mask="auto",
+            )
+            c.restoreState()
+            c.setStrokeColor(colors.HexColor("#4F46E5"))
+            c.setLineWidth(1.5)
+            c.circle(cx, cy, r, stroke=1, fill=0)
+        except Exception:
+            photo_path = None
+
+    # لو فيه صورة شخصية، ننزّل باقي محتوى الشهادة تحتها عشان مفيش تداخل
+    offset = 3.1 * cm if photo_path else 0
+
     def draw_center(text: str, size: int, y: float, color: str = "#0F172A", bold: bool = False):
         c.setFont("Amiri", size)
         c.setFillColor(colors.HexColor(color))
@@ -581,17 +650,17 @@ def generate_certificate_pdf(
         if bold:
             c.drawString(x + 0.35, y, shaped)  # محاكاة الخط العريض برسم مزدوج بإزاحة بسيطة
 
-    draw_center("شهادة اجتياز", 32, H - 4.2 * cm, "#4F46E5", bold=True)
+    draw_center("شهادة اجتياز", 32, H - 4.2 * cm - offset, "#4F46E5", bold=True)
 
     c.setStrokeColor(colors.HexColor("#C7D2FE"))
     c.setLineWidth(1.2)
-    c.line(W / 2 - 3 * cm, H - 5.0 * cm, W / 2 + 3 * cm, H - 5.0 * cm)
+    c.line(W / 2 - 3 * cm, H - 5.0 * cm - offset, W / 2 + 3 * cm, H - 5.0 * cm - offset)
 
-    draw_center("تُمنح هذه الشهادة إلى", 15, H - 6.6 * cm, "#64748B")
-    draw_center(user_name, 27, H - 8.2 * cm, "#0F172A", bold=True)
-    draw_center(f"لاجتيازه امتحان: {exam_name}", 17, H - 9.9 * cm, "#334155")
-    draw_center(f"بمستوى: {level}    —    نسبة: {pct:.1f}٪", 16, H - 11.3 * cm, "#059669", bold=True)
-    draw_center(f"بتاريخ: {date_str[:10]}", 12, H - 12.8 * cm, "#94A3B8")
+    draw_center("تُمنح هذه الشهادة إلى", 15, H - 6.6 * cm - offset, "#64748B")
+    draw_center(user_name, 27, H - 8.2 * cm - offset, "#0F172A", bold=True)
+    draw_center(f"لاجتيازه امتحان: {exam_name}", 17, H - 9.9 * cm - offset, "#334155")
+    draw_center(f"بمستوى: {level}    —    نسبة: {pct:.1f}٪", 16, H - 11.3 * cm - offset, "#059669", bold=True)
+    draw_center(f"بتاريخ: {date_str[:10]}", 12, H - 12.8 * cm - offset, "#94A3B8")
     draw_center(f"رقم الشهادة: {cert_id}", 10, 1.8 * cm, "#CBD5E1")
 
     c.showPage()
@@ -2549,7 +2618,7 @@ async def get_my_certificate(
             detail="الشهادة متاحة فقط لمن حقق المستوى 3 (متقدم) أو المستوى 4 (خبير) على الأقل.",
         )
 
-    pdf_bytes = generate_certificate_pdf(user_name, exam[0], level, pct, sub_id, str(submitted_at))
+    pdf_bytes = generate_certificate_pdf(user_name, exam[0], level, pct, sub_id, str(submitted_at), sap_id)
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
@@ -2589,7 +2658,7 @@ async def get_certificate_for_user_admin(
             detail="الشهادة متاحة فقط لمن حقق المستوى 3 (متقدم) أو المستوى 4 (خبير) على الأقل.",
         )
 
-    pdf_bytes = generate_certificate_pdf(user_name, exam[0], level, pct, sub_id, str(submitted_at))
+    pdf_bytes = generate_certificate_pdf(user_name, exam[0], level, pct, sub_id, str(submitted_at), sap_id.strip())
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
