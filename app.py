@@ -564,7 +564,7 @@ def get_public_logo(which: int):
 
 
 def ensure_arabic_font():
-    """يسجّل خط Amiri العربي مرة واحدة فقط لاستخدامه في توليد ملفات PDF (الشهادات)."""
+    """يسجّل خط Amiri العربي (الأساسي) وخط Al-Mujahed (لاسم الزميل تحديدًا) مرة واحدة فقط."""
     global _ARABIC_FONT_REGISTERED
     if _ARABIC_FONT_REGISTERED:
         return
@@ -575,7 +575,20 @@ def ensure_arabic_font():
             detail="خط الشهادات العربي غير موجود على السيرفر (ملف fonts/Amiri-Regular.ttf مفقود من مجلد المشروع).",
         )
     pdfmetrics.registerFont(TTFont("Amiri", str(font_path)))
+
+    # خط مميز لاسم الزميل في الشهادة (اختياري: لو مش موجود، بيرجع تلقائيًا لخط Amiri)
+    name_font_path = Path(__file__).parent / "fonts" / "al-mujahed-free-yr.ttf"
+    if name_font_path.exists():
+        try:
+            pdfmetrics.registerFont(TTFont("NameFont", str(name_font_path)))
+        except Exception:
+            pass
+
     _ARABIC_FONT_REGISTERED = True
+
+
+def _name_font_available() -> bool:
+    return "NameFont" in pdfmetrics.getRegisteredFontNames()
 
 
 def shape_arabic(text: str) -> str:
@@ -714,17 +727,21 @@ def generate_certificate_pdf(
         x = center - tw / 2
         c.drawString(x, y, shaped)
 
-    def draw_center_thick(text: str, size: int, y: float, color: str = NAVY, cx: float = None):
-        """نص عريض وسميك بمحاكاة الخط الثقيل عبر رسم متعدد بإزاحات دقيقة
-        (الخط العربي المتاح على السيرفر بوزن Regular فقط بدون نسخة Bold)."""
-        c.setFont("Amiri", size)
+    def draw_center_thick(text: str, size: int, y: float, color: str = NAVY, cx: float = None, font: str = "Amiri"):
+        """نص عريض وسميك. لو الخط المُمرَّر أصلًا Bold/مميز (زي NameFont) بيترسم مرة واحدة بس؛
+        ولو خط عادي (Amiri) بيتحاكى السُّمك برسمه عدة مرات بإزاحات دقيقة."""
+        c.setFont(font, size)
         c.setFillColor(colors.HexColor(color))
         shaped = shape_arabic(text)
-        tw = c.stringWidth(shaped, "Amiri", size)
+        tw = c.stringWidth(shaped, font, size)
         center = cx if cx is not None else text_center_x
         x = center - tw / 2
-        for dx, dy in [(0, 0), (0.65, 0), (-0.65, 0), (0, 0.5), (0, -0.5), (0.45, 0.35), (-0.45, -0.35), (0.45, -0.35), (-0.45, 0.35)]:
-            c.drawString(x + dx, y + dy, shaped)
+        if font == "Amiri":
+            for dx, dy in [(0, 0), (0.65, 0), (-0.65, 0), (0, 0.5), (0, -0.5), (0.45, 0.35), (-0.45, -0.35), (0.45, -0.35), (-0.45, 0.35)]:
+                c.drawString(x + dx, y + dy, shaped)
+        else:
+            c.drawString(x, y, shaped)
+            c.drawString(x + 0.4, y, shaped)  # لمسة سُمك بسيطة حتى مع الخط المميز
 
     def draw_diamond(cx: float, cy: float, r: float, color: str):
         c.setFillColor(colors.HexColor(color))
@@ -736,7 +753,47 @@ def generate_certificate_pdf(
         p.close()
         c.drawPath(p, fill=1, stroke=0)
 
-    # ==================== محتوى الشهادة (نص متدفق مع التفاف تلقائي للأسطر الطويلة) ====================
+    def _measure(text: str, size: float) -> tuple:
+        shaped = shape_arabic(text)
+        return shaped, c.stringWidth(shaped, "Amiri", size)
+
+    def draw_rtl_segments(segments, y: float, max_width: float, cx: float = None):
+        """يرسم سطرًا من عدة أجزاء بألوان/أوزان مختلفة، مرتبة من اليمين لليسار
+        (الجزء الأول في القراءة يكون أقصى اليمين)، مع تصغير تلقائي للخط لو النص طويل
+        عشان يفضل في سطر واحد زي ما هو مطلوب بالظبط."""
+        center = cx if cx is not None else text_center_x
+        scale = 1.0
+        rendered = []
+        while True:
+            rendered = []
+            total_w = 0.0
+            for text, size, color, thick in segments:
+                sz = size * scale
+                shaped, w = _measure(text, sz)
+                rendered.append((shaped, sz, color, thick, w))
+                total_w += w
+            if total_w <= max_width or scale <= 0.55:
+                break
+            scale -= 0.05
+        x_right = center + total_w / 2
+        for shaped, sz, color, thick, w in rendered:
+            x_left = x_right - w
+            c.setFont("Amiri", sz)
+            c.setFillColor(colors.HexColor(color))
+            if thick:
+                for dx, dy in [(0, 0), (0.55, 0), (-0.55, 0), (0, 0.4), (0, -0.4), (0.4, 0.3), (-0.4, -0.3)]:
+                    c.drawString(x_left + dx, y + dy, shaped)
+            else:
+                c.drawString(x_left, y, shaped)
+            x_right -= w
+        return scale
+
+    # ==================== محتوى الشهادة: 6 أسطر ثابتة بألوان مميزة لكل عنصر ====================
+    NAME_COLOR = "#9F1239"      # اسم الزميل: لون مميز (خمري) وخط سميك
+    COURSE_COLOR = "#1D4ED8"    # اسم الدورة: أزرق ملكي عريض
+    LEVEL_COLOR = "#047857"     # المستوى والنسبة: أخضر زمردي عريض
+    WISH_COLOR = "#92400E"      # سطر التهنئة الختامي
+
     y = H - 5.5 * cm  # بداية الكلام مرفوعة لأعلى قليلًا
 
     draw_center_thick("شهادة اجتياز", 38, y, NAVY)
@@ -748,33 +805,61 @@ def generate_certificate_pdf(
     c.line(text_center_x - 3.4 * cm, y, text_center_x - 0.28 * cm, y)
     c.line(text_center_x + 0.28 * cm, y, text_center_x + 3.4 * cm, y)
     draw_diamond(text_center_x, y, 0.16 * cm, GOLD)
+    y -= 1.1 * cm
+
+    # السطر الأول: يسر شركة العربي المتحدة...
+    draw_rtl_segments(
+        [("يسر شركة العربي المتحدة للاستثمار الصناعي والتجاري - مصنع فوم بنها", 14.5, SLATE, False)],
+        y, text_max_width,
+    )
+    y -= 0.78 * cm
+
+    # السطر الثاني: منح هذه الشهادة إلى الزميل الفاضل /
+    draw_rtl_segments(
+        [("منح هذه الشهادة إلى الزميل الفاضل /", 15.5, SLATE, False)],
+        y, text_max_width,
+    )
     y -= 1.05 * cm
 
-    intro_text = (
-        "يسر شركة العربي المتحدة للاستثمار الصناعي والتجاري - مصنع فوم بنها "
-        "بمنح هذه الشهادة إلى الزميل الفاضل /"
-    )
-    for line in _wrap_arabic_lines(intro_text, "Amiri", 15.5, text_max_width):
-        draw_center(line, 15.5, y, SLATE)
-        y -= 0.75 * cm
-
-    y -= 0.2 * cm
-    # اسم الزميل: خط عريض وسميك وأكبر حجمًا
-    for line in _wrap_arabic_lines(user_name, "Amiri", 30, text_max_width):
-        draw_center_thick(line, 30, y, NAVY)
+    # السطر الثالث: اسم الزميل (لون مميز وخط عريض وسميك)
+    _name_font = "NameFont" if _name_font_available() else "Amiri"
+    _name_size = 31 if _name_font == "NameFont" else 29
+    for line in _wrap_arabic_lines(user_name, _name_font, _name_size, text_max_width):
+        draw_center_thick(line, _name_size, y, NAME_COLOR, font=_name_font)
         y -= 1.42 * cm
 
     y -= 0.15 * cm
-    outro_text = (
-        f"وذلك لاجتيازه دورة / {exam_name} والحصول على مستوى / {level} "
-        f"ونسبة / {pct:.1f}٪ ، متمنين له دوام التوفيق والنجاح."
-    )
-    for line in _wrap_arabic_lines(outro_text, "Amiri", 15.5, text_max_width):
-        draw_center(line, 15.5, y, SLATE)
-        y -= 0.75 * cm
 
-    y -= 0.5 * cm
-    draw_center(f"بتاريخ: {date_str[:10]}", 13, y, MUTED)
+    # السطر الرابع: وذلك لاجتيازه دورة / اسم الدورة (اسم الدورة بلون مميز وخط عريض)
+    draw_rtl_segments(
+        [
+            ("وذلك لاجتيازه دورة / ", 15, SLATE, False),
+            (exam_name, 16, COURSE_COLOR, True),
+        ],
+        y, text_max_width,
+    )
+    y -= 0.95 * cm
+
+    # السطر الخامس: والحصول على مستوى / ... ونسبة / ... (بلون مميز وخط عريض)
+    draw_rtl_segments(
+        [
+            ("والحصول على مستوى / ", 15, SLATE, False),
+            (level, 16, LEVEL_COLOR, True),
+            ("  ونسبة / ", 15, SLATE, False),
+            (f"{pct:.1f}٪", 16, LEVEL_COLOR, True),
+        ],
+        y, text_max_width,
+    )
+    y -= 0.95 * cm
+
+    # السطر السادس: متمنين له دوام التوفيق والنجاح
+    draw_rtl_segments(
+        [("متمنين له دوام التوفيق والنجاح", 14.5, WISH_COLOR, False)],
+        y, text_max_width,
+    )
+    y -= 0.85 * cm
+
+    draw_center(f"بتاريخ: {date_str[:10]}", 12.5, y, MUTED)
 
     draw_center(f"رقم الشهادة: {cert_id}", 11, 1.8 * cm, MUTED, cx=W / 2)
 
