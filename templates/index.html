@@ -72,8 +72,8 @@
 </head>
 <body class="app-bg text-slate-800 min-h-screen">
 
-    <!-- شريط التنقل العلوي -->
-    <nav class="bg-slate-900/90 backdrop-blur-xl text-white sticky top-0 z-50 no-print border-b border-white/10 shadow-[0_4px_30px_-10px_rgba(0,0,0,0.4)]">
+    <!-- شريط التنقل العلوي (بيختفي تلقائيًا بعد تسجيل الدخول) -->
+    <nav id="top-nav" class="bg-slate-900/90 backdrop-blur-xl text-white sticky top-0 z-50 no-print border-b border-white/10 shadow-[0_4px_30px_-10px_rgba(0,0,0,0.4)]">
         <div class="max-w-6xl mx-auto px-4 md:px-6 py-3 flex flex-wrap justify-between items-center gap-3">
             <div class="flex items-center gap-2.5">
                 <span class="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-900/40 text-base">🛠️</span>
@@ -85,13 +85,135 @@
             <div class="flex items-center gap-1.5 md:gap-2 flex-wrap" id="nav-buttons">
                 <button onclick="switchView('view-login-user')" class="px-3 md:px-4 py-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-xs md:text-sm font-bold transition-all shadow-md shadow-indigo-900/30 hover:-translate-y-0.5">دخول الأفراد</button>
                 <button onclick="switchView('view-login-admin')" class="px-3 md:px-4 py-2 rounded-full bg-white/10 hover:bg-white/15 text-xs md:text-sm font-bold border border-white/15 transition-all hover:-translate-y-0.5">دخول الإدارة</button>
-                <button onclick="switchView('view-leaderboards')" class="px-3 md:px-4 py-2 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-xs md:text-sm font-bold transition-all shadow-md shadow-amber-900/30 hover:-translate-y-0.5">🏆 لوحة الشرف</button>
                 <button id="logout-btn" onclick="logout()" class="hidden px-3 md:px-4 py-2 rounded-full bg-rose-600/90 hover:bg-rose-500 text-xs md:text-sm font-bold transition-all hover:-translate-y-0.5">خروج</button>
             </div>
         </div>
     </nav>
 
+    <!-- 🏆 زرار لوحة الشرف العائم (ظاهر دايمًا، قبل وبعد تسجيل الدخول) -->
+    <button id="leaderboard-float-btn" onclick="switchView('view-leaderboards')" title="لوحة الشرف" class="no-print fixed bottom-5 left-5 z-50 flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-bold pl-4 pr-3 py-3 rounded-full shadow-lg shadow-amber-900/30 hover:shadow-xl hover:-translate-y-0.5 transition-all">
+        <span class="text-lg">🏆</span>
+        <span class="hidden sm:inline text-sm">لوحة الشرف</span>
+    </button>
+
+    <!-- شريط جلسة عائم صغير (بيظهر بس بعد تسجيل الدخول بدل الشريط العلوي الكامل) -->
+    <div id="floating-session-pill" class="hidden no-print fixed top-4 right-4 z-50 items-center gap-2 bg-slate-900/90 backdrop-blur-xl text-white pl-2 pr-4 py-2 rounded-full shadow-lg border border-white/10">
+        <span id="floating-session-name" class="text-xs font-bold text-indigo-200"></span>
+        <button onclick="logout()" class="flex items-center justify-center w-7 h-7 rounded-full bg-rose-600/90 hover:bg-rose-500 text-xs transition-all" title="تسجيل الخروج">⏻</button>
+    </div>
+
     <div class="max-w-6xl mx-auto p-4 md:p-8">
+
+        <!-- ============ الصفحة التعريفية (تظهر بس في شاشتي تسجيل الدخول) ============ -->
+        <div id="site-intro-landing" class="space-y-14 mb-14">
+
+            <!-- Hero -->
+            <div class="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white shadow-2xl shadow-indigo-950/40">
+                <div class="absolute -top-24 -right-24 w-72 h-72 bg-indigo-500/30 rounded-full blur-3xl animate-float pointer-events-none"></div>
+                <div class="absolute -bottom-24 -left-24 w-80 h-80 bg-amber-400/15 rounded-full blur-3xl animate-float-slow pointer-events-none"></div>
+                <div class="relative grid md:grid-cols-2 gap-8 items-center p-8 md:p-14">
+                    <div>
+                        <span class="inline-block text-[11px] font-bold tracking-wide bg-white/10 border border-white/15 text-indigo-200 px-3 py-1.5 rounded-full mb-5">شركة العربي المتحدة — مصنع فوم بنها</span>
+                        <h1 class="font-display text-3xl md:text-4xl font-extrabold leading-tight mb-4">منصة التدريب والتقييم الفني<br><span class="bg-gradient-to-l from-amber-300 via-white to-indigo-300 bg-clip-text text-transparent">للصيانة الإنتاجية الشاملة (TPM)</span></h1>
+                        <p class="text-slate-300 text-sm md:text-base leading-relaxed max-w-lg">منصة موحّدة لتنمية وتقييم مهارات فرق العمل في برنامج الـ Jishu Hozen وباقي الإدارات، من خلال دورات ومحتوى تدريبي متنوع، واختبارات فورية، وشهادات معتمدة لكل فرد.</p>
+                    </div>
+                    <div class="relative rounded-3xl overflow-hidden shadow-2xl aspect-video bg-slate-800 border border-white/10">
+                        <img src="/api/public/site-image/site-hero" alt="TPM Training" class="w-full h-full object-cover" onerror="this.closest('.relative').style.display='none'">
+                    </div>
+                </div>
+            </div>
+
+            <!-- امتيازات المنصة -->
+            <div>
+                <h2 class="text-center font-display text-2xl font-extrabold text-slate-800 mb-2">امتيازات المنصة</h2>
+                <p class="text-center text-slate-400 text-sm mb-8">كل اللي محتاجه فريقك عشان يتعلّم ويتقيّم في مكان واحد</p>
+                <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="bg-white/80 backdrop-blur border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all">
+                        <span class="text-2xl">🎬</span>
+                        <h3 class="font-bold text-slate-800 mt-2 mb-1">دورات بصيغ متعددة</h3>
+                        <p class="text-xs text-slate-500 leading-relaxed">شرح دورات بالفيديو، وملفات PDF، ومقاطع صوتية — كل فرد يتعلم بالطريقة اللي تناسبه.</p>
+                    </div>
+                    <div class="bg-white/80 backdrop-blur border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all">
+                        <span class="text-2xl">🧩</span>
+                        <h3 class="font-bold text-slate-800 mt-2 mb-1">مصفوفة مهارات لكل فرد</h3>
+                        <p class="text-xs text-slate-500 leading-relaxed">تتبّع دقيق للمهارات المطلوبة والمكتسبة لكل موظف حسب إدارته وفريقه.</p>
+                    </div>
+                    <div class="bg-white/80 backdrop-blur border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all">
+                        <span class="text-2xl">🎓</span>
+                        <h3 class="font-bold text-slate-800 mt-2 mb-1">شهادات معتمدة</h3>
+                        <p class="text-xs text-slate-500 leading-relaxed">شهادات اجتياز وتقدير لكل فرد بعد إتمام الدورة والتقييم بنجاح.</p>
+                    </div>
+                    <div class="bg-white/80 backdrop-blur border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all">
+                        <span class="text-2xl">🏭</span>
+                        <h3 class="font-bold text-slate-800 mt-2 mb-1">تنظيم حسب الإدارة والفريق</h3>
+                        <p class="text-xs text-slate-500 leading-relaxed">كل فرد مرتبط بإدارته وفريقه، والدورات موزعة حسب التخصص المطلوب.</p>
+                    </div>
+                    <div class="bg-white/80 backdrop-blur border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all">
+                        <span class="text-2xl">🏆</span>
+                        <h3 class="font-bold text-slate-800 mt-2 mb-1">لوحة شرف وتحفيز</h3>
+                        <p class="text-xs text-slate-500 leading-relaxed">ترتيب عام وترتيب لكل امتحان، لتحفيز روح المنافسة الإيجابية بين الفرق.</p>
+                    </div>
+                    <div class="bg-white/80 backdrop-blur border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all">
+                        <span class="text-2xl">📊</span>
+                        <h3 class="font-bold text-slate-800 mt-2 mb-1">تقييمات وتحليلات أداء</h3>
+                        <p class="text-xs text-slate-500 leading-relaxed">اختبارات فورية بعد كل دورة، مع تقارير أداء تساعد الإدارة على المتابعة.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- نبذة تعريفية -->
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="bg-white/80 backdrop-blur border border-slate-100 rounded-3xl overflow-hidden shadow-sm">
+                    <div class="about-img-wrap aspect-[16/10] bg-slate-100">
+                        <img src="/api/public/site-image/site-about-1" alt="TPM" class="w-full h-full object-cover" onerror="this.closest('.about-img-wrap').style.display='none'">
+                    </div>
+                    <div class="p-6">
+                        <h3 class="font-bold text-slate-800 mb-2">الصيانة الإنتاجية الشاملة (TPM)</h3>
+                        <p class="text-xs text-slate-500 leading-relaxed">برنامج Jishu Hozen (الصيانة الذاتية) وفرقه، بيهدف لتمكين فرق الإنتاج من صيانة معداتهم بأنفسهم، ورفع كفاءة التشغيل وتقليل الأعطال من خلال التدريب المستمر.</p>
+                    </div>
+                </div>
+                <div class="bg-white/80 backdrop-blur border border-slate-100 rounded-3xl overflow-hidden shadow-sm">
+                    <div class="about-img-wrap aspect-[16/10] bg-slate-100">
+                        <img src="/api/public/site-image/site-about-2" alt="Skills" class="w-full h-full object-cover" onerror="this.closest('.about-img-wrap').style.display='none'">
+                    </div>
+                    <div class="p-6">
+                        <h3 class="font-bold text-slate-800 mb-2">المهارات المتخصصة للإدارات المختلفة</h3>
+                        <p class="text-xs text-slate-500 leading-relaxed">محتوى تدريبي مخصص لكل إدارة (صيانة، إنتاج، جودة وغيرها)، بيغطي المهارات الفنية اللي كل فريق محتاجها في شغله اليومي.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- فيديوهات تعريفية -->
+            <div>
+                <h2 class="text-center font-display text-2xl font-extrabold text-slate-800 mb-2">فيديوهات تعريفية</h2>
+                <p class="text-center text-slate-400 text-sm mb-8">لمحة سريعة عن المنصة (هيتم إضافة المزيد من الفيديوهات التفصيلية لاحقًا)</p>
+                <div class="grid sm:grid-cols-2 gap-5">
+                    <div class="rounded-3xl overflow-hidden shadow-sm border border-slate-100 bg-black">
+                        <video class="w-full aspect-video object-cover" muted autoplay loop playsinline preload="none" poster="/api/public/site-image/site-hero" onerror="this.closest('.rounded-3xl').style.display='none'">
+                            <source src="/api/public/site-video/site-video-1" type="video/mp4">
+                        </video>
+                    </div>
+                    <div class="rounded-3xl overflow-hidden shadow-sm border border-slate-100 bg-black">
+                        <video class="w-full aspect-video object-cover" muted autoplay loop playsinline preload="none" poster="/api/public/site-image/site-hero" onerror="this.closest('.rounded-3xl').style.display='none'">
+                            <source src="/api/public/site-video/site-video-2" type="video/mp4">
+                        </video>
+                    </div>
+                </div>
+            </div>
+
+            <!-- معرض صور التدريبات -->
+            <div>
+                <h2 class="text-center font-display text-2xl font-extrabold text-slate-800 mb-2">لقطات من التدريبات</h2>
+                <p class="text-center text-slate-400 text-sm mb-8">صور عامة من فعاليات وورش التدريب الميدانية</p>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div class="aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm"><img src="/api/public/site-image/site-training-1" class="w-full h-full object-cover" onerror="this.closest('.aspect-square').style.display='none'"></div>
+                    <div class="aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm"><img src="/api/public/site-image/site-training-2" class="w-full h-full object-cover" onerror="this.closest('.aspect-square').style.display='none'"></div>
+                    <div class="aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm"><img src="/api/public/site-image/site-training-3" class="w-full h-full object-cover" onerror="this.closest('.aspect-square').style.display='none'"></div>
+                    <div class="aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm"><img src="/api/public/site-image/site-training-4" class="w-full h-full object-cover" onerror="this.closest('.aspect-square').style.display='none'"></div>
+                </div>
+            </div>
+        </div>
+        <!-- ============ نهاية الصفحة التعريفية ============ -->
 
         <!-- 1. تسجيل دخول الأفراد -->
         <div id="view-login-user" class="view-panel relative max-w-md mx-auto mt-6">
@@ -986,6 +1108,10 @@
             switchView('view-login-user');
             document.getElementById('session-badge').classList.add('hidden');
             document.getElementById('logout-btn').classList.add('hidden');
+            document.getElementById('top-nav').classList.remove('hidden');
+            const pill = document.getElementById('floating-session-pill');
+            pill.classList.add('hidden');
+            pill.classList.remove('flex');
         }
 
         function switchView(viewId) {
@@ -993,6 +1119,25 @@
             document.getElementById(viewId).classList.remove('hidden');
             const timerFloat = document.getElementById('exam-timer-float');
             if (timerFloat) timerFloat.classList.toggle('hidden', viewId !== 'view-exam-active');
+            const introLanding = document.getElementById('site-intro-landing');
+            if (introLanding) introLanding.classList.toggle('hidden', viewId !== 'view-login-user' && viewId !== 'view-login-admin');
+
+            // إخفاء الأزرار العائمة (لوحة الشرف + شريط الجلسة) أثناء الامتحان
+            // عشان ميحجبوش زرار التسليم أو عنوان الامتحان
+            const inExam = (viewId === 'view-exam-active');
+            const leaderboardFloat = document.getElementById('leaderboard-float-btn');
+            if (leaderboardFloat) leaderboardFloat.classList.toggle('hidden', inExam);
+            const sessionPill = document.getElementById('floating-session-pill');
+            if (sessionPill) {
+                if (inExam) {
+                    sessionPill.classList.add('hidden');
+                    sessionPill.classList.remove('flex');
+                } else if (currentUser) {
+                    sessionPill.classList.remove('hidden');
+                    sessionPill.classList.add('flex');
+                }
+            }
+
             if (viewId === 'view-leaderboards') {
                 loadLeaderboardExams();
                 loadGeneralLeaderboard();
@@ -1018,13 +1163,22 @@
             const logoutBtn = document.getElementById('logout-btn');
             badge.classList.remove('hidden');
             logoutBtn.classList.remove('hidden');
+            let label = '';
             if (role === 'super_admin') {
-                badge.innerText = `الإدارة المركزية (${user.name})`;
+                label = `الإدارة المركزية (${user.name})`;
             } else if (role === 'admin') {
-                badge.innerText = `مدير: ${user.name}`;
+                label = `مدير: ${user.name}`;
             } else {
-                badge.innerText = `${user.name} - ${user.department}`;
+                label = `${user.name} - ${user.department}`;
             }
+            badge.innerText = label;
+
+            // إخفاء الشريط العلوي الكامل بعد تسجيل الدخول، وإظهار شريط الجلسة العائم الصغير بدلًا منه
+            document.getElementById('top-nav').classList.add('hidden');
+            const pill = document.getElementById('floating-session-pill');
+            pill.classList.remove('hidden');
+            pill.classList.add('flex');
+            document.getElementById('floating-session-name').innerText = label;
         }
 
         function logout() {
@@ -1034,6 +1188,10 @@
             clearInterval(timerInterval);
             document.getElementById('session-badge').classList.add('hidden');
             document.getElementById('logout-btn').classList.add('hidden');
+            document.getElementById('top-nav').classList.remove('hidden');
+            const pill = document.getElementById('floating-session-pill');
+            pill.classList.add('hidden');
+            pill.classList.remove('flex');
             switchView('view-login-user');
         }
 
