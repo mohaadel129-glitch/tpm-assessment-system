@@ -563,6 +563,41 @@ def get_public_logo(which: int):
     return FileResponse(str(path))
 
 
+# أسماء صور الصفحة التعريفية المسموح عرضها للعامة (قائمة مغلقة أمانًا — عشان منفتحش مجلد
+# assets بالكامل، لأنه فيه صور شخصية للأفراد وصورة اعتماد المدير لازم تفضل خاصة)
+PUBLIC_SITE_IMAGE_NAMES = {
+    "site-hero", "site-about-1", "site-about-2",
+    "site-training-1", "site-training-2", "site-training-3", "site-training-4",
+}
+PUBLIC_SITE_VIDEO_NAMES = {"site-video-1", "site-video-2"}
+VIDEO_EXTENSIONS = [".mp4", ".webm", ".mov", ".MP4"]
+
+
+@app.get("/api/public/site-image/{name}")
+def get_public_site_image(name: str):
+    """يعرض صور الصفحة التعريفية (Hero / نبذة / معرض التدريبات) — بقائمة أسماء مغلقة فقط."""
+    if name not in PUBLIC_SITE_IMAGE_NAMES:
+        raise HTTPException(status_code=404, detail="Not found")
+    path = _find_asset_image(name)
+    if not path:
+        raise HTTPException(status_code=404, detail="Image not found")
+    return FileResponse(str(path))
+
+
+@app.get("/api/public/site-video/{name}")
+def get_public_site_video(name: str):
+    """يعرض الفيديوهات التعريفية القصيرة في الصفحة الرئيسية — بقائمة أسماء مغلقة فقط."""
+    if name not in PUBLIC_SITE_VIDEO_NAMES:
+        raise HTTPException(status_code=404, detail="Not found")
+    if not ASSETS_DIR.exists():
+        raise HTTPException(status_code=404, detail="Video not found")
+    for ext in VIDEO_EXTENSIONS:
+        candidate = ASSETS_DIR / f"{name}{ext}"
+        if candidate.exists():
+            return FileResponse(str(candidate), media_type="video/mp4")
+    raise HTTPException(status_code=404, detail="Video not found")
+
+
 def ensure_arabic_font():
     """يسجّل خط Amiri العربي (الأساسي) وخط Al-Mujahed (لاسم الزميل تحديدًا) مرة واحدة فقط."""
     global _ARABIC_FONT_REGISTERED
