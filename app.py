@@ -38,7 +38,15 @@ app = FastAPI(title="Enterprise Skill Matrix & Assessment System")
 # مفاتيح الصلاحيات المتاحة لحسابات الأدمن الفرعية (المديرين العاديين)
 # الأدمن المركزي (admin_settings) يملك كل الصلاحيات دائمًا تلقائيًا
 ADMIN_PERMISSION_KEYS = [
-    "resets", "gallery", "create", "manage", "users", "teams", "analytics", "skills"
+    "resets", "gallery", "create", "manage", "users", "teams", "analytics", "skills",
+    "suggestions", "appreciation", "backup", "full_access",
+]
+
+# مهام أعضاء الفريق المتاحة (تُستخدم عند تعيين الأفراد في الفرق)
+TEAM_MEMBER_ROLES = [
+    "قائد الفريق", "ميسر الفريق", "اداري الفريق", "عضو الفريق",
+    "عضو الحلقة A", "عضو الحلقة B", "عضو الحلقة C",
+    "قائد الحلقة A", "قائد الحلقة B", "قائد الحلقة C",
 ]
 
 # ==================== تشفير كلمات المرور (بدون أي مكتبات خارجية) ====================
@@ -134,18 +142,22 @@ async def get_current_admin(authorization: Optional[str] = Header(None)) -> Dict
 async def get_current_super_admin(
     admin: Dict[str, object] = Depends(get_current_admin)
 ) -> Dict[str, object]:
-    if admin.get("type") != "super_admin":
-        raise HTTPException(
-            status_code=403, detail="هذا الإجراء متاح للأدمن المركزي فقط."
-        )
-    return admin
+    if admin.get("type") == "super_admin":
+        return admin
+    # صلاحية "كل الصلاحيات" تمنح نفس إمكانيات الأدمن المركزي بالكامل، لو الأدمن المركزي منحها لشخص بعينه
+    if "full_access" in (admin.get("permissions") or []):
+        return admin
+    raise HTTPException(
+        status_code=403, detail="هذا الإجراء متاح للأدمن المركزي فقط."
+    )
 
 
 def require_permission(perm_key: str):
     async def _dep(admin: Dict[str, object] = Depends(get_current_admin)):
         if admin.get("type") == "super_admin":
             return admin
-        if perm_key in (admin.get("permissions") or []):
+        perms = admin.get("permissions") or []
+        if "full_access" in perms or perm_key in perms:
             return admin
         raise HTTPException(
             status_code=403, detail="ليس لديك صلاحية الوصول إلى هذا القسم."
@@ -377,16 +389,40 @@ def init_db_tables():
         # 10. جدول الفرق
         c.execute(f"""CREATE TABLE IF NOT EXISTS teams (
             id {id_type},
-            name TEXT UNIQUE NOT NULL
+            name TEXT UNIQUE NOT NULL,
+            visibility TEXT DEFAULT 'public'
         )""")
+        # ترحيل: إضافة عمود رؤية الفريق (public = يظهر للجميع، team_only = لأعضاء الفريق فقط) لو الجدول قديم
+        try:
+            if is_pg:
+                c.execute("ALTER TABLE teams ADD COLUMN IF NOT EXISTS visibility TEXT DEFAULT 'public'")
+            else:
+                c.execute("PRAGMA table_info(teams)")
+                cols = [r[1] for r in c.fetchall()]
+                if "visibility" not in cols:
+                    c.execute("ALTER TABLE teams ADD COLUMN visibility TEXT DEFAULT 'public'")
+        except Exception:
+            pass
 
         # 11. جدول ربط المستخدمين بالفرق (فرد يمكن أن يكون في فريقين كحد أقصى)
         c.execute(f"""CREATE TABLE IF NOT EXISTS user_teams (
             id {id_type},
             sap_id TEXT NOT NULL,
             team_id INTEGER NOT NULL,
+            role_in_team TEXT,
             UNIQUE(sap_id, team_id)
         )""")
+        # ترحيل: إضافة عمود مهمة العضو داخل الفريق لو الجدول قديم
+        try:
+            if is_pg:
+                c.execute("ALTER TABLE user_teams ADD COLUMN IF NOT EXISTS role_in_team TEXT")
+            else:
+                c.execute("PRAGMA table_info(user_teams)")
+                cols = [r[1] for r in c.fetchall()]
+                if "role_in_team" not in cols:
+                    c.execute("ALTER TABLE user_teams ADD COLUMN role_in_team TEXT")
+        except Exception:
+            pass
 
         # 12. جدول جلسات دخول الامتحان (لمنع دخول الامتحان مرتين أو تركه دون تسليم)
         c.execute(f"""CREATE TABLE IF NOT EXISTS exam_sessions (
@@ -458,6 +494,74 @@ def init_db_tables():
                     cols = [r[1] for r in c.fetchall()]
                     if col not in cols:
                         c.execute(f"ALTER TABLE skill_requirements ADD COLUMN {col} {coldef}")
+            except Exception:
+                pass
+
+        # 16. نتائج الصيانة الإنتاجية الشاملة (TPM) نصف السنوية — تُرفع بواسطة الأدمن المركزي
+        c.execute(f"""CREATE TABLE IF NOT EXISTS tpm_results (
+            id {id_type},
+            half_period TEXT NOT NULL,
+            factory TEXT,
+            department TEXT NOT NULL,
+            team TEXT NOT NULL,
+            activity TEXT NOT NULL,
+            planned_point REAL,
+            actual_point REAL,
+            achievement_pct REAL NOT NULL,
+            rating_ar TEXT,
+            uploaded_at TIMESTAMP DEFAULT {ts_default}
+        )""")
+
+        # 17. مقترحات وملاحظات الزوار (من زر "اقتراح بتعديل" في الصفحة الرئيسية)
+        c.execute(f"""CREATE TABLE IF NOT EXISTS suggestions (
+            id {id_type},
+            name TEXT,
+            phone TEXT,
+            message TEXT NOT NULL,
+            is_read INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'pending',
+            admin_reply TEXT,
+            created_at TIMESTAMP DEFAULT {ts_default}
+        )""")
+        # ترحيل: أعمدة حالة المقترح (مقبول/مرفوض) ورد الأدمن، لو الجدول قديم
+        for col, coldef in [("status", "TEXT DEFAULT 'pending'"), ("admin_reply", "TEXT")]:
+            try:
+                if is_pg:
+                    c.execute(f"ALTER TABLE suggestions ADD COLUMN IF NOT EXISTS {col} {coldef}")
+                else:
+                    c.execute("PRAGMA table_info(suggestions)")
+                    cols = [r[1] for r in c.fetchall()]
+                    if col not in cols:
+                        c.execute(f"ALTER TABLE suggestions ADD COLUMN {col} {coldef}")
+            except Exception:
+                pass
+
+        # 18. شهادات التقدير (تُمنح لأفراد يحددهم الأدمن، وتُنزَّل من خلال الإدارة فقط)
+        c.execute(f"""CREATE TABLE IF NOT EXISTS appreciation_certificates (
+            id {id_type},
+            sap_id TEXT NOT NULL,
+            user_name TEXT NOT NULL,
+            reason_text TEXT NOT NULL,
+            granted_by TEXT,
+            rank_type TEXT DEFAULT 'none',
+            exam_id INTEGER,
+            exam_name TEXT,
+            rank_value INTEGER,
+            created_at TIMESTAMP DEFAULT {ts_default}
+        )""")
+        # ترحيل: أعمدة الترتيب (في دورة معينة أو الترتيب العام) لو الجدول قديم
+        for col, coldef in [
+            ("rank_type", "TEXT DEFAULT 'none'"), ("exam_id", "INTEGER"),
+            ("exam_name", "TEXT"), ("rank_value", "INTEGER"),
+        ]:
+            try:
+                if is_pg:
+                    c.execute(f"ALTER TABLE appreciation_certificates ADD COLUMN IF NOT EXISTS {col} {coldef}")
+                else:
+                    c.execute("PRAGMA table_info(appreciation_certificates)")
+                    cols = [r[1] for r in c.fetchall()]
+                    if col not in cols:
+                        c.execute(f"ALTER TABLE appreciation_certificates ADD COLUMN {col} {coldef}")
             except Exception:
                 pass
 
@@ -563,11 +667,23 @@ def get_public_logo(which: int):
     return FileResponse(str(path))
 
 
+@app.get("/api/public/name-font")
+def get_public_name_font():
+    """يعرض ملف الخط المميز (نفس خط اسم الزميل في الشهادات) عشان نستخدمه في تصميم
+    الموقع أيضًا (زي توقيع المصمم) — مجرد ملف خط، لا يحتوي على أي بيانات خاصة."""
+    font_path = Path(__file__).parent / "fonts" / "al-mujahed-free-yr.ttf"
+    if not font_path.exists():
+        raise HTTPException(status_code=404, detail="Font not found")
+    return FileResponse(str(font_path), media_type="font/ttf")
+
+
 # أسماء صور الصفحة التعريفية المسموح عرضها للعامة (قائمة مغلقة أمانًا — عشان منفتحش مجلد
 # assets بالكامل، لأنه فيه صور شخصية للأفراد وصورة اعتماد المدير لازم تفضل خاصة)
 PUBLIC_SITE_IMAGE_NAMES = {
-    "site-hero", "site-about-1", "site-about-2",
+    "site-hero", "site-about-1", "site-about-2", "site-designer-avatar",
     "site-training-1", "site-training-2", "site-training-3", "site-training-4",
+    "site-training-5", "site-training-6", "site-training-7", "site-training-8",
+    "site-training-9", "site-training-10",
 }
 PUBLIC_SITE_VIDEO_NAMES = {"site-video-1", "site-video-2"}
 VIDEO_EXTENSIONS = [".mp4", ".webm", ".mov", ".MP4"]
@@ -596,6 +712,395 @@ def get_public_site_video(name: str):
         if candidate.exists():
             return FileResponse(str(candidate), media_type="video/mp4")
     raise HTTPException(status_code=404, detail="Video not found")
+
+
+# ==================== مقترحات الزوار (زر "اقتراح بتعديل" في الصفحة الرئيسية) ====================
+@app.post("/api/public/suggestions")
+async def submit_suggestion(payload: Dict[str, object]):
+    name = str(payload.get("name") or "").strip()
+    phone = str(payload.get("phone") or "").strip()
+    message = str(payload.get("message") or "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="من فضلك اكتب نص الاقتراح أو المشكلة.")
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q = (
+        "INSERT INTO suggestions (name, phone, message) VALUES (%s, %s, %s)"
+        if is_pg
+        else "INSERT INTO suggestions (name, phone, message) VALUES (?, ?, ?)"
+    )
+    c.execute(q, (name, phone, message))
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
+
+
+@app.get("/api/admin/suggestions")
+async def list_suggestions(
+    status: str = "all",
+    q: str = "",
+    _admin: Dict[str, object] = Depends(require_permission("suggestions")),
+):
+    """يرجّع المقترحات مع دعم الفلترة بالحالة والبحث بالاسم/التليفون/نص الرسالة،
+    بالإضافة لعدد كل حالة (لعرض الكروت الإحصائية فوق القائمة)."""
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    c.execute("SELECT id, name, phone, message, is_read, status, admin_reply, created_at FROM suggestions ORDER BY id DESC")
+    rows = c.fetchall()
+    conn.close()
+
+    all_items = [
+        {
+            "id": r[0], "name": r[1], "phone": r[2], "message": r[3],
+            "is_read": bool(r[4]), "status": r[5] or "pending", "admin_reply": r[6],
+            "created_at": str(r[7]),
+        }
+        for r in rows
+    ]
+
+    counts = {
+        "all": len(all_items),
+        "pending": sum(1 for s in all_items if s["status"] == "pending"),
+        "approved": sum(1 for s in all_items if s["status"] == "approved"),
+        "rejected": sum(1 for s in all_items if s["status"] == "rejected"),
+        "unread": sum(1 for s in all_items if not s["is_read"]),
+    }
+
+    filtered = all_items
+    if status and status != "all":
+        filtered = [s for s in filtered if s["status"] == status]
+    if q:
+        ql = q.strip().lower()
+        filtered = [
+            s for s in filtered
+            if ql in (s["name"] or "").lower() or ql in (s["phone"] or "").lower() or ql in (s["message"] or "").lower()
+        ]
+
+    return {"items": filtered, "counts": counts}
+
+
+@app.post("/api/admin/suggestions/{suggestion_id}/mark-read")
+async def mark_suggestion_read(
+    suggestion_id: int, _admin: Dict[str, object] = Depends(require_permission("suggestions"))
+):
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q = (
+        "UPDATE suggestions SET is_read = 1 WHERE id = %s" if is_pg
+        else "UPDATE suggestions SET is_read = 1 WHERE id = ?"
+    )
+    c.execute(q, (suggestion_id,))
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
+
+
+@app.post("/api/admin/suggestions/{suggestion_id}/respond")
+async def respond_to_suggestion(
+    suggestion_id: int,
+    status: str = Form(...),
+    admin_reply: str = Form(""),
+    _admin: Dict[str, object] = Depends(require_permission("suggestions")),
+):
+    """يحدد الأدمن حالة المقترح: approved (✓ مقبول) أو rejected (✗ مرفوض)، مع رد اختياري."""
+    if status not in ("approved", "rejected", "pending"):
+        raise HTTPException(status_code=400, detail="حالة غير صحيحة.")
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q = (
+        "UPDATE suggestions SET status = %s, admin_reply = %s, is_read = 1 WHERE id = %s" if is_pg
+        else "UPDATE suggestions SET status = ?, admin_reply = ?, is_read = 1 WHERE id = ?"
+    )
+    c.execute(q, (status, admin_reply.strip() or None, suggestion_id))
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
+
+
+@app.get("/api/admin/suggestions/export")
+async def export_suggestions(_admin: Dict[str, object] = Depends(require_permission("suggestions"))):
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    c.execute("SELECT id, name, phone, message, status, admin_reply, is_read, created_at FROM suggestions ORDER BY id DESC")
+    rows = c.fetchall()
+    conn.close()
+
+    status_ar = {"pending": "قيد المراجعة", "approved": "مقبول", "rejected": "مرفوض"}
+    df = pd.DataFrame(
+        [
+            {
+                "رقم": r[0], "الاسم": r[1], "رقم الموبايل": r[2], "الرسالة": r[3],
+                "الحالة": status_ar.get(r[4] or "pending", r[4]), "رد الإدارة": r[5] or "",
+                "تمت المراجعة": "نعم" if r[6] else "لا", "التاريخ": str(r[7]),
+            }
+            for r in rows
+        ]
+    )
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="المقترحات")
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=suggestions_export.xlsx"},
+    )
+
+
+# ==================== نتائج الصيانة الإنتاجية الشاملة (TPM) — الصفحة الرئيسية ====================
+TPM_STEP_PILLARS = {"JH", "PM"}  # الركائز اللي ليها خطوات متتالية (Jishu Hozen / Planned Maintenance)
+
+
+@app.post("/api/admin/tpm-results/upload")
+async def upload_tpm_results(
+    half_period: str = Form(...),
+    file: UploadFile = File(...),
+    _admin: Dict[str, object] = Depends(get_current_super_admin),
+):
+    """رفع ملف إكسل نتائج TPM (بنفس أعمدة الملف: Factory, Team, Activity, Department,
+    Planned_Point, Actual_Point, Achievement_Pct, Rating_AR) — للنصف الأول أو الثاني من السنة."""
+    half_period = half_period.strip().upper()
+    if half_period not in ("H1", "H2"):
+        raise HTTPException(status_code=400, detail="النصف يجب أن يكون H1 أو H2.")
+    try:
+        contents = await file.read()
+        df = pd.read_excel(io.BytesIO(contents))
+        required_cols = {"Team", "Activity", "Department", "Achievement_Pct"}
+        if not required_cols.issubset(set(df.columns)):
+            raise HTTPException(
+                status_code=400,
+                detail=f"الملف لازم يحتوي على الأعمدة: {', '.join(sorted(required_cols))}",
+            )
+        conn, is_pg = get_db()
+        c = conn.cursor()
+        q_del = (
+            "DELETE FROM tpm_results WHERE half_period = %s" if is_pg
+            else "DELETE FROM tpm_results WHERE half_period = ?"
+        )
+        c.execute(q_del, (half_period,))
+        q_ins = (
+            """INSERT INTO tpm_results
+               (half_period, factory, department, team, activity, planned_point, actual_point, achievement_pct, rating_ar)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+            if is_pg
+            else """INSERT INTO tpm_results
+               (half_period, factory, department, team, activity, planned_point, actual_point, achievement_pct, rating_ar)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+        )
+        count = 0
+        for _, row in df.iterrows():
+            if pd.isna(row.get("Team")) or pd.isna(row.get("Department")):
+                continue
+            c.execute(q_ins, (
+                half_period,
+                str(row.get("Factory") or "").strip() or None,
+                str(row["Department"]).strip(),
+                str(row["Team"]).strip(),
+                str(row.get("Activity") or "").strip(),
+                float(row["Planned_Point"]) if pd.notna(row.get("Planned_Point")) else None,
+                float(row["Actual_Point"]) if pd.notna(row.get("Actual_Point")) else None,
+                float(row["Achievement_Pct"]),
+                str(row.get("Rating_AR") or "").strip() or None,
+            ))
+            count += 1
+        conn.commit()
+        conn.close()
+        return {"status": "success", "rows_imported": count, "half_period": half_period}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"تعذّرت قراءة الملف: {e}")
+
+
+def _fetch_tpm_rows(half: str):
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    c.execute(
+        """SELECT department, team, activity, achievement_pct
+           FROM tpm_results WHERE half_period = %s""" if is_pg
+        else """SELECT department, team, activity, achievement_pct
+           FROM tpm_results WHERE half_period = ?""",
+        (half,),
+    )
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+
+def _aggregate_tpm(rows):
+    """يحسب متوسط الإنجاز لكل إدارة ولكل ركيزة داخل كل إدارة، من صفوف نتائج TPM خام."""
+    departments = sorted(set(r[0] for r in rows if r[0] != "TPM Teams"))
+    pillars = sorted(set(r[1] for r in rows))
+
+    dept_avg = []
+    for dept in departments:
+        vals = [r[3] for r in rows if r[0] == dept]
+        dept_avg.append(round(sum(vals) / len(vals), 1) if vals else 0)
+
+    pillar_by_dept = {}
+    for dept in departments:
+        vals = []
+        for pillar in pillars:
+            matched = [r[3] for r in rows if r[0] == dept and r[1] == pillar]
+            vals.append(round(sum(matched) / len(matched), 1) if matched else None)
+        pillar_by_dept[dept] = vals
+
+    overall_avg = round(sum(r[3] for r in rows) / len(rows), 1) if rows else 0
+
+    return {
+        "departments": departments,
+        "pillars": pillars,
+        "department_avg": dept_avg,
+        "pillar_by_department": pillar_by_dept,
+        "overall_avg": overall_avg,
+    }
+
+
+@app.get("/api/public/tpm-results")
+def get_public_tpm_results(half: str = "H1"):
+    """يرجّع نتائج TPM جاهزة للرسم البياني في الصفحة الرئيسية: متوسط الإنجاز لكل إدارة،
+    متوسط الإنجاز لكل ركيزة، وتفصيل الخطوات للركائز اللي ليها خطوات (JH و PM)."""
+    half = half.strip().upper() if half else "H1"
+    rows = _fetch_tpm_rows(half)
+
+    if not rows:
+        return {"half_period": half, "has_data": False}
+
+    agg = _aggregate_tpm(rows)
+    departments, pillars = agg["departments"], agg["pillars"]
+
+    # شارتات خاصة للركائز اللي ليها خطوات (JH, PM) — تطور الأداء عبر الخطوات لكل إدارة
+    step_charts = {}
+    for pillar in TPM_STEP_PILLARS:
+        step_rows = [r for r in rows if r[1] == pillar and r[0] != "TPM Teams" and "-" in (r[2] or "")]
+        if not step_rows:
+            continue
+        steps = sorted(set(r[2] for r in step_rows), key=lambda s: (len(s), s))
+        series = {}
+        for dept in departments:
+            series[dept] = [
+                next((r[3] for r in step_rows if r[0] == dept and r[2] == step), None)
+                for step in steps
+            ]
+        step_charts[pillar] = {"steps": steps, "series": series}
+
+    return {
+        "half_period": half,
+        "has_data": True,
+        "departments": departments,
+        "pillars": pillars,
+        "department_avg": agg["department_avg"],
+        "pillar_by_department": agg["pillar_by_department"],
+        "step_charts": step_charts,
+    }
+
+
+@app.get("/api/public/tpm-results/comparison")
+def get_public_tpm_comparison():
+    """يقارن نتائج النصف الأول بالنصف الثاني (لو النصفين متاحين) — لكل إدارة ولكل ركيزة."""
+    h1_rows = _fetch_tpm_rows("H1")
+    h2_rows = _fetch_tpm_rows("H2")
+
+    if not h1_rows or not h2_rows:
+        return {"has_both": False}
+
+    h1 = _aggregate_tpm(h1_rows)
+    h2 = _aggregate_tpm(h2_rows)
+
+    # نوحّد قائمة الإدارات والركائز بين النصفين (اتحاد الاثنين) عشان المقارنة تبقى كاملة
+    departments = sorted(set(h1["departments"]) | set(h2["departments"]))
+    pillars = sorted(set(h1["pillars"]) | set(h2["pillars"]))
+
+    def dept_avg_aligned(agg):
+        m = dict(zip(agg["departments"], agg["department_avg"]))
+        return [m.get(d) for d in departments]
+
+    def pillar_aligned(agg):
+        out = {}
+        for dept in departments:
+            row = agg["pillar_by_department"].get(dept)
+            if row is None:
+                out[dept] = [None] * len(pillars)
+                continue
+            m = dict(zip(agg["pillars"], row))
+            out[dept] = [m.get(p) for p in pillars]
+        return out
+
+    return {
+        "has_both": True,
+        "departments": departments,
+        "pillars": pillars,
+        "h1_department_avg": dept_avg_aligned(h1),
+        "h2_department_avg": dept_avg_aligned(h2),
+        "h1_overall_avg": h1["overall_avg"],
+        "h2_overall_avg": h2["overall_avg"],
+        "h1_pillar_by_department": pillar_aligned(h1),
+        "h2_pillar_by_department": pillar_aligned(h2),
+    }
+
+
+@app.get("/api/public/platform-stats")
+def get_public_platform_stats():
+    """إحصائيات عامة عن المنصة تُعرض كشارات في الصفحة الرئيسية."""
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM exams")
+    courses_count = c.fetchone()[0]
+    c.execute("SELECT COUNT(DISTINCT sap_id) FROM submissions")
+    examinees_count = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM submissions")
+    submissions_count = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM users")
+    users_count = c.fetchone()[0]
+    try:
+        c.execute("SELECT COUNT(*) FROM teams")
+        teams_count = c.fetchone()[0]
+    except Exception:
+        teams_count = 0
+    conn.close()
+    return {
+        "courses_count": courses_count,
+        "examinees_count": examinees_count,
+        "submissions_count": submissions_count,
+        "users_count": users_count,
+        "teams_count": teams_count,
+    }
+
+
+# ==================== نسخ احتياطي لقاعدة البيانات (يدوي) ====================
+BACKUP_TABLES = [
+    "users", "admins", "admin_settings", "exams", "questions", "submissions",
+    "teams", "user_teams", "retake_permissions", "retake_requests",
+    "reset_requests", "skill_requirements", "skill_overrides",
+    "tpm_results", "suggestions", "appreciation_certificates", "media_gallery",
+]
+
+
+@app.get("/api/admin/backup/download")
+async def download_backup(_admin: Dict[str, object] = Depends(require_permission("backup"))):
+    """نسخة احتياطية يدوية فورية: ملف إكسل بكل جداول النظام، كل جدول في ورقة مستقلة."""
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        for table in BACKUP_TABLES:
+            try:
+                c.execute(f"SELECT * FROM {table}")
+                rows = c.fetchall()
+                col_names = [desc[0] for desc in c.description]
+                df = pd.DataFrame(rows, columns=col_names) if rows else pd.DataFrame(columns=col_names)
+                # اسم الورقة في إكسل محدود بـ 31 حرف
+                df.to_excel(writer, index=False, sheet_name=table[:31])
+            except Exception:
+                continue
+    conn.close()
+    output.seek(0)
+    filename = f"tpm_backup_{datetime.now().strftime('%Y-%m-%d_%H%M')}.xlsx"
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 def ensure_arabic_font():
@@ -630,6 +1135,10 @@ def shape_arabic(text: str) -> str:
     """يهيّئ نصًا عربيًا (بما فيه أرقام/إنجليزي مختلط) للعرض الصحيح داخل PDF."""
     reshaped = arabic_reshaper.reshape(str(text))
     return get_display(reshaped)
+
+
+def _to_arabic_numerals(s: str) -> str:
+    return s.translate(str.maketrans("0123456789.", "٠١٢٣٤٥٦٧٨٩٫"))
 
 
 def _wrap_arabic_lines(text: str, font_name: str, size: int, max_width: float) -> List[str]:
@@ -827,9 +1336,6 @@ def generate_certificate_pdf(
             x_right -= w
         return scale
 
-    def _to_arabic_numerals(s: str) -> str:
-        return s.translate(str.maketrans("0123456789.", "٠١٢٣٤٥٦٧٨٩٫"))
-
     # ==================== محتوى الشهادة: 6 أسطر ثابتة بألوان مميزة لكل عنصر ====================
     NAME_COLOR = "#9F1239"      # اسم الزميل واسم الدورة: لون مميز (خمري) وخط مميز
     LEVEL_COLOR = "#047857"     # المستوى والنسبة: أخضر زمردي (بدون سماكة)
@@ -929,6 +1435,408 @@ def generate_certificate_pdf(
     c.showPage()
     c.save()
     return buf.getvalue()
+
+
+def _arabic_ordinal(n: int) -> str:
+    """يحوّل رقم ترتيب إلى صيغة عربية (المركز الأول، الثاني...) لعرضها في شهادة التقدير."""
+    words = {
+        1: "المركز الأول", 2: "المركز الثاني", 3: "المركز الثالث", 4: "المركز الرابع",
+        5: "المركز الخامس", 6: "المركز السادس", 7: "المركز السابع", 8: "المركز الثامن",
+        9: "المركز التاسع", 10: "المركز العاشر",
+    }
+    return words.get(n, f"المركز رقم {_to_arabic_numerals(str(n))}")
+
+
+def generate_appreciation_certificate_pdf(
+    user_name: str, reason_text: str, cert_id: int, date_str: str, sap_id: str = "",
+    rank_type: str = "none", exam_name: str = None, rank_value: int = None,
+) -> bytes:
+    """شهادة تقدير (مختلفة عن شهادة الاجتياز) — تُمنح لأفراد يحددهم الأدمن مع نص تقدير حر،
+    بنفس الإطار والتصميم الفاخر لشهادة الاجتياز، مع إمكانية إظهار ترتيب الفرد
+    في دورة معينة أو ترتيبه العام."""
+    ensure_arabic_font()
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=landscape(A4))
+    W, H = landscape(A4)
+
+    NAVY = "#0F2A5C"
+    GOLD = "#B8860B"
+    SLATE = "#374151"
+    MUTED = "#8B95A8"
+
+    c.setFillColor(colors.HexColor("#FAF9F5"))
+    c.rect(0, 0, W, H, fill=1, stroke=0)
+
+    c.setStrokeColor(colors.HexColor(NAVY))
+    c.setLineWidth(3.2)
+    c.rect(0.9 * cm, 0.9 * cm, W - 1.8 * cm, H - 1.8 * cm, fill=0, stroke=1)
+    c.setStrokeColor(colors.HexColor(GOLD))
+    c.setLineWidth(1)
+    c.rect(1.25 * cm, 1.25 * cm, W - 2.5 * cm, H - 2.5 * cm, fill=0, stroke=1)
+
+    def draw_corner(x: float, y: float, hx: int, hy: int, length: float = 1.5 * cm):
+        c.setStrokeColor(colors.HexColor(GOLD))
+        c.setLineWidth(2.4)
+        c.line(x, y, x + hx * length, y)
+        c.line(x, y, x, y + hy * length)
+
+    draw_corner(1.7 * cm, H - 1.7 * cm, 1, -1)
+    draw_corner(W - 1.7 * cm, H - 1.7 * cm, -1, -1)
+    draw_corner(1.7 * cm, 1.7 * cm, 1, 1)
+    draw_corner(W - 1.7 * cm, 1.7 * cm, -1, 1)
+
+    logo_size = 4.2 * cm
+    logo_y = H - 1.7 * cm - logo_size
+    logo1_path = _find_asset_image("logo 1", "logo1", "Logo 1", "Logo1")
+    logo2_path = _find_asset_image("logo 2", "logo2", "Logo 2", "Logo2")
+    if logo1_path:
+        try:
+            c.drawImage(ImageReader(str(logo1_path)), 2 * cm, logo_y, width=logo_size, height=logo_size,
+                        preserveAspectRatio=True, anchor="c", mask="auto")
+        except Exception:
+            pass
+    if logo2_path:
+        try:
+            c.drawImage(ImageReader(str(logo2_path)), W - 2 * cm - logo_size, logo_y, width=logo_size, height=logo_size,
+                        preserveAspectRatio=True, anchor="c", mask="auto")
+        except Exception:
+            pass
+
+    photo_path = _find_asset_image(sap_id) if sap_id else None
+    photo_w, photo_h = 4.8 * cm, 6.4 * cm
+    photo_x = 2.2 * cm
+    photo_y = 6.4 * cm
+    if photo_path:
+        try:
+            c.saveState()
+            c.setFillColor(colors.white)
+            c.roundRect(photo_x - 0.18 * cm, photo_y - 0.18 * cm, photo_w + 0.36 * cm, photo_h + 0.36 * cm,
+                        0.25 * cm, fill=1, stroke=0)
+            c.drawImage(ImageReader(str(photo_path)), photo_x, photo_y, width=photo_w, height=photo_h,
+                        preserveAspectRatio=True, anchor="c", mask="auto")
+            c.setStrokeColor(colors.HexColor(GOLD))
+            c.setLineWidth(2)
+            c.roundRect(photo_x, photo_y, photo_w, photo_h, 0.15 * cm, fill=0, stroke=1)
+            c.setStrokeColor(colors.HexColor(NAVY))
+            c.setLineWidth(0.7)
+            c.roundRect(photo_x - 0.18 * cm, photo_y - 0.18 * cm, photo_w + 0.36 * cm, photo_h + 0.36 * cm,
+                        0.28 * cm, fill=0, stroke=1)
+            c.restoreState()
+        except Exception:
+            photo_path = None
+
+    text_center_x = ((photo_x + photo_w + 2.3 * cm) + (W - 2 * cm)) / 2 if photo_path else W / 2
+    text_max_width = (W - 2.2 * cm) - (photo_x + photo_w + 2.3 * cm) if photo_path else (W - 5 * cm)
+
+    def draw_center(text: str, size: int, y: float, color: str = SLATE, cx: float = None):
+        c.setFont("Amiri", size)
+        c.setFillColor(colors.HexColor(color))
+        shaped = shape_arabic(text)
+        tw = c.stringWidth(shaped, "Amiri", size)
+        center = cx if cx is not None else text_center_x
+        c.drawString(center - tw / 2, y, shaped)
+
+    def draw_center_thick(text: str, size: int, y: float, color: str = NAVY, cx: float = None, font: str = "Amiri"):
+        c.setFont(font, size)
+        c.setFillColor(colors.HexColor(color))
+        shaped = shape_arabic(text)
+        tw = c.stringWidth(shaped, font, size)
+        center = cx if cx is not None else text_center_x
+        x = center - tw / 2
+        if font == "Amiri":
+            for dx, dy in [(0, 0), (0.65, 0), (-0.65, 0), (0, 0.5), (0, -0.5), (0.45, 0.35), (-0.45, -0.35), (0.45, -0.35), (-0.45, 0.35)]:
+                c.drawString(x + dx, y + dy, shaped)
+        else:
+            c.drawString(x, y, shaped)
+            c.drawString(x + 0.4, y, shaped)
+
+    def draw_diamond(cx: float, cy: float, r: float, color: str):
+        c.setFillColor(colors.HexColor(color))
+        p = c.beginPath()
+        p.moveTo(cx, cy + r); p.lineTo(cx + r, cy); p.lineTo(cx, cy - r); p.lineTo(cx - r, cy); p.close()
+        c.drawPath(p, fill=1, stroke=0)
+
+    NAME_COLOR = "#9F1239"
+    _name_font = "NameFont" if _name_font_available() else "Amiri"
+    _name_size = 31 if _name_font == "NameFont" else 29
+
+    y = H - 5.5 * cm
+    draw_center_thick("شهادة تقدير", 38, y, NAVY)
+    y -= 1.85 * cm
+
+    c.setStrokeColor(colors.HexColor(GOLD))
+    c.setLineWidth(1.4)
+    c.line(text_center_x - 3.4 * cm, y, text_center_x - 0.28 * cm, y)
+    c.line(text_center_x + 0.28 * cm, y, text_center_x + 3.4 * cm, y)
+    draw_diamond(text_center_x, y, 0.16 * cm, GOLD)
+    y -= 1.1 * cm
+
+    for line in _wrap_arabic_lines(
+        "تتقدم شركة العربي المتحدة للاستثمار الصناعي والتجاري - مصنع فوم بنها بخالص الشكر والتقدير إلى الزميل الفاضل /",
+        "Amiri", 14.5, text_max_width,
+    ):
+        draw_center(line, 14.5, y, SLATE)
+        y -= 0.7 * cm
+    y -= 0.5 * cm
+
+    for line in _wrap_arabic_lines(user_name, _name_font, _name_size, text_max_width):
+        draw_center_thick(line, _name_size, y, NAME_COLOR, font=_name_font)
+        y -= 1.42 * cm
+    y -= 0.25 * cm
+
+    for line in _wrap_arabic_lines(reason_text, "Amiri", 15, text_max_width):
+        draw_center(line, 15, y, SLATE)
+        y -= 0.75 * cm
+    y -= 0.15 * cm
+
+    # سطر الترتيب (لو محدد) — في دورة معينة أو الترتيب العام عبر كل الدورات
+    if rank_type in ("exam", "general") and rank_value:
+        ordinal = _arabic_ordinal(rank_value)
+        if rank_type == "exam" and exam_name:
+            rank_line = f"حاصل على {ordinal} على دورة / {exam_name}"
+        else:
+            rank_line = f"حاصل على {ordinal} على الترتيب العام لكل الدورات"
+        for line in _wrap_arabic_lines(rank_line, "Amiri", 15, text_max_width):
+            draw_center_thick(line, 15, y, "#047857")
+            y -= 0.78 * cm
+        y -= 0.2 * cm
+
+    draw_center("مع خالص الشكر والتقدير", 14, y, "#92400E")
+    y -= 0.85 * cm
+
+    draw_center(f"بتاريخ: {date_str[:10]}", 12.5, y, MUTED)
+    draw_center(f"رقم الشهادة: {cert_id}", 11, 1.8 * cm, MUTED, cx=W / 2)
+
+    manager_sig_path = _find_asset_image(
+        "manager signature", "director signature", "signature", "توقيع المدير", "اعتماد المدير", "Manager Signature",
+    )
+    if manager_sig_path:
+        try:
+            sig_w, sig_h = 4.0 * cm, 2.2 * cm
+            sig_x, sig_y = 2.3 * cm, 2.6 * cm
+            c.drawImage(ImageReader(str(manager_sig_path)), sig_x, sig_y, width=sig_w, height=sig_h,
+                        preserveAspectRatio=True, anchor="c", mask="auto")
+            c.setStrokeColor(colors.HexColor(GOLD))
+            c.setLineWidth(1.2)
+            c.line(sig_x, sig_y - 0.15 * cm, sig_x + sig_w, sig_y - 0.15 * cm)
+            draw_center("اعتماد المدير", 10.5, sig_y - 0.62 * cm, MUTED, cx=sig_x + sig_w / 2)
+        except Exception:
+            pass
+
+    c.showPage()
+    c.save()
+    return buf.getvalue()
+
+
+def _compute_exam_rank(sap_id: str, exam_id: int) -> Optional[int]:
+    """يحسب ترتيب فرد داخل امتحان معيّن (بأعلى محاولة له)، بنفس منطق لوحة شرف الامتحان."""
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q = (
+        "SELECT s.sap_id, s.total_pct, s.submitted_at FROM submissions s WHERE s.exam_id = %s AND COALESCE(s.hidden, 0) = 0"
+        if is_pg
+        else "SELECT s.sap_id, s.total_pct, s.submitted_at FROM submissions s WHERE s.exam_id = ? AND COALESCE(s.hidden, 0) = 0"
+    )
+    c.execute(q, (exam_id,))
+    rows = c.fetchall()
+    conn.close()
+
+    best_by_sap: Dict[str, tuple] = {}
+    for r_sap, pct, submitted_at in rows:
+        if r_sap not in best_by_sap or pct > best_by_sap[r_sap][0] or (
+            pct == best_by_sap[r_sap][0] and str(submitted_at) < str(best_by_sap[r_sap][1])
+        ):
+            best_by_sap[r_sap] = (pct, submitted_at)
+
+    ranked = sorted(best_by_sap.items(), key=lambda kv: (-kv[1][0], str(kv[1][1])))
+    for i, (r_sap, _) in enumerate(ranked):
+        if r_sap == sap_id:
+            return i + 1
+    return None
+
+
+def _compute_general_rank(sap_id: str) -> Optional[int]:
+    """يحسب الترتيب العام لفرد عبر كل الدورات، بنفس منطق لوحة الشرف العامة."""
+    conn, _ = get_db()
+    c = conn.cursor()
+    c.execute("""SELECT s.sap_id, s.exam_id, s.total_pct
+                 FROM submissions s
+                 LEFT JOIN exams e ON s.exam_id = e.id
+                 WHERE COALESCE(s.hidden, 0) = 0 AND COALESCE(e.hide_leaderboard, 0) = 0""")
+    rows = c.fetchall()
+    conn.close()
+
+    best_per_person_exam: Dict[tuple, float] = {}
+    for r_sap, exam_id, pct in rows:
+        key = (r_sap, exam_id)
+        if key not in best_per_person_exam or pct > best_per_person_exam[key]:
+            best_per_person_exam[key] = pct
+
+    person_bests: Dict[str, List[float]] = {}
+    for (r_sap, exam_id), pct in best_per_person_exam.items():
+        person_bests.setdefault(r_sap, []).append(pct)
+
+    results = [(r_sap, sum(pcts) / len(pcts), len(pcts)) for r_sap, pcts in person_bests.items()]
+    results.sort(key=lambda x: (-x[1], -x[2]))
+
+    for i, (r_sap, _, _) in enumerate(results):
+        if r_sap == sap_id:
+            return i + 1
+    return None
+
+
+@app.get("/api/admin/appreciation/list")
+async def list_appreciation_certificates(_admin: Dict[str, object] = Depends(require_permission("appreciation"))):
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    c.execute("""SELECT id, sap_id, user_name, reason_text, granted_by, rank_type, exam_name, rank_value, created_at
+                 FROM appreciation_certificates ORDER BY id DESC""")
+    rows = c.fetchall()
+    conn.close()
+    return [
+        {
+            "id": r[0], "sap_id": r[1], "user_name": r[2], "reason_text": r[3], "granted_by": r[4],
+            "rank_type": r[5] or "none", "exam_name": r[6], "rank_value": r[7], "created_at": str(r[8]),
+        }
+        for r in rows
+    ]
+
+
+@app.get("/api/admin/appreciation/exams-list")
+async def list_exams_for_appreciation(_admin: Dict[str, object] = Depends(require_permission("appreciation"))):
+    """قائمة مبسطة بأسماء الدورات لتعبئة قائمة الاختيار عند منح شهادة تقدير مرتبطة بترتيب في دورة معينة."""
+    conn, _ = get_db()
+    c = conn.cursor()
+    c.execute("SELECT id, name FROM exams ORDER BY id DESC")
+    rows = c.fetchall()
+    conn.close()
+    return [{"id": r[0], "name": r[1]} for r in rows]
+
+
+@app.get("/api/admin/appreciation/preview-rank")
+async def preview_appreciation_rank(
+    sap_id: str, rank_type: str, exam_id: Optional[int] = None,
+    _admin: Dict[str, object] = Depends(require_permission("appreciation")),
+):
+    """يعرض للأدمن ترتيب الفرد قبل ما يمنح الشهادة، عشان يتأكد من الرقم قبل التوليد."""
+    sap_id = sap_id.strip()
+    if rank_type == "exam":
+        if not exam_id:
+            raise HTTPException(status_code=400, detail="من فضلك اختر الدورة.")
+        rank = _compute_exam_rank(sap_id, exam_id)
+    elif rank_type == "general":
+        rank = _compute_general_rank(sap_id)
+    else:
+        rank = None
+    return {"rank": rank}
+
+
+@app.post("/api/admin/appreciation/grant")
+async def grant_appreciation_certificate(
+    sap_id: str = Form(...),
+    reason_text: str = Form(...),
+    rank_type: str = Form("none"),
+    exam_id: Optional[int] = Form(None),
+    admin: Dict[str, object] = Depends(require_permission("appreciation")),
+):
+    """يمنح شهادة تقدير لفرد يحدده الأدمن، بنص تقدير حر، مع إمكانية إظهار ترتيبه
+    في دورة معينة أو ترتيبه العام عبر كل الدورات (يُحسب ويُثبَّت وقت المنح)."""
+    sap_id = sap_id.strip()
+    reason_text = reason_text.strip()
+    if not reason_text:
+        raise HTTPException(status_code=400, detail="من فضلك اكتب نص التقدير.")
+    if rank_type not in ("none", "exam", "general"):
+        raise HTTPException(status_code=400, detail="نوع الترتيب غير صحيح.")
+
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q_user = "SELECT name FROM users WHERE sap_id = %s" if is_pg else "SELECT name FROM users WHERE sap_id = ?"
+    c.execute(q_user, (sap_id,))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="رقم الساب غير موجود بين المستخدمين.")
+    user_name = row[0]
+
+    exam_name = None
+    rank_value = None
+    if rank_type == "exam":
+        if not exam_id:
+            conn.close()
+            raise HTTPException(status_code=400, detail="من فضلك اختر الدورة لعرض ترتيب الفرد فيها.")
+        q_exam = "SELECT name FROM exams WHERE id = %s" if is_pg else "SELECT name FROM exams WHERE id = ?"
+        c.execute(q_exam, (exam_id,))
+        exam_row = c.fetchone()
+        if not exam_row:
+            conn.close()
+            raise HTTPException(status_code=404, detail="الدورة غير موجودة.")
+        exam_name = exam_row[0]
+        rank_value = _compute_exam_rank(sap_id, exam_id)
+        if rank_value is None:
+            conn.close()
+            raise HTTPException(status_code=400, detail="هذا الفرد ليس له نتيجة مسجّلة في هذه الدورة.")
+    elif rank_type == "general":
+        rank_value = _compute_general_rank(sap_id)
+        if rank_value is None:
+            conn.close()
+            raise HTTPException(status_code=400, detail="هذا الفرد ليس له أي نتائج مسجّلة بعد لحساب ترتيبه العام.")
+
+    q_ins = (
+        """INSERT INTO appreciation_certificates
+           (sap_id, user_name, reason_text, granted_by, rank_type, exam_id, exam_name, rank_value)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"""
+        if is_pg
+        else """INSERT INTO appreciation_certificates
+           (sap_id, user_name, reason_text, granted_by, rank_type, exam_id, exam_name, rank_value)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)"""
+    )
+    c.execute(q_ins, (sap_id, user_name, reason_text, admin.get("sap_id"), rank_type, exam_id, exam_name, rank_value))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": f"تم منح شهادة تقدير لـ {user_name}.", "rank_value": rank_value}
+
+
+@app.delete("/api/admin/appreciation/{cert_id}")
+async def delete_appreciation_certificate(
+    cert_id: int, _admin: Dict[str, object] = Depends(require_permission("appreciation"))
+):
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q = "DELETE FROM appreciation_certificates WHERE id = %s" if is_pg else "DELETE FROM appreciation_certificates WHERE id = ?"
+    c.execute(q, (cert_id,))
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
+
+
+@app.get("/api/admin/appreciation/{cert_id}/download")
+async def download_appreciation_certificate(
+    cert_id: int, _admin: Dict[str, object] = Depends(require_permission("appreciation"))
+):
+    """تنزيل شهادة التقدير كملف PDF — متاح للأدمن المركزي فقط أو لمن يمنحه صلاحية 'appreciation'."""
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q = (
+        """SELECT sap_id, user_name, reason_text, created_at, rank_type, exam_name, rank_value
+           FROM appreciation_certificates WHERE id = %s""" if is_pg
+        else """SELECT sap_id, user_name, reason_text, created_at, rank_type, exam_name, rank_value
+           FROM appreciation_certificates WHERE id = ?"""
+    )
+    c.execute(q, (cert_id,))
+    row = c.fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="شهادة التقدير غير موجودة.")
+    sap_id, user_name, reason_text, created_at, rank_type, exam_name, rank_value = row
+    pdf_bytes = generate_appreciation_certificate_pdf(
+        user_name, reason_text, cert_id, str(created_at), sap_id.strip(),
+        rank_type=rank_type or "none", exam_name=exam_name, rank_value=rank_value,
+    )
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=appreciation_certificate_{cert_id}.pdf"},
+    )
 
 
 @app.get("/api/health")
@@ -1476,10 +2384,76 @@ async def get_all_users(_admin: Dict[str, object] = Depends(require_permission("
 async def list_teams(_admin: Dict[str, object] = Depends(require_permission("teams"))):
     conn, _ = get_db()
     c = conn.cursor()
-    c.execute("SELECT id, name FROM teams ORDER BY name ASC")
+    c.execute("SELECT id, name, visibility FROM teams ORDER BY name ASC")
     rows = c.fetchall()
     conn.close()
-    return [{"id": r[0], "name": r[1]} for r in rows]
+    return [{"id": r[0], "name": r[1], "visibility": r[2] or "public"} for r in rows]
+
+
+@app.get("/api/admin/team-roles")
+async def get_team_roles(_admin: Dict[str, object] = Depends(require_permission("teams"))):
+    """قائمة مهام أعضاء الفريق المتاحة (لملء القوائم المنسدلة عند التعيين)."""
+    return TEAM_MEMBER_ROLES
+
+
+@app.post("/api/admin/teams/{team_id}/visibility")
+async def set_team_visibility(
+    team_id: int,
+    visibility: str = Form(...),
+    _admin: Dict[str, object] = Depends(require_permission("teams")),
+):
+    """يحدد الأدمن المركزي (أو من له صلاحية الفرق) هل عرض أعضاء الفريق ده متاح لكل الناس
+    (public) ولا لأعضاء الفريق نفسه بس (team_only)."""
+    if visibility not in ("public", "team_only"):
+        raise HTTPException(status_code=400, detail="قيمة الرؤية غير صحيحة.")
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q = (
+        "UPDATE teams SET visibility = %s WHERE id = %s" if is_pg
+        else "UPDATE teams SET visibility = ? WHERE id = ?"
+    )
+    c.execute(q, (visibility, team_id))
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
+
+
+@app.get("/api/admin/teams/roster")
+async def get_teams_roster(_admin: Dict[str, object] = Depends(require_permission("teams"))):
+    """يرجّع كل الفرق مع أعضائها ومهمة كل عضو، بالإضافة لقائمة الأفراد اللي مش في أي فريق —
+    للأدمن عشان يشوف الصورة الكاملة لتوزيع الفرق."""
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    c.execute("SELECT id, name, visibility FROM teams ORDER BY name ASC")
+    teams_rows = c.fetchall()
+
+    c.execute("""SELECT ut.team_id, ut.sap_id, u.name, u.department, ut.role_in_team
+                 FROM user_teams ut JOIN users u ON ut.sap_id = u.sap_id
+                 ORDER BY u.name ASC""")
+    members_rows = c.fetchall()
+
+    c.execute("""SELECT sap_id, name, department FROM users
+                 WHERE sap_id NOT IN (SELECT DISTINCT sap_id FROM user_teams)
+                 ORDER BY name ASC""")
+    no_team_rows = c.fetchall()
+    conn.close()
+
+    members_by_team: Dict[int, List[Dict[str, object]]] = {}
+    for team_id, sap_id, name, dept, role in members_rows:
+        members_by_team.setdefault(team_id, []).append(
+            {"sap_id": sap_id, "name": name, "department": dept, "role_in_team": role}
+        )
+
+    teams = [
+        {
+            "id": t[0], "name": t[1], "visibility": t[2] or "public",
+            "members": members_by_team.get(t[0], []),
+        }
+        for t in teams_rows
+    ]
+    users_without_team = [{"sap_id": r[0], "name": r[1], "department": r[2]} for r in no_team_rows]
+
+    return {"teams": teams, "users_without_team": users_without_team}
 
 
 @app.post("/api/admin/teams/add")
@@ -1527,30 +2501,34 @@ async def get_user_teams(
     conn, is_pg = get_db()
     c = conn.cursor()
     q = (
-        """SELECT t.id, t.name FROM user_teams ut JOIN teams t ON ut.team_id = t.id WHERE ut.sap_id = %s"""
+        """SELECT t.id, t.name, ut.role_in_team FROM user_teams ut JOIN teams t ON ut.team_id = t.id WHERE ut.sap_id = %s"""
         if is_pg
-        else """SELECT t.id, t.name FROM user_teams ut JOIN teams t ON ut.team_id = t.id WHERE ut.sap_id = ?"""
+        else """SELECT t.id, t.name, ut.role_in_team FROM user_teams ut JOIN teams t ON ut.team_id = t.id WHERE ut.sap_id = ?"""
     )
     c.execute(q, (sap_id.strip(),))
     rows = c.fetchall()
     conn.close()
-    return [{"id": r[0], "name": r[1]} for r in rows]
+    return [{"id": r[0], "name": r[1], "role_in_team": r[2]} for r in rows]
 
 
 @app.post("/api/admin/users/{sap_id}/set-teams")
 async def set_user_teams(
     sap_id: str,
-    team_ids: str = Form("[]"),
+    team_assignments: str = Form("[]"),
     _admin: Dict[str, object] = Depends(require_permission("users")),
 ):
-    """يحدد فرق المستخدم (بحد أقصى فريقين)، ويستبدل أي تعيين سابق بالكامل."""
+    """يحدد فرق المستخدم مع مهمته في كل فريق (بحد أقصى فريقين)، ويستبدل أي تعيين سابق بالكامل.
+    الصيغة: [{"team_id": 1, "role_in_team": "قائد الفريق"}, ...]"""
     try:
-        ids = json.loads(team_ids) if team_ids else []
-        ids = [int(i) for i in ids]
+        assignments = json.loads(team_assignments) if team_assignments else []
+        parsed = [
+            (int(a["team_id"]), (a.get("role_in_team") or "").strip() or None)
+            for a in assignments
+        ]
     except Exception:
         raise HTTPException(status_code=400, detail="صيغة الفرق غير صحيحة.")
 
-    if len(ids) > 2:
+    if len(parsed) > 2:
         raise HTTPException(
             status_code=400, detail="لا يمكن أن يكون الفرد مشتركاً في أكثر من فريقين."
         )
@@ -1565,16 +2543,52 @@ async def set_user_teams(
     c.execute(q_del, (sap_id.strip(),))
 
     q_ins = (
-        "INSERT INTO user_teams (sap_id, team_id) VALUES (%s, %s)"
+        "INSERT INTO user_teams (sap_id, team_id, role_in_team) VALUES (%s, %s, %s)"
         if is_pg
-        else "INSERT INTO user_teams (sap_id, team_id) VALUES (?, ?)"
+        else "INSERT INTO user_teams (sap_id, team_id, role_in_team) VALUES (?, ?, ?)"
     )
-    for tid in ids:
-        c.execute(q_ins, (sap_id.strip(), tid))
+    for tid, role in parsed:
+        c.execute(q_ins, (sap_id.strip(), tid, role))
 
     conn.commit()
     conn.close()
     return {"status": "success", "message": "تم تحديث فرق المستخدم بنجاح."}
+
+
+@app.get("/api/user/teams")
+async def get_visible_teams_for_user(current_user: Dict[str, object] = Depends(get_current_user)):
+    """يرجّع للمستخدم الحالي الفرق المسموح له يشوف أعضاءها: كل الفرق العامة (public)،
+    بالإضافة لفرقه الخاصة (team_only) لو هو عضو فيها."""
+    sap_id = current_user.get("sap_id")
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    c.execute("SELECT id, name, visibility FROM teams ORDER BY name ASC")
+    all_teams = c.fetchall()
+
+    q_my = (
+        "SELECT team_id FROM user_teams WHERE sap_id = %s" if is_pg
+        else "SELECT team_id FROM user_teams WHERE sap_id = ?"
+    )
+    c.execute(q_my, (sap_id,))
+    my_team_ids = {r[0] for r in c.fetchall()}
+
+    visible_team_ids = [t[0] for t in all_teams if (t[2] or "public") == "public" or t[0] in my_team_ids]
+
+    result = []
+    for tid, name, visibility in all_teams:
+        if tid not in visible_team_ids:
+            continue
+        c.execute("""SELECT u.sap_id, u.name, u.department, ut.role_in_team
+                     FROM user_teams ut JOIN users u ON ut.sap_id = u.sap_id
+                     WHERE ut.team_id = %s""" if is_pg else
+                   """SELECT u.sap_id, u.name, u.department, ut.role_in_team
+                     FROM user_teams ut JOIN users u ON ut.sap_id = u.sap_id
+                     WHERE ut.team_id = ?""", (tid,))
+        members = [{"sap_id": r[0], "name": r[1], "department": r[2], "role_in_team": r[3]} for r in c.fetchall()]
+        result.append({"id": tid, "name": name, "visibility": visibility or "public", "members": members})
+
+    conn.close()
+    return result
 
 
 @app.post("/api/admin/add-user")
@@ -2720,6 +3734,15 @@ async def submit_exam(
             "percentage": round(b_pct, 1),
             "level": get_level(b_pct),
         }
+
+    # لو الشخص ده قدّم الامتحان ده قبل كده (إعادة امتحان)، نمسح نتيجته السابقة في هذا الامتحان
+    # قبل حفظ النتيجة الجديدة، عشان يفضل ليه نتيجة واحدة بس (الأحدث) لكل امتحان
+    q_del_prev = (
+        "DELETE FROM submissions WHERE exam_id = %s AND sap_id = %s"
+        if is_pg
+        else "DELETE FROM submissions WHERE exam_id = ? AND sap_id = ?"
+    )
+    c.execute(q_del_prev, (exam_id, sap_id))
 
     q_sub = (
         """INSERT INTO submissions (exam_id, sap_id, user_name, total_score, total_questions, total_pct, overall_level, branch_details, answers_detail) 
