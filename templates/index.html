@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>منصة التقييم والامتحانات وإدارة الكفاءات الفنية</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Tajawal:wght@700;800;900&display=swap" rel="stylesheet">
     <style>
@@ -60,12 +61,23 @@
             #print-area { position: absolute; left: 0; top: 0; width: 100%; }
             .no-print { display: none !important; }
         }
+
+        /* خلفيات زخرفية متحركة لصفحة تسجيل الدخول */
+        @keyframes floatBlob { 0%,100%{ transform: translate(0,0) scale(1);} 50%{ transform: translate(10px,-14px) scale(1.06);} }
+        .animate-float{ animation: floatBlob 7s ease-in-out infinite; }
+        .animate-float-slow{ animation: floatBlob 11s ease-in-out infinite; }
+
+        @font-face { font-family: 'DesignerName'; src: url('/api/public/name-font') format('truetype'); font-display: swap; }
+        .designer-caption{ font-family: 'DesignerName', 'Tajawal', sans-serif; font-weight: 700; }
+
+        .login-tab-active{ background:#fff; color:#4338ca; box-shadow:0 4px 12px -4px rgba(79,70,229,.35); }
+        .login-tab-inactive{ color:#64748b; }
     </style>
 </head>
 <body class="app-bg text-slate-800 min-h-screen">
 
-    <!-- شريط التنقل العلوي -->
-    <nav class="bg-slate-900/90 backdrop-blur-xl text-white sticky top-0 z-50 no-print border-b border-white/10 shadow-[0_4px_30px_-10px_rgba(0,0,0,0.4)]">
+    <!-- شريط التنقل العلوي (بيختفي تلقائيًا بعد تسجيل الدخول) -->
+    <nav id="top-nav" class="bg-slate-900/90 backdrop-blur-xl text-white sticky top-0 z-50 no-print border-b border-white/10 shadow-[0_4px_30px_-10px_rgba(0,0,0,0.4)]">
         <div class="max-w-6xl mx-auto px-4 md:px-6 py-3 flex flex-wrap justify-between items-center gap-3">
             <div class="flex items-center gap-2.5">
                 <span class="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-900/40 text-base">🛠️</span>
@@ -75,53 +87,344 @@
                 </div>
             </div>
             <div class="flex items-center gap-1.5 md:gap-2 flex-wrap" id="nav-buttons">
-                <button onclick="switchView('view-login-user')" class="px-3 md:px-4 py-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-xs md:text-sm font-bold transition-all shadow-md shadow-indigo-900/30 hover:-translate-y-0.5">دخول الأفراد</button>
-                <button onclick="switchView('view-login-admin')" class="px-3 md:px-4 py-2 rounded-full bg-white/10 hover:bg-white/15 text-xs md:text-sm font-bold border border-white/15 transition-all hover:-translate-y-0.5">دخول الإدارة</button>
-                <button onclick="switchView('view-leaderboards')" class="px-3 md:px-4 py-2 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-xs md:text-sm font-bold transition-all shadow-md shadow-amber-900/30 hover:-translate-y-0.5">🏆 لوحة الشرف</button>
+                <button onclick="openContactModal()" class="px-3 md:px-4 py-2 rounded-full bg-white/10 hover:bg-white/15 text-xs md:text-sm font-bold border border-white/15 transition-all hover:-translate-y-0.5 flex items-center gap-1.5">📞 <span class="hidden sm:inline">تواصل معنا</span></button>
+                <button onclick="openSuggestionModal()" class="px-3 md:px-4 py-2 rounded-full bg-white/10 hover:bg-white/15 text-xs md:text-sm font-bold border border-white/15 transition-all hover:-translate-y-0.5 flex items-center gap-1.5">💡 <span class="hidden sm:inline">اقتراح بتعديل</span></button>
+                <button onclick="openLoginAtTop()" class="px-3 md:px-4 py-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-xs md:text-sm font-bold transition-all shadow-md shadow-indigo-900/30 hover:-translate-y-0.5">تسجيل الدخول</button>
                 <button id="logout-btn" onclick="logout()" class="hidden px-3 md:px-4 py-2 rounded-full bg-rose-600/90 hover:bg-rose-500 text-xs md:text-sm font-bold transition-all hover:-translate-y-0.5">خروج</button>
             </div>
         </div>
     </nav>
 
+    <!-- نافذة التواصل -->
+    <div id="contact-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl text-center">
+            <div class="flex justify-between items-center">
+                <h3 class="font-bold text-slate-800 text-base">تواصل معنا</h3>
+                <button onclick="closeContactModal()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+            </div>
+            <p class="text-xs text-slate-400">نفس الرقم متاح للاتصال والواتساب</p>
+            <a href="tel:01159455004" class="flex items-center justify-center gap-2 w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-3.5 rounded-2xl transition-all">
+                <span>📱</span><span>اتصال هاتفي: 01159455004</span>
+            </a>
+            <a href="https://wa.me/2001159455004" target="_blank" class="flex items-center justify-center gap-2 w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3.5 rounded-2xl transition-all shadow-lg shadow-emerald-300/40">
+                <span>🟢</span><span>واتساب: 01159455004</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- نافذة اقتراح بتعديل -->
+    <div id="suggestion-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div class="flex justify-between items-center border-b pb-2">
+                <h3 class="font-bold text-slate-800 text-base">اقتراح بتعديل / مشكلة</h3>
+                <button onclick="closeSuggestionModal()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+            </div>
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">رقم الموبايل</label>
+                    <input type="tel" id="suggestion-phone" class="w-full px-4 py-2.5 border border-slate-200 bg-slate-50/60 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all" placeholder="01xxxxxxxxx">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">الاسم</label>
+                    <input type="text" id="suggestion-name" class="w-full px-4 py-2.5 border border-slate-200 bg-slate-50/60 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all" placeholder="اسمك">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">الاقتراح / المشكلة</label>
+                    <textarea id="suggestion-message" rows="4" class="w-full px-4 py-2.5 border border-slate-200 bg-slate-50/60 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all" placeholder="اكتب اقتراحك أو المشكلة اللي واجهتك..."></textarea>
+                </div>
+            </div>
+            <button onclick="submitSuggestion()" class="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold py-3 rounded-xl transition-all shadow-md shadow-indigo-200">إرسال</button>
+        </div>
+    </div>
+
+    <!-- 🏆 زرار لوحة الشرف العائم (ظاهر دايمًا، قبل وبعد تسجيل الدخول) -->
+    <button id="leaderboard-float-btn" onclick="switchView('view-leaderboards')" title="لوحة الشرف" class="no-print fixed bottom-5 left-5 z-50 flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-bold pl-4 pr-3 py-3 rounded-full shadow-lg shadow-amber-900/30 hover:shadow-xl hover:-translate-y-0.5 transition-all">
+        <span class="text-lg">🏆</span>
+        <span class="hidden sm:inline text-sm">لوحة الشرف</span>
+    </button>
+
+    <!-- شريط جلسة عائم صغير (بيظهر بس بعد تسجيل الدخول بدل الشريط العلوي الكامل) -->
+    <div id="floating-session-pill" class="hidden no-print fixed top-4 right-4 z-50 items-center gap-2 bg-slate-900/90 backdrop-blur-xl text-white pl-2 pr-4 py-2 rounded-full shadow-lg border border-white/10">
+        <span id="floating-session-name" class="text-xs font-bold text-indigo-200"></span>
+        <button onclick="logout()" class="flex items-center justify-center w-7 h-7 rounded-full bg-rose-600/90 hover:bg-rose-500 text-xs transition-all" title="تسجيل الخروج">⏻</button>
+    </div>
+
     <div class="max-w-6xl mx-auto p-4 md:p-8">
 
-        <!-- 1. تسجيل دخول الأفراد -->
-        <div id="view-login-user" class="view-panel max-w-md mx-auto bg-white/95 backdrop-blur-sm p-8 sm:p-10 rounded-3xl shadow-2xl shadow-slate-300/30 border border-slate-200/70 mt-8">
-            <h2 class="text-2xl font-extrabold text-slate-800 mb-6 text-center tracking-tight">تسجيل دخول الممتحن</h2>
-            <form onsubmit="handleUserLogin(event)" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-semibold text-slate-700 mb-1">رقم الساب (SAP ID)</label>
-                    <input type="text" id="user-login-sap" required class="w-full px-4 py-3 border border-slate-200 bg-slate-50/60 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 focus:bg-white transition-all" placeholder="مثال: 1001">
+        <!-- ============ الصفحة التعريفية (تظهر بس في شاشتي تسجيل الدخول) ============ -->
+        <div id="site-intro-landing" class="space-y-14 mb-14">
+
+            <!-- صورة وتعريف مصمم المنصة -->
+            <div class="flex flex-col items-center text-center pt-2">
+                <div class="w-24 h-24 rounded-full overflow-hidden bg-gradient-to-br from-indigo-100 to-violet-100 border-4 border-white shadow-xl shadow-indigo-200/60 flex items-center justify-center text-3xl">
+                    <img src="/api/public/site-image/site-designer-avatar" alt="م. محمد عادل" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='👤'">
                 </div>
-                <div>
-                    <label class="block text-sm font-semibold text-slate-700 mb-1">كلمة المرور</label>
-                    <input type="password" id="user-login-pass" required class="w-full px-4 py-3 border border-slate-200 bg-slate-50/60 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 focus:bg-white transition-all" placeholder="••••••">
-                </div>
-                <button type="submit" class="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold py-3.5 rounded-2xl transition-all shadow-lg shadow-indigo-300/50 hover:shadow-xl hover:-translate-y-0.5">تسجيل الدخول</button>
-            </form>
-            <div class="mt-4 text-center">
-                <button onclick="requestPasswordResetModal()" class="text-xs text-indigo-600 hover:underline font-bold">نسيت كلمة المرور؟ (طلب استعادة من الإدارة)</button>
+                <p class="designer-caption mt-3 text-base text-indigo-700">إعداد وتصميم م. محمد عادل</p>
             </div>
+
+            <!-- Hero + خطة المنصة -->
+            <div class="grid lg:grid-cols-2 gap-6 items-stretch">
+                <div class="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white shadow-2xl shadow-indigo-950/40">
+                    <div class="absolute -top-24 -right-24 w-72 h-72 bg-indigo-500/30 rounded-full blur-3xl animate-float pointer-events-none"></div>
+                    <div class="absolute -bottom-24 -left-24 w-80 h-80 bg-amber-400/15 rounded-full blur-3xl animate-float-slow pointer-events-none"></div>
+                    <div class="relative flex flex-col justify-center h-full p-8 md:p-10">
+                        <span class="inline-block text-[11px] font-bold tracking-wide bg-white/10 border border-white/15 text-indigo-200 px-3 py-1.5 rounded-full mb-5 w-fit">شركة العربي المتحدة — مصنع فوم بنها</span>
+                        <h1 class="font-display text-2xl md:text-3xl font-extrabold leading-tight mb-4">منصة التدريب والتقييم الفني<br><span class="bg-gradient-to-l from-amber-300 via-white to-indigo-300 bg-clip-text text-transparent">لمصنع فوم بنها</span></h1>
+                        <p class="text-slate-300 text-sm md:text-base leading-relaxed">منصة موحّدة لتنمية وتقييم مهارات فرق العمل في برنامج الصيانة الإنتاجية الشاملة والتقييم الفني في المهارات المتخصصة، من خلال دورات ومحتوى تدريبي متنوع، واختبارات فورية، وشهادات معتمدة لكل فرد.</p>
+                    </div>
+                </div>
+
+                <div class="bg-white/85 backdrop-blur border border-slate-100 rounded-[2rem] shadow-sm p-6 md:p-7 flex flex-col">
+                    <h3 class="font-bold text-slate-800 mb-4 flex items-center gap-2">🗺️ خطة المنصة</h3>
+                    <div id="platform-roadmap" class="space-y-0 overflow-y-auto pr-1 max-h-[280px] lg:max-h-none lg:flex-1"></div>
+                </div>
+            </div>
+
+            <!-- مكان تسجيل الدخول (يُنقل هنا تلقائيًا بالجافاسكريبت) -->
+            <div id="login-anchor"></div>
+
+            <!-- نتائج الصيانة الإنتاجية الشاملة (TPM) -->
+            <div id="tpm-results-section" class="hidden">
+                <div class="flex flex-col items-center mb-2">
+                    <h2 class="text-center font-display text-2xl font-extrabold text-slate-800 mb-2">نتائج الصيانة الإنتاجية الشاملة (TPM)</h2>
+                    <p id="tpm-results-subtitle" class="text-center text-slate-400 text-sm mb-3">نتائج النصف الأول من العام</p>
+                    <button id="tpm-compare-toggle-btn" onclick="toggleTpmComparisonView()" class="hidden text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3.5 py-1.5 rounded-full transition-all mb-5">📊 قارن بين النصف الأول والثاني</button>
+                </div>
+
+                <!-- عرض نصف واحد (افتراضي) -->
+                <div id="tpm-single-half-view">
+                    <div class="grid md:grid-cols-2 gap-5 mb-5">
+                        <div class="bg-white/80 backdrop-blur border border-slate-100 rounded-3xl p-5 shadow-sm">
+                            <h4 class="font-bold text-slate-700 text-sm mb-3">متوسط الإنجاز حسب الإدارة</h4>
+                            <canvas id="chart-dept-avg" height="220"></canvas>
+                        </div>
+                        <div class="bg-white/80 backdrop-blur border border-slate-100 rounded-3xl p-5 shadow-sm">
+                            <h4 class="font-bold text-slate-700 text-sm mb-3">الأداء حسب الركائز الست</h4>
+                            <canvas id="chart-pillars" height="220"></canvas>
+                        </div>
+                    </div>
+                    <div id="tpm-step-charts" class="grid md:grid-cols-2 gap-5"></div>
+                </div>
+
+                <!-- عرض المقارنة بين النصفين -->
+                <div id="tpm-comparison-view" class="hidden">
+                    <div class="grid grid-cols-2 md:grid-cols-2 gap-3 mb-5 max-w-md mx-auto">
+                        <div class="bg-white/80 backdrop-blur border border-slate-100 rounded-2xl p-4 text-center shadow-sm">
+                            <div class="text-[11px] text-slate-400 font-bold mb-1">متوسط النصف الأول</div>
+                            <div id="tpm-h1-overall" class="font-display font-extrabold text-2xl text-indigo-600">—</div>
+                        </div>
+                        <div class="bg-white/80 backdrop-blur border border-slate-100 rounded-2xl p-4 text-center shadow-sm">
+                            <div class="text-[11px] text-slate-400 font-bold mb-1">متوسط النصف الثاني</div>
+                            <div id="tpm-h2-overall" class="font-display font-extrabold text-2xl text-emerald-600">—</div>
+                        </div>
+                    </div>
+                    <div class="grid md:grid-cols-2 gap-5">
+                        <div class="bg-white/80 backdrop-blur border border-slate-100 rounded-3xl p-5 shadow-sm">
+                            <h4 class="font-bold text-slate-700 text-sm mb-3">متوسط الإنجاز حسب الإدارة — مقارنة</h4>
+                            <canvas id="chart-compare-dept" height="220"></canvas>
+                        </div>
+                        <div class="bg-white/80 backdrop-blur border border-slate-100 rounded-3xl p-5 shadow-sm">
+                            <h4 class="font-bold text-slate-700 text-sm mb-3">الأداء حسب الركائز — مقارنة</h4>
+                            <select id="tpm-compare-dept-select" onchange="renderTpmComparisonPillarChart()" class="text-[11px] border border-slate-200 rounded-lg px-2 py-1 mb-2 bg-white outline-none"></select>
+                            <canvas id="chart-compare-pillars" height="220"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- شارات النتائج العامة للتدريب -->
+            <div id="platform-stats-badges" class="grid grid-cols-2 md:grid-cols-5 gap-3"></div>
+
+            <!-- امتيازات المنصة -->
+            <div>
+                <h2 class="text-center font-display text-2xl font-extrabold text-slate-800 mb-2">امتيازات المنصة</h2>
+                <p class="text-center text-slate-400 text-sm mb-8">كل اللي محتاجه فريقك عشان يتعلّم ويتقيّم في مكان واحد</p>
+                <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="bg-white/80 backdrop-blur border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all">
+                        <span class="text-2xl">🎬</span>
+                        <h3 class="font-bold text-slate-800 mt-2 mb-1">دورات بصيغ متعددة</h3>
+                        <p class="text-xs text-slate-500 leading-relaxed">شرح دورات بالفيديو، وملفات PDF، ومقاطع صوتية — كل فرد يتعلم بالطريقة اللي تناسبه.</p>
+                    </div>
+                    <div class="bg-white/80 backdrop-blur border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all">
+                        <span class="text-2xl">🧩</span>
+                        <h3 class="font-bold text-slate-800 mt-2 mb-1">مصفوفة مهارات لكل فرد</h3>
+                        <p class="text-xs text-slate-500 leading-relaxed">تتبّع دقيق للمهارات المطلوبة والمكتسبة لكل موظف حسب إدارته وفريقه.</p>
+                    </div>
+                    <div class="bg-white/80 backdrop-blur border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all">
+                        <span class="text-2xl">🎓</span>
+                        <h3 class="font-bold text-slate-800 mt-2 mb-1">شهادات معتمدة</h3>
+                        <p class="text-xs text-slate-500 leading-relaxed">شهادات اجتياز وتقدير لكل فرد بعد إتمام الدورة والتقييم بنجاح.</p>
+                    </div>
+                    <div class="bg-white/80 backdrop-blur border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all">
+                        <span class="text-2xl">🏭</span>
+                        <h3 class="font-bold text-slate-800 mt-2 mb-1">تنظيم حسب الإدارة والفريق</h3>
+                        <p class="text-xs text-slate-500 leading-relaxed">كل فرد مرتبط بإدارته وفريقه، والدورات موزعة حسب التخصص المطلوب.</p>
+                    </div>
+                    <div class="bg-white/80 backdrop-blur border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all">
+                        <span class="text-2xl">🏆</span>
+                        <h3 class="font-bold text-slate-800 mt-2 mb-1">لوحة شرف وتحفيز</h3>
+                        <p class="text-xs text-slate-500 leading-relaxed">ترتيب عام وترتيب لكل امتحان، لتحفيز روح المنافسة الإيجابية بين الفرق.</p>
+                    </div>
+                    <div class="bg-white/80 backdrop-blur border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all">
+                        <span class="text-2xl">📊</span>
+                        <h3 class="font-bold text-slate-800 mt-2 mb-1">تقييمات وتحليلات أداء</h3>
+                        <p class="text-xs text-slate-500 leading-relaxed">اختبارات فورية بعد كل دورة، مع تقارير أداء تساعد الإدارة على المتابعة.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- نبذة تعريفية -->
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="bg-white/80 backdrop-blur border border-slate-100 rounded-3xl overflow-hidden shadow-sm">
+                    <div class="about-img-wrap aspect-[16/10] bg-slate-100">
+                        <img src="/api/public/site-image/site-about-1" alt="TPM" class="w-full h-full object-cover" onerror="this.closest('.about-img-wrap').style.display='none'">
+                    </div>
+                    <div class="p-6">
+                        <h3 class="font-bold text-slate-800 mb-2">الصيانة الإنتاجية الشاملة (TPM)</h3>
+                        <p class="text-xs text-slate-500 leading-relaxed">برنامج Jishu Hozen (الصيانة الذاتية) وفرقه، بيهدف لتمكين فرق الإنتاج من صيانة معداتهم بأنفسهم، ورفع كفاءة التشغيل وتقليل الأعطال من خلال التدريب المستمر.</p>
+                    </div>
+                </div>
+                <div class="bg-white/80 backdrop-blur border border-slate-100 rounded-3xl overflow-hidden shadow-sm">
+                    <div class="about-img-wrap aspect-[16/10] bg-slate-100">
+                        <img src="/api/public/site-image/site-about-2" alt="Skills" class="w-full h-full object-cover" onerror="this.closest('.about-img-wrap').style.display='none'">
+                    </div>
+                    <div class="p-6">
+                        <h3 class="font-bold text-slate-800 mb-2">المهارات المتخصصة للإدارات المختلفة</h3>
+                        <p class="text-xs text-slate-500 leading-relaxed">محتوى تدريبي مخصص لكل إدارة (صيانة، إنتاج، جودة وغيرها)، بيغطي المهارات الفنية اللي كل فريق محتاجها في شغله اليومي.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- فيديوهات تعريفية -->
+            <div>
+                <h2 class="text-center font-display text-2xl font-extrabold text-slate-800 mb-2">فيديوهات تعريفية</h2>
+                <p class="text-center text-slate-400 text-sm mb-8">لمحة سريعة عن المنصة (هيتم إضافة المزيد من الفيديوهات التفصيلية لاحقًا)</p>
+                <div class="grid sm:grid-cols-2 gap-5">
+                    <div class="rounded-3xl overflow-hidden shadow-sm border border-slate-100 bg-black">
+                        <video class="w-full aspect-video object-cover" muted autoplay loop playsinline preload="none" poster="/api/public/site-image/site-hero" onerror="this.closest('.rounded-3xl').style.display='none'">
+                            <source src="/api/public/site-video/site-video-1" type="video/mp4">
+                        </video>
+                    </div>
+                    <div class="rounded-3xl overflow-hidden shadow-sm border border-slate-100 bg-black">
+                        <video class="w-full aspect-video object-cover" muted autoplay loop playsinline preload="none" poster="/api/public/site-image/site-hero" onerror="this.closest('.rounded-3xl').style.display='none'">
+                            <source src="/api/public/site-video/site-video-2" type="video/mp4">
+                        </video>
+                    </div>
+                </div>
+            </div>
+
+            <!-- معرض صور التدريبات -->
+            <div>
+                <h2 class="text-center font-display text-2xl font-extrabold text-slate-800 mb-2">لقطات من التدريبات</h2>
+                <p class="text-center text-slate-400 text-sm mb-8">صور عامة من فعاليات وورش التدريب الميدانية</p>
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <div class="aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm"><img src="/api/public/site-image/site-training-1" class="w-full h-full object-cover" onerror="this.closest('.aspect-square').style.display='none'"></div>
+                    <div class="aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm"><img src="/api/public/site-image/site-training-2" class="w-full h-full object-cover" onerror="this.closest('.aspect-square').style.display='none'"></div>
+                    <div class="aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm"><img src="/api/public/site-image/site-training-3" class="w-full h-full object-cover" onerror="this.closest('.aspect-square').style.display='none'"></div>
+                    <div class="aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm"><img src="/api/public/site-image/site-training-4" class="w-full h-full object-cover" onerror="this.closest('.aspect-square').style.display='none'"></div>
+                    <div class="aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm"><img src="/api/public/site-image/site-training-5" class="w-full h-full object-cover" onerror="this.closest('.aspect-square').style.display='none'"></div>
+                    <div class="aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm"><img src="/api/public/site-image/site-training-6" class="w-full h-full object-cover" onerror="this.closest('.aspect-square').style.display='none'"></div>
+                    <div class="aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm"><img src="/api/public/site-image/site-training-7" class="w-full h-full object-cover" onerror="this.closest('.aspect-square').style.display='none'"></div>
+                    <div class="aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm"><img src="/api/public/site-image/site-training-8" class="w-full h-full object-cover" onerror="this.closest('.aspect-square').style.display='none'"></div>
+                    <div class="aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm"><img src="/api/public/site-image/site-training-9" class="w-full h-full object-cover" onerror="this.closest('.aspect-square').style.display='none'"></div>
+                    <div class="aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm"><img src="/api/public/site-image/site-training-10" class="w-full h-full object-cover" onerror="this.closest('.aspect-square').style.display='none'"></div>
+                </div>
+            </div>
+        </div>
+        <!-- ============ نهاية الصفحة التعريفية ============ -->
+
+        <!-- 1. تسجيل دخول الأفراد -->
+        <div id="view-login-user" class="view-panel relative max-w-md mx-auto mt-6">
+            <div class="absolute -top-16 -right-14 w-56 h-56 bg-gradient-to-br from-indigo-400/30 to-violet-400/20 rounded-full blur-3xl animate-float pointer-events-none"></div>
+            <div class="absolute -bottom-20 -left-14 w-64 h-64 bg-gradient-to-tr from-amber-300/25 to-orange-300/15 rounded-full blur-3xl animate-float-slow pointer-events-none"></div>
+
+            <div class="relative bg-white/85 backdrop-blur-xl p-8 sm:p-10 rounded-[2rem] shadow-2xl shadow-indigo-200/40 border border-white/60 ring-1 ring-slate-900/5">
+                <div class="flex items-center justify-center gap-6 mb-4">
+                    <img src="/api/public/logo/1" alt="Logo 1" class="h-14 w-14 object-contain drop-shadow-md" onerror="this.style.display='none'">
+                    <div class="w-px h-10 bg-slate-200"></div>
+                    <img src="/api/public/logo/2" alt="Logo 2" class="h-14 w-14 object-contain drop-shadow-md" onerror="this.style.display='none'">
+                </div>
+                <p class="text-center text-[11px] font-bold text-slate-400 tracking-wide mb-6">شركة العربي المتحدة للاستثمار الصناعي والتجاري — مصنع فوم بنها</p>
+
+                <div class="flex bg-slate-100 rounded-2xl p-1 mb-6 text-sm font-bold">
+                    <button type="button" class="flex-1 py-2 rounded-xl login-tab-active transition-all">دخول الأفراد</button>
+                    <button type="button" onclick="switchView('view-login-admin')" class="flex-1 py-2 rounded-xl login-tab-inactive hover:text-slate-700 transition-colors">دخول الإدارة</button>
+                </div>
+
+                <h2 class="text-2xl font-display font-extrabold text-slate-800 mb-1 text-center tracking-tight">تسجيل دخول الممتحن</h2>
+                <p class="text-center text-xs text-slate-400 mb-6">أدخل بياناتك للوصول إلى منصة الامتحانات</p>
+
+                <form onsubmit="handleUserLogin(event)" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">رقم الساب (SAP ID)</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 right-4 flex items-center text-slate-400 pointer-events-none">🆔</span>
+                            <input type="text" id="user-login-sap" required class="w-full pr-11 pl-4 py-3.5 border border-slate-200 bg-slate-50/60 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 focus:bg-white transition-all" placeholder="مثال: 1001">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">كلمة المرور</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 right-4 flex items-center text-slate-400 pointer-events-none">🔒</span>
+                            <input type="password" id="user-login-pass" required class="w-full pr-11 pl-4 py-3.5 border border-slate-200 bg-slate-50/60 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 focus:bg-white transition-all" placeholder="••••••">
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-600 bg-[length:200%_auto] hover:bg-right text-white font-bold py-3.5 rounded-2xl transition-all duration-500 shadow-lg shadow-indigo-300/50 hover:shadow-xl hover:-translate-y-0.5">تسجيل الدخول</button>
+                </form>
+                <div class="mt-4 text-center">
+                    <button onclick="requestPasswordResetModal()" class="text-xs text-indigo-600 hover:underline font-bold">نسيت كلمة المرور؟ (طلب استعادة من الإدارة)</button>
+                </div>
+            </div>
+            <p class="text-center text-[11px] text-slate-400 font-semibold mt-5">تصميم وإعداد: م. محمد عادل</p>
         </div>
 
         <!-- 2. تسجيل دخول الإدارة -->
-        <div id="view-login-admin" class="view-panel hidden max-w-md mx-auto bg-white/95 backdrop-blur-sm p-8 sm:p-10 rounded-3xl shadow-2xl shadow-slate-300/30 border border-slate-200/70 mt-8">
-            <h2 class="text-2xl font-extrabold text-slate-800 mb-6 text-center tracking-tight">بوابة الإدارة المركزية</h2>
-            <form onsubmit="handleAdminLogin(event)" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-semibold text-slate-700 mb-1">رقم الساب (SAP ID)</label>
-                    <input type="text" id="admin-login-sap" required class="w-full px-4 py-3 border border-slate-200 bg-slate-50/60 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 focus:bg-white transition-all" placeholder="ADMIN01">
+        <div id="view-login-admin" class="view-panel hidden relative max-w-md mx-auto mt-6">
+            <div class="absolute -top-16 -left-14 w-56 h-56 bg-gradient-to-br from-slate-400/25 to-indigo-400/15 rounded-full blur-3xl animate-float pointer-events-none"></div>
+            <div class="absolute -bottom-20 -right-14 w-64 h-64 bg-gradient-to-tr from-slate-300/25 to-slate-500/10 rounded-full blur-3xl animate-float-slow pointer-events-none"></div>
+
+            <div class="relative bg-white/85 backdrop-blur-xl p-8 sm:p-10 rounded-[2rem] shadow-2xl shadow-slate-300/40 border border-white/60 ring-1 ring-slate-900/5">
+                <div class="flex items-center justify-center gap-6 mb-4">
+                    <img src="/api/public/logo/1" alt="Logo 1" class="h-14 w-14 object-contain drop-shadow-md" onerror="this.style.display='none'">
+                    <div class="w-px h-10 bg-slate-200"></div>
+                    <img src="/api/public/logo/2" alt="Logo 2" class="h-14 w-14 object-contain drop-shadow-md" onerror="this.style.display='none'">
                 </div>
-                <div>
-                    <label class="block text-sm font-semibold text-slate-700 mb-1">ايميل الشركة</label>
-                    <input type="email" id="admin-login-email" required class="w-full px-4 py-3 border border-slate-200 bg-slate-50/60 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 focus:bg-white transition-all" placeholder="admin@company.com">
+                <p class="text-center text-[11px] font-bold text-slate-400 tracking-wide mb-6">شركة العربي المتحدة للاستثمار الصناعي والتجاري — مصنع فوم بنها</p>
+
+                <div class="flex bg-slate-100 rounded-2xl p-1 mb-6 text-sm font-bold">
+                    <button type="button" onclick="switchView('view-login-user')" class="flex-1 py-2 rounded-xl login-tab-inactive hover:text-slate-700 transition-colors">دخول الأفراد</button>
+                    <button type="button" class="flex-1 py-2 rounded-xl login-tab-active transition-all">دخول الإدارة</button>
                 </div>
-                <div>
-                    <label class="block text-sm font-semibold text-slate-700 mb-1">كلمة المرور</label>
-                    <input type="password" id="admin-login-pass" required class="w-full px-4 py-3 border border-slate-200 bg-slate-50/60 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 focus:bg-white transition-all" placeholder="Admin@2026">
-                </div>
-                <button type="submit" class="w-full bg-gradient-to-r from-slate-800 to-slate-950 hover:from-slate-900 hover:to-black text-white font-bold py-3.5 rounded-2xl transition-all shadow-lg shadow-slate-400/40 hover:shadow-xl hover:-translate-y-0.5">دخول الإدارة</button>
-            </form>
+
+                <h2 class="text-2xl font-display font-extrabold text-slate-800 mb-1 text-center tracking-tight">بوابة الإدارة المركزية</h2>
+                <p class="text-center text-xs text-slate-400 mb-6">وصول خاص بفريق الإدارة والتحكم في المنصة</p>
+
+                <form onsubmit="handleAdminLogin(event)" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">رقم الساب (SAP ID)</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 right-4 flex items-center text-slate-400 pointer-events-none">🆔</span>
+                            <input type="text" id="admin-login-sap" required class="w-full pr-11 pl-4 py-3.5 border border-slate-200 bg-slate-50/60 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 focus:bg-white transition-all" placeholder="ADMIN01">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">ايميل الشركة</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 right-4 flex items-center text-slate-400 pointer-events-none">✉️</span>
+                            <input type="email" id="admin-login-email" required class="w-full pr-11 pl-4 py-3.5 border border-slate-200 bg-slate-50/60 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 focus:bg-white transition-all" placeholder="admin@company.com">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">كلمة المرور</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 right-4 flex items-center text-slate-400 pointer-events-none">🔒</span>
+                            <input type="password" id="admin-login-pass" required class="w-full pr-11 pl-4 py-3.5 border border-slate-200 bg-slate-50/60 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 focus:bg-white transition-all" placeholder="Admin@2026">
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full bg-gradient-to-r from-slate-800 via-slate-900 to-black bg-[length:200%_auto] hover:bg-right text-white font-bold py-3.5 rounded-2xl transition-all duration-500 shadow-lg shadow-slate-400/40 hover:shadow-xl hover:-translate-y-0.5">دخول الإدارة</button>
+                </form>
+            </div>
+            <p class="text-center text-[11px] text-slate-400 font-semibold mt-5">تصميم وإعداد: م. محمد عادل</p>
         </div>
 
         <!-- 3. لوحة تحكم المستخدم (الامتحانات + سجل النتائج) -->
@@ -138,9 +441,19 @@
                 </div>
                 <div class="flex gap-2 flex-wrap">
                     <button onclick="openMySkillMatrix()" class="text-xs bg-violet-50 hover:bg-violet-100 text-violet-700 px-3 py-2 rounded-xl font-bold transition">🎯 مصفوفة مهاراتي</button>
+                    <button onclick="toggleUserTeamsView()" class="text-xs bg-amber-50 hover:bg-amber-100 text-amber-700 px-3 py-2 rounded-xl font-bold transition">👥 الفرق</button>
                     <button onclick="toggleUserHistory()" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-xl font-bold transition">📊 سجل نتائجي السابقة</button>
                     <button onclick="togglePasswordModal()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl font-bold transition">🔒 تغيير كلمة المرور</button>
                 </div>
+            </div>
+
+            <!-- عرض الفرق المتاحة للمستخدم -->
+            <div id="user-teams-card" class="hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-amber-100 shadow-xl shadow-amber-100/50 space-y-4">
+                <div class="flex justify-between items-center border-b pb-2">
+                    <h4 class="font-bold text-slate-800 text-base">👥 الفرق</h4>
+                    <button onclick="toggleUserTeamsView()" class="text-xs text-rose-600 font-bold">إغلاق ✕</button>
+                </div>
+                <div id="user-teams-list" class="space-y-3"></div>
             </div>
 
             <!-- سجل نتائج المتدرب السابقة -->
@@ -266,6 +579,16 @@
                             <button type="button" data-super-only="1" onclick="switchAdminTab('admin-tab-admins')" data-tab="admin-tab-admins" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>👔</span><span>إدارة حسابات المديرين</span>
                             </button>
+                            <button type="button" data-perm="suggestions" onclick="switchAdminTab('admin-tab-suggestions')" data-tab="admin-tab-suggestions" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                                <span>💡</span><span>المقترحات</span>
+                                <span id="suggestions-unread-badge" class="hidden bg-rose-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full"></span>
+                            </button>
+                            <button type="button" data-perm="appreciation" onclick="switchAdminTab('admin-tab-appreciation')" data-tab="admin-tab-appreciation" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                                <span>🏵️</span><span>شهادات التقدير</span>
+                            </button>
+                            <button type="button" data-perm="backup" onclick="switchAdminTab('admin-tab-backup')" data-tab="admin-tab-backup" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                                <span>💾</span><span>نسخة احتياطية</span>
+                            </button>
                         </div>
                     </div>
                     <button type="button" id="sub-admin-change-pass-btn" onclick="subAdminChangePassword()" class="hidden w-full mt-2.5 flex items-center justify-center gap-2 text-xs font-bold px-4 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all">
@@ -286,6 +609,20 @@
                     <input type="password" id="adm-set-pass" placeholder="كلمة المرور الجديدة (اختياري)" class="px-3 py-2.5 border border-slate-200 bg-slate-50/60 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white transition-all">
                 </div>
                 <button onclick="saveAdminSettings()" class="bg-gradient-to-r from-slate-700 to-slate-900 hover:from-slate-800 hover:to-black text-white px-4 py-2 rounded-xl text-xs font-bold">حفظ تعديل بيانات الإدارة</button>
+
+                <div class="border-t pt-4 mt-2 space-y-3">
+                    <h4 class="text-sm font-bold text-slate-800">📊 رفع نتائج الصيانة الإنتاجية الشاملة (TPM)</h4>
+                    <p class="text-[11px] text-slate-500">ملف إكسل بنفس أعمدة النموذج (Factory, Team, Activity, Department, Planned_Point, Actual_Point, Achievement_Pct, Rating_AR) — بيظهر شارت النتائج تلقائيًا في الصفحة الرئيسية.</p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <select id="tpm-upload-half" class="px-3 py-2.5 border border-slate-200 bg-slate-50/60 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white transition-all">
+                            <option value="H1">النصف الأول من العام</option>
+                            <option value="H2">النصف الثاني من العام</option>
+                        </select>
+                        <input type="file" id="tpm-upload-file" accept=".xlsx, .xls" class="md:col-span-2 text-xs text-slate-500 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:bg-indigo-50 file:text-indigo-700">
+                    </div>
+                    <button onclick="uploadTpmResults()" class="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white text-xs px-4 py-2 rounded-xl font-bold transition-all shadow-md shadow-indigo-200">رفع ملف النتائج</button>
+                    <p id="tpm-upload-msg" class="text-xs font-semibold"></p>
+                </div>
             </div>
 
             <!-- ب. طلبات استعادة كلمة المرور -->
@@ -484,12 +821,18 @@
             <!-- ز. إدارة الفرق -->
             <div id="admin-tab-teams" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
                 <h3 class="text-lg font-bold text-slate-800 border-b pb-2">🧩 إدارة الفرق</h3>
-                <p class="text-[11px] text-slate-500">أنشئ الفرق هنا، ثم خصّص فريق كل مستخدم من تبويب "إدارة المشتركين" (حتى فريقين لكل فرد كحد أقصى). يمكنك أيضاً إتاحة امتحان معين لفريق محدد فقط من تبويب "إنشاء دورة جديدة".</p>
+                <p class="text-[11px] text-slate-500">أنشئ الفرق هنا، ثم خصّص فريق كل مستخدم ومهمته داخل الفريق من تبويب "إدارة المشتركين" (حتى فريقين لكل فرد كحد أقصى). يمكنك أيضاً إتاحة امتحان معين لفريق محدد فقط من تبويب "إنشاء دورة جديدة".</p>
                 <div class="flex flex-col sm:flex-row gap-2">
                     <input type="text" id="adm-team-name" placeholder="اسم الفريق الجديد (مثال: فريق الصيانة الوقائية)" class="flex-1 px-3 py-2.5 border border-slate-200 bg-slate-50/60 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white transition-all">
                     <button onclick="addTeam()" class="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs whitespace-nowrap transition-all shadow-md shadow-indigo-200 hover:-translate-y-0.5">➕ إضافة فريق</button>
                 </div>
                 <div id="adm-teams-list" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2"></div>
+
+                <div class="border-t pt-4 flex justify-between items-center">
+                    <h4 class="text-sm font-bold text-slate-700">👥 عرض كل الفرق وأعضائها</h4>
+                    <button onclick="loadTeamsRoster()" class="text-xs font-bold text-indigo-600 hover:underline">🔄 تحديث العرض</button>
+                </div>
+                <div id="adm-teams-roster" class="space-y-3"></div>
             </div>
 
             <!-- ط. لوحة التحليلات -->
@@ -670,11 +1013,81 @@
                             <label class="flex items-center gap-1.5"><input type="checkbox" name="sub_perm" value="teams"> إدارة الفرق</label>
                             <label class="flex items-center gap-1.5"><input type="checkbox" name="sub_perm" value="analytics"> لوحة التحليلات</label>
                             <label class="flex items-center gap-1.5"><input type="checkbox" name="sub_perm" value="skills"> مصفوفة المهارات</label>
+                            <label class="flex items-center gap-1.5"><input type="checkbox" name="sub_perm" value="suggestions"> المقترحات</label>
+                            <label class="flex items-center gap-1.5"><input type="checkbox" name="sub_perm" value="appreciation"> شهادات التقدير</label>
+                            <label class="flex items-center gap-1.5"><input type="checkbox" name="sub_perm" value="backup"> نسخة احتياطية</label>
+                        </div>
+                        <div class="mt-2 pt-2 border-t border-slate-200/70">
+                            <label class="flex items-center gap-1.5 text-xs font-bold text-rose-700 bg-rose-50 px-2.5 py-1.5 rounded-lg w-fit">
+                                <input type="checkbox" name="sub_perm" value="full_access" onchange="toggleFullAccessWarning(this)">
+                                ⚠️ كل الصلاحيات (نفس صلاحيات الأدمن المركزي بالكامل)
+                            </label>
+                            <p class="text-[10px] text-rose-500 mt-1">تحذير: هذه الصلاحية تمنح الشخص كل إمكانيات الأدمن المركزي، بما في ذلك إنشاء وحذف حسابات مديرين آخرين. لا تمنحها إلا لثقتك الكاملة.</p>
                         </div>
                     </div>
                     <button onclick="addSubAdmin()" class="bg-gradient-to-r from-slate-700 to-slate-900 hover:from-slate-800 hover:to-black text-white px-4 py-2 rounded-xl text-xs font-bold">حفظ حساب المدير</button>
                 </div>
                 <div id="adm-sub-admins-list" class="space-y-2"></div>
+            </div>
+
+            <!-- المقترحات -->
+            <div id="admin-tab-suggestions" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
+                <div class="flex justify-between items-center border-b pb-2">
+                    <h3 class="text-lg font-bold text-slate-800">💡 المقترحات والملاحظات</h3>
+                    <div class="flex items-center gap-2">
+                        <button onclick="exportSuggestions()" class="text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-full transition-all">⬇️ تصدير Excel</button>
+                        <button onclick="loadSuggestions()" class="text-xs font-bold text-indigo-600 hover:underline">🔄 تحديث</button>
+                    </div>
+                </div>
+
+                <!-- كروت إحصائية -->
+                <div id="suggestions-count-cards" class="grid grid-cols-2 sm:grid-cols-5 gap-2"></div>
+
+                <!-- فلترة وبحث -->
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <input type="text" id="suggestions-search" oninput="loadSuggestions()" placeholder="بحث بالاسم أو رقم الموبايل أو نص الرسالة..." class="flex-1 px-3 py-2.5 border border-slate-200 bg-slate-50/60 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white transition-all">
+                    <select id="suggestions-status-filter" onchange="loadSuggestions()" class="px-3 py-2.5 border border-slate-200 bg-slate-50/60 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white transition-all">
+                        <option value="all">كل الحالات</option>
+                        <option value="pending">قيد المراجعة</option>
+                        <option value="approved">✓ مقبول</option>
+                        <option value="rejected">✗ مرفوض</option>
+                    </select>
+                </div>
+
+                <div id="adm-suggestions-list" class="space-y-2.5"></div>
+            </div>
+
+            <!-- شهادات التقدير -->
+            <div id="admin-tab-appreciation" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
+                <h3 class="text-lg font-bold text-slate-800 border-b pb-2">🏵️ شهادات التقدير</h3>
+                <p class="text-[11px] text-slate-500">امنح شهادة تقدير لأي فرد بنص حر، مع إمكانية إظهار ترتيبه في دورة معينة أو ترتيبه العام عبر كل الدورات، ونزّلها كملف PDF مباشرة من هنا.</p>
+                <div class="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/70 space-y-3">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <input type="text" id="appr-sap-id" onchange="previewAppreciationRank()" placeholder="رقم الساب (SAP ID)" class="px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                        <textarea id="appr-reason" rows="2" placeholder="نص التقدير (مثال: تقديرًا لتميزه وجهوده المتميزة في...)" class="md:col-span-2 px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all"></textarea>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
+                        <select id="appr-rank-type" onchange="onAppreciationRankTypeChange()" class="px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                            <option value="none">بدون ذكر ترتيب</option>
+                            <option value="exam">ترتيبه في دورة معينة</option>
+                            <option value="general">ترتيبه العام (كل الدورات)</option>
+                        </select>
+                        <select id="appr-exam-select" onchange="previewAppreciationRank()" class="hidden md:col-span-1 px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                            <option value="">اختر الدورة...</option>
+                        </select>
+                        <p id="appr-rank-preview" class="text-xs font-bold text-emerald-600"></p>
+                    </div>
+                    <button onclick="grantAppreciation()" class="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md shadow-amber-200">🏵️ منح الشهادة</button>
+                </div>
+                <div id="adm-appreciation-list" class="space-y-2"></div>
+            </div>
+
+            <!-- نسخة احتياطية -->
+            <div id="admin-tab-backup" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
+                <h3 class="text-lg font-bold text-slate-800 border-b pb-2">💾 نسخة احتياطية لقاعدة البيانات</h3>
+                <p class="text-[11px] text-slate-500">تحميل فوري لملف إكسل يحتوي كل جداول النظام (المستخدمين، الامتحانات، النتائج، الفرق، نتائج TPM، المقترحات... إلخ)، كل جدول في ورقة مستقلة.</p>
+                <button onclick="downloadBackup()" class="bg-gradient-to-r from-slate-700 to-slate-900 hover:from-slate-800 hover:to-black text-white px-4 py-2 rounded-xl text-xs font-bold transition-all">⬇️ تحميل نسخة احتياطية الآن</button>
+                <p class="text-[11px] text-slate-400 pt-2 border-t">💡 النسخ التلقائي الدوري عبر البريد الإلكتروني يحتاج ربط خدمة بريد (SMTP) وجدولة دورية على السيرفر — تواصل معنا لو حابب نجهزها كخطوة تانية.</p>
             </div>
 
                 </div>
@@ -895,6 +1308,7 @@
         let timerInterval = null;
         let activeTargetQuestionId = null;
         let galleryImages = [];
+        let teamMemberRolesCache = [];
 
         // --- طبقة اتصال موحّدة تُرفق تلقائيًا رمز الجلسة (Authorization) مع كل طلب ---
         async function apiFetch(url, options = {}) {
@@ -915,6 +1329,269 @@
             return res;
         }
 
+        // --- نافذة التواصل ---
+        function openContactModal() { document.getElementById('contact-modal').classList.remove('hidden'); }
+        function closeContactModal() { document.getElementById('contact-modal').classList.add('hidden'); }
+
+        // --- نافذة اقتراح بتعديل ---
+        function openSuggestionModal() { document.getElementById('suggestion-modal').classList.remove('hidden'); }
+        function closeSuggestionModal() { document.getElementById('suggestion-modal').classList.add('hidden'); }
+        async function submitSuggestion() {
+            const phone = document.getElementById('suggestion-phone').value.trim();
+            const name = document.getElementById('suggestion-name').value.trim();
+            const message = document.getElementById('suggestion-message').value.trim();
+            if (!message) { alert('من فضلك اكتب نص الاقتراح أو المشكلة.'); return; }
+            try {
+                const res = await fetch('/api/public/suggestions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone, name, message })
+                });
+                if (res.ok) {
+                    alert('تم إرسال اقتراحك بنجاح، شكرًا لك!');
+                    document.getElementById('suggestion-phone').value = '';
+                    document.getElementById('suggestion-name').value = '';
+                    document.getElementById('suggestion-message').value = '';
+                    closeSuggestionModal();
+                } else {
+                    const data = await res.json();
+                    alert(data.detail || 'حدث خطأ، حاول مرة أخرى.');
+                }
+            } catch (e) {
+                alert('تعذّر الإرسال، تأكد من الاتصال بالإنترنت.');
+            }
+        }
+
+        // --- فتح تسجيل الدخول من الشريط العلوي (بقى مكانه أعلى الصفحة بجوار الـ Hero) ---
+        function openLoginAtTop() {
+            switchView('view-login-user');
+            const el = document.getElementById('view-login-user');
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        // --- نقل كارت تسجيل الدخول ليظهر أعلى الصفحة بجوار قسم الـ Hero بدل أسفلها ---
+        (function relocateLoginCards() {
+            const anchor = document.getElementById('login-anchor');
+            const u = document.getElementById('view-login-user');
+            const a = document.getElementById('view-login-admin');
+            if (anchor && u && a) { anchor.after(u, a); }
+        })();
+
+        // --- خطة المنصة (Roadmap) ---
+        const PLATFORM_ROADMAP = [
+            { date: '2026-06-01', label: 'تخطيط المنصة' },
+            { date: '2026-06-15', label: 'تصميم الواجهة وتنظيم الامتحانات' },
+            { date: '2026-07-15', label: 'إضافة مصفوفة المهارات للأفراد' },
+            { date: '2026-08-16', label: 'إعداد ورفع الامتحانات وبداية التجريب' },
+            { divider: 'بداية إعداد النسخة الثانية من النظام' },
+            { date: '2026-08-17', label: 'تجهيز وضبط لوحة الشرف' },
+            { date: '2026-08-19', label: 'إعداد تحليلات الأداء' },
+            { date: '2026-08-24', label: 'إضافة تعديلات لضبط الإدارة والتحكم للمسئولين' },
+            { divider: 'انطلاق النسخة الثانية من النظام' },
+            { date: '2026-08-27', label: 'إضافة خاصية مراجعة الامتحانات والإجابات للأفراد' },
+            { date: '2026-08-30', label: 'إضافة خاصية شهادات التقدير وتحسين واجهة النظام' },
+            { date: '2026-09-02', label: 'اعتماد شهادات التقدير من السيد رئيس النشاط' },
+            { divider: 'انطلاق النسخة الثالثة من النظام' },
+            { date: '2026-09-07', label: 'إضافة شاشات الدورات التدريبية للإدارة' },
+            { date: '2026-09-10', label: 'تجهيز المواد العلمية ورفع الدورات التدريبية' },
+            { date: '2026-11-01', label: 'مراجعة الاقتراحات والاستعداد لإطلاق المرحلة الثالثة أو النسخة الرابعة من النظام' },
+        ];
+
+        function renderRoadmap() {
+            const box = document.getElementById('platform-roadmap');
+            if (!box) return;
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            const monthsAr = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+            let html = '';
+            PLATFORM_ROADMAP.forEach((item, idx) => {
+                if (item.divider) {
+                    html += `<div class="my-3 text-center"><span class="inline-block text-[11px] font-bold bg-gradient-to-r from-amber-500 to-orange-500 text-white px-3 py-1.5 rounded-full shadow-sm">🚀 ${item.divider}</span></div>`;
+                    return;
+                }
+                const d = new Date(item.date);
+                const isLast = idx === PLATFORM_ROADMAP.length - 1;
+                let status = 'upcoming';
+                if (d.getTime() === today.getTime()) status = 'today';
+                else if (d < today) status = 'done';
+                const dotClass = status === 'done' ? 'bg-emerald-500' : status === 'today' ? 'bg-amber-500 animate-pulse' : 'bg-slate-300';
+                const textClass = status === 'upcoming' ? 'text-slate-400' : 'text-slate-700';
+                const dateLabel = `${d.getDate()} ${monthsAr[d.getMonth()]} ${d.getFullYear()}`;
+                html += `
+                <div class="flex gap-3 ${isLast ? '' : 'pb-4'} relative">
+                    ${isLast ? '' : '<span class="absolute right-[5px] top-4 bottom-0 w-px bg-slate-200"></span>'}
+                    <span class="mt-1.5 w-3 h-3 rounded-full ${dotClass} shrink-0 z-10"></span>
+                    <div class="flex-1">
+                        <p class="text-xs font-bold ${textClass}">${item.label}${status === 'today' ? ' <span class="text-amber-600">(جاري العمل عليه الآن)</span>' : ''}</p>
+                        <p class="text-[10px] text-slate-400 mt-0.5">${dateLabel}</p>
+                    </div>
+                </div>`;
+            });
+            box.innerHTML = html;
+        }
+        renderRoadmap();
+
+        // --- نتائج TPM (شارتات) ---
+        let tpmCharts = {};
+        async function loadTpmResultsChart(half = 'H1') {
+            try {
+                const res = await fetch(`/api/public/tpm-results?half=${half}`);
+                const data = await res.json();
+                const section = document.getElementById('tpm-results-section');
+                if (!data.has_data) { section.classList.add('hidden'); return; }
+                section.classList.remove('hidden');
+                document.getElementById('tpm-results-subtitle').innerText = half === 'H1' ? 'نتائج النصف الأول من العام' : 'نتائج النصف الثاني من العام';
+
+                Object.values(tpmCharts).forEach(ch => ch.destroy());
+                tpmCharts = {};
+
+                const palette = ['#4f46e5', '#059669', '#d97706', '#0891b2', '#db2777'];
+
+                tpmCharts.deptAvg = new Chart(document.getElementById('chart-dept-avg'), {
+                    type: 'bar',
+                    data: { labels: data.departments, datasets: [{ label: 'متوسط الإنجاز %', data: data.department_avg, backgroundColor: '#4f46e5', borderRadius: 8 }] },
+                    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100 } } }
+                });
+
+                tpmCharts.pillars = new Chart(document.getElementById('chart-pillars'), {
+                    type: 'bar',
+                    data: {
+                        labels: data.pillars,
+                        datasets: data.departments.map((dept, i) => ({
+                            label: dept, data: data.pillar_by_department[dept], backgroundColor: palette[i % palette.length], borderRadius: 6
+                        }))
+                    },
+                    options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } }, scales: { y: { beginAtZero: true, max: 100 } } }
+                });
+
+                const stepBox = document.getElementById('tpm-step-charts');
+                stepBox.innerHTML = '';
+                const pillarNames = { JH: 'خطوات الصيانة الذاتية (Jishu Hozen)', PM: 'خطوات الصيانة المخططة (PM)' };
+                Object.keys(data.step_charts || {}).forEach(pillar => {
+                    const chartId = `chart-step-${pillar}`;
+                    const card = document.createElement('div');
+                    card.className = 'bg-white/80 backdrop-blur border border-slate-100 rounded-3xl p-5 shadow-sm';
+                    card.innerHTML = `<h4 class="font-bold text-slate-700 text-sm mb-3">${pillarNames[pillar] || pillar}</h4><canvas id="${chartId}" height="220"></canvas>`;
+                    stepBox.appendChild(card);
+                    const sc = data.step_charts[pillar];
+                    tpmCharts[chartId] = new Chart(document.getElementById(chartId), {
+                        type: 'line',
+                        data: {
+                            labels: sc.steps,
+                            datasets: data.departments.map((dept, i) => ({
+                                label: dept, data: sc.series[dept], borderColor: palette[i % palette.length],
+                                backgroundColor: palette[i % palette.length], tension: 0.3, spanGaps: true
+                            }))
+                        },
+                        options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } }, scales: { y: { beginAtZero: true, max: 100 } } }
+                    });
+                });
+            } catch (e) { console.warn('TPM chart load failed', e); }
+            checkTpmComparisonAvailability();
+        }
+        loadTpmResultsChart('H1');
+
+        // --- مقارنة نتائج TPM بين النصف الأول والثاني ---
+        let tpmComparisonData = null;
+        let tpmComparisonCharts = {};
+
+        async function checkTpmComparisonAvailability() {
+            try {
+                const res = await fetch('/api/public/tpm-results/comparison');
+                const data = await res.json();
+                const btn = document.getElementById('tpm-compare-toggle-btn');
+                if (data.has_both) {
+                    tpmComparisonData = data;
+                    btn.classList.remove('hidden');
+                } else {
+                    btn.classList.add('hidden');
+                }
+            } catch (e) { console.warn('TPM comparison check failed', e); }
+        }
+
+        function toggleTpmComparisonView() {
+            const single = document.getElementById('tpm-single-half-view');
+            const compare = document.getElementById('tpm-comparison-view');
+            const btn = document.getElementById('tpm-compare-toggle-btn');
+            const showingCompare = !compare.classList.contains('hidden');
+            if (showingCompare) {
+                compare.classList.add('hidden');
+                single.classList.remove('hidden');
+                btn.innerText = '📊 قارن بين النصف الأول والثاني';
+            } else {
+                single.classList.add('hidden');
+                compare.classList.remove('hidden');
+                btn.innerText = '⬅️ الرجوع للعرض العادي';
+                renderTpmComparisonCharts();
+            }
+        }
+
+        function renderTpmComparisonCharts() {
+            if (!tpmComparisonData) return;
+            const d = tpmComparisonData;
+            document.getElementById('tpm-h1-overall').innerText = d.h1_overall_avg + '%';
+            document.getElementById('tpm-h2-overall').innerText = d.h2_overall_avg + '%';
+
+            Object.values(tpmComparisonCharts).forEach(ch => ch.destroy());
+            tpmComparisonCharts = {};
+
+            tpmComparisonCharts.deptCompare = new Chart(document.getElementById('chart-compare-dept'), {
+                type: 'bar',
+                data: {
+                    labels: d.departments,
+                    datasets: [
+                        { label: 'النصف الأول', data: d.h1_department_avg, backgroundColor: '#4f46e5', borderRadius: 6 },
+                        { label: 'النصف الثاني', data: d.h2_department_avg, backgroundColor: '#059669', borderRadius: 6 },
+                    ]
+                },
+                options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } }, scales: { y: { beginAtZero: true, max: 100 } } }
+            });
+
+            const deptSelect = document.getElementById('tpm-compare-dept-select');
+            deptSelect.innerHTML = d.departments.map(dep => `<option value="${dep}">${dep}</option>`).join('');
+            renderTpmComparisonPillarChart();
+        }
+
+        function renderTpmComparisonPillarChart() {
+            if (!tpmComparisonData) return;
+            const d = tpmComparisonData;
+            const dept = document.getElementById('tpm-compare-dept-select').value || d.departments[0];
+            if (tpmComparisonCharts.pillarCompare) tpmComparisonCharts.pillarCompare.destroy();
+            tpmComparisonCharts.pillarCompare = new Chart(document.getElementById('chart-compare-pillars'), {
+                type: 'bar',
+                data: {
+                    labels: d.pillars,
+                    datasets: [
+                        { label: 'النصف الأول', data: d.h1_pillar_by_department[dept], backgroundColor: '#4f46e5', borderRadius: 6 },
+                        { label: 'النصف الثاني', data: d.h2_pillar_by_department[dept], backgroundColor: '#059669', borderRadius: 6 },
+                    ]
+                },
+                options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } }, scales: { y: { beginAtZero: true, max: 100 } } }
+            });
+        }
+
+        // --- شارات الإحصائيات العامة للمنصة ---
+        async function loadPlatformStats() {
+            try {
+                const res = await fetch('/api/public/platform-stats');
+                const s = await res.json();
+                const box = document.getElementById('platform-stats-badges');
+                const badges = [
+                    { icon: '📚', value: s.courses_count, label: 'دورة وامتحان' },
+                    { icon: '🧑‍🤝‍🧑', value: s.examinees_count, label: 'ممتحن' },
+                    { icon: '📝', value: s.submissions_count, label: 'محاولة امتحان' },
+                    { icon: '👥', value: s.users_count, label: 'مستخدم مسجل' },
+                    { icon: '🏭', value: s.teams_count, label: 'فريق TPM' },
+                ];
+                box.innerHTML = badges.map(b => `
+                    <div class="bg-white/80 backdrop-blur border border-slate-100 rounded-2xl p-4 text-center shadow-sm">
+                        <div class="text-xl mb-1">${b.icon}</div>
+                        <div class="font-display font-extrabold text-xl text-slate-800">${b.value}</div>
+                        <div class="text-[10px] text-slate-400 font-semibold mt-0.5">${b.label}</div>
+                    </div>`).join('');
+            } catch (e) { console.warn('Platform stats load failed', e); }
+        }
+        loadPlatformStats();
+
         function handleSessionExpired() {
             authToken = null;
             localStorage.removeItem('authToken');
@@ -923,6 +1600,10 @@
             switchView('view-login-user');
             document.getElementById('session-badge').classList.add('hidden');
             document.getElementById('logout-btn').classList.add('hidden');
+            document.getElementById('top-nav').classList.remove('hidden');
+            const pill = document.getElementById('floating-session-pill');
+            pill.classList.add('hidden');
+            pill.classList.remove('flex');
         }
 
         function switchView(viewId) {
@@ -930,6 +1611,25 @@
             document.getElementById(viewId).classList.remove('hidden');
             const timerFloat = document.getElementById('exam-timer-float');
             if (timerFloat) timerFloat.classList.toggle('hidden', viewId !== 'view-exam-active');
+            const introLanding = document.getElementById('site-intro-landing');
+            if (introLanding) introLanding.classList.toggle('hidden', viewId !== 'view-login-user' && viewId !== 'view-login-admin');
+
+            // إخفاء الأزرار العائمة (لوحة الشرف + شريط الجلسة) أثناء الامتحان
+            // عشان ميحجبوش زرار التسليم أو عنوان الامتحان
+            const inExam = (viewId === 'view-exam-active');
+            const leaderboardFloat = document.getElementById('leaderboard-float-btn');
+            if (leaderboardFloat) leaderboardFloat.classList.toggle('hidden', inExam);
+            const sessionPill = document.getElementById('floating-session-pill');
+            if (sessionPill) {
+                if (inExam) {
+                    sessionPill.classList.add('hidden');
+                    sessionPill.classList.remove('flex');
+                } else if (currentUser) {
+                    sessionPill.classList.remove('hidden');
+                    sessionPill.classList.add('flex');
+                }
+            }
+
             if (viewId === 'view-leaderboards') {
                 loadLeaderboardExams();
                 loadGeneralLeaderboard();
@@ -947,6 +1647,9 @@
             if (tabId === 'admin-tab-analytics') loadAnalytics();
             if (tabId === 'admin-tab-skills') loadSkills();
             if (tabId === 'admin-tab-pending') loadPendingAttempts();
+            if (tabId === 'admin-tab-teams') loadTeamsRoster();
+            if (tabId === 'admin-tab-suggestions') loadSuggestions();
+            if (tabId === 'admin-tab-appreciation') loadAppreciationList();
         }
 
         function setSession(user, role) {
@@ -955,13 +1658,22 @@
             const logoutBtn = document.getElementById('logout-btn');
             badge.classList.remove('hidden');
             logoutBtn.classList.remove('hidden');
+            let label = '';
             if (role === 'super_admin') {
-                badge.innerText = `الإدارة المركزية (${user.name})`;
+                label = `الإدارة المركزية (${user.name})`;
             } else if (role === 'admin') {
-                badge.innerText = `مدير: ${user.name}`;
+                label = `مدير: ${user.name}`;
             } else {
-                badge.innerText = `${user.name} - ${user.department}`;
+                label = `${user.name} - ${user.department}`;
             }
+            badge.innerText = label;
+
+            // إخفاء الشريط العلوي الكامل بعد تسجيل الدخول، وإظهار شريط الجلسة العائم الصغير بدلًا منه
+            document.getElementById('top-nav').classList.add('hidden');
+            const pill = document.getElementById('floating-session-pill');
+            pill.classList.remove('hidden');
+            pill.classList.add('flex');
+            document.getElementById('floating-session-name').innerText = label;
         }
 
         function logout() {
@@ -971,6 +1683,10 @@
             clearInterval(timerInterval);
             document.getElementById('session-badge').classList.add('hidden');
             document.getElementById('logout-btn').classList.add('hidden');
+            document.getElementById('top-nav').classList.remove('hidden');
+            const pill = document.getElementById('floating-session-pill');
+            pill.classList.add('hidden');
+            pill.classList.remove('flex');
             switchView('view-login-user');
         }
 
@@ -1041,6 +1757,7 @@
                     if (currentUser.role === 'super_admin') {
                         loadAdminProfileData().catch(e => console.error(e));
                         loadSubAdmins().catch(e => console.error(e));
+                        loadSuggestions().catch(e => console.error(e));
                     }
                     loadResetRequests().catch(e => console.error(e));
                     loadAdminGallery().catch(e => console.error(e));
@@ -1061,9 +1778,10 @@
         function applyAdminPermissionsUI() {
             const role = currentUser?.role;
             const perms = currentUser?.permissions || [];
-            const isSuper = role === 'super_admin';
+            const hasFullAccess = perms.includes('full_access');
+            const isSuper = role === 'super_admin' || hasFullAccess;
 
-            // تبويبات مقصورة على الأدمن المركزي فقط
+            // تبويبات مقصورة على الأدمن المركزي فقط (أو من مُنح صلاحية "كل الصلاحيات")
             document.querySelectorAll('[data-super-only="1"]').forEach(el => {
                 el.classList.toggle('hidden', !isSuper);
             });
@@ -1120,6 +1838,237 @@
             const res = await apiFetch('/api/admin/profile/update', { method: 'POST', body: fd });
             const data = await res.json();
             alert(data.message);
+        }
+
+        // --- المقترحات (أدمن مركزي فقط) ---
+        async function loadSuggestions() {
+            const cont = document.getElementById('adm-suggestions-list');
+            if (!cont) return;
+            cont.innerHTML = '<p class="text-xs text-slate-400">جارِ التحميل...</p>';
+
+            const statusFilter = document.getElementById('suggestions-status-filter')?.value || 'all';
+            const q = document.getElementById('suggestions-search')?.value || '';
+            const res = await apiFetch(`/api/admin/suggestions?status=${encodeURIComponent(statusFilter)}&q=${encodeURIComponent(q)}`);
+            if (!res.ok) { cont.innerHTML = '<p class="text-xs text-rose-500">تعذّر تحميل المقترحات.</p>'; return; }
+            const data = await res.json();
+            const list = data.items;
+            const counts = data.counts;
+
+            const badge = document.getElementById('suggestions-unread-badge');
+            if (badge) {
+                badge.classList.toggle('hidden', counts.unread === 0);
+                badge.innerText = counts.unread;
+            }
+
+            const cardsCont = document.getElementById('suggestions-count-cards');
+            if (cardsCont) {
+                const cards = [
+                    { label: 'الكل', value: counts.all, color: 'text-slate-700' },
+                    { label: 'قيد المراجعة', value: counts.pending, color: 'text-amber-600' },
+                    { label: 'مقبول', value: counts.approved, color: 'text-emerald-600' },
+                    { label: 'مرفوض', value: counts.rejected, color: 'text-rose-600' },
+                    { label: 'غير مقروء', value: counts.unread, color: 'text-indigo-600' },
+                ];
+                cardsCont.innerHTML = cards.map(c => `
+                    <div class="bg-slate-50/80 border border-slate-200/70 rounded-xl p-3 text-center">
+                        <div class="font-display font-extrabold text-lg ${c.color}">${c.value}</div>
+                        <div class="text-[10px] text-slate-400 font-semibold">${c.label}</div>
+                    </div>`).join('');
+            }
+
+            if (list.length === 0) {
+                cont.innerHTML = '<p class="text-slate-500 text-xs">لا توجد مقترحات مطابقة.</p>';
+                return;
+            }
+            const statusBadge = (s) => {
+                if (s.status === 'approved') return '<span class="text-[10px] font-bold text-emerald-600">✓ مقبول</span>';
+                if (s.status === 'rejected') return '<span class="text-[10px] font-bold text-rose-600">✗ مرفوض</span>';
+                return '<span class="text-[10px] font-bold text-amber-600">⏳ قيد المراجعة</span>';
+            };
+            cont.innerHTML = list.map(s => `
+                <div class="p-4 rounded-2xl border ${s.is_read ? 'bg-slate-50/60 border-slate-200/70' : 'bg-amber-50/60 border-amber-200'} space-y-2">
+                    <div class="flex justify-between items-start gap-2">
+                        <div class="text-xs">
+                            <span class="font-bold text-slate-800">${s.name || 'بدون اسم'}</span>
+                            ${s.phone ? `<span class="text-slate-400 font-mono"> — ${s.phone}</span>` : ''}
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            ${statusBadge(s)}
+                            <span class="text-[10px] text-slate-400">${s.created_at}</span>
+                        </div>
+                    </div>
+                    <p class="text-xs text-slate-700 leading-relaxed">${s.message}</p>
+                    ${s.admin_reply ? `<p class="text-[11px] text-indigo-700 bg-indigo-50 rounded-lg px-2.5 py-1.5"><b>رد الإدارة:</b> ${s.admin_reply}</p>` : ''}
+                    <div class="flex items-center gap-2 pt-1 border-t border-dashed border-slate-200">
+                        <input type="text" id="reply-input-${s.id}" placeholder="اكتب ردًا (اختياري)..." value="${s.admin_reply || ''}" class="flex-1 text-[11px] px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-300">
+                        <button onclick="respondToSuggestion(${s.id}, 'approved')" class="text-[11px] font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2.5 py-1.5 rounded-lg transition-all">✓ قبول</button>
+                        <button onclick="respondToSuggestion(${s.id}, 'rejected')" class="text-[11px] font-bold bg-rose-100 hover:bg-rose-200 text-rose-700 px-2.5 py-1.5 rounded-lg transition-all">✗ رفض</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function respondToSuggestion(id, status) {
+            const replyInput = document.getElementById(`reply-input-${id}`);
+            const fd = new FormData();
+            fd.append('status', status);
+            fd.append('admin_reply', replyInput ? replyInput.value : '');
+            await apiFetch(`/api/admin/suggestions/${id}/respond`, { method: 'POST', body: fd });
+            loadSuggestions();
+        }
+
+        async function markSuggestionRead(id) {
+            await apiFetch(`/api/admin/suggestions/${id}/mark-read`, { method: 'POST' });
+            loadSuggestions();
+        }
+
+        async function exportSuggestions() {
+            const res = await apiFetch('/api/admin/suggestions/export');
+            if (!res.ok) { alert('تعذّر تصدير الملف.'); return; }
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = 'suggestions_export.xlsx';
+            document.body.appendChild(a); a.click(); a.remove();
+            window.URL.revokeObjectURL(url);
+        }
+
+        // --- شهادات التقدير ---
+        const rankTypeLabels = { none: '', exam: '🏆 دورة', general: '🏆 عام' };
+
+        async function loadAppreciationList() {
+            const cont = document.getElementById('adm-appreciation-list');
+            if (!cont) return;
+            cont.innerHTML = '<p class="text-xs text-slate-400">جارِ التحميل...</p>';
+            const res = await apiFetch('/api/admin/appreciation/list');
+            if (!res.ok) { cont.innerHTML = '<p class="text-xs text-rose-500">تعذّر تحميل الشهادات.</p>'; return; }
+            const list = await res.json();
+            if (list.length === 0) { cont.innerHTML = '<p class="text-slate-500 text-xs">لا توجد شهادات تقدير ممنوحة بعد.</p>'; return; }
+            cont.innerHTML = list.map(a => {
+                let rankNote = '';
+                if (a.rank_type === 'exam' && a.rank_value) rankNote = `<span class="text-[10px] font-bold text-emerald-600">🏆 المركز ${a.rank_value} — ${a.exam_name || ''}</span>`;
+                else if (a.rank_type === 'general' && a.rank_value) rankNote = `<span class="text-[10px] font-bold text-emerald-600">🏆 المركز ${a.rank_value} عام</span>`;
+                return `
+                <div class="flex items-center justify-between p-3 bg-slate-50/80 border border-slate-200/70 rounded-xl text-xs gap-2">
+                    <div>
+                        <span class="font-bold text-slate-800">🏵️ ${a.user_name}</span>
+                        <span class="text-slate-400 font-mono"> (${a.sap_id})</span>
+                        ${rankNote ? `<span class="mr-2">${rankNote}</span>` : ''}
+                        <p class="text-[11px] text-slate-500 mt-0.5">${a.reason_text}</p>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <a href="/api/admin/appreciation/${a.id}/download" target="_blank" class="text-[11px] font-bold bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-2.5 py-1.5 rounded-lg transition-all">⬇️ تنزيل</a>
+                        <button onclick="deleteAppreciation(${a.id})" class="text-rose-600 hover:text-rose-800 font-bold">حذف</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        async function ensureAppreciationExamOptions() {
+            const sel = document.getElementById('appr-exam-select');
+            if (sel.dataset.loaded) return;
+            const res = await apiFetch('/api/admin/appreciation/exams-list');
+            if (res.ok) {
+                const exams = await res.json();
+                sel.innerHTML = '<option value="">اختر الدورة...</option>' + exams.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
+                sel.dataset.loaded = '1';
+            }
+        }
+
+        async function onAppreciationRankTypeChange() {
+            const type = document.getElementById('appr-rank-type').value;
+            const examSelect = document.getElementById('appr-exam-select');
+            examSelect.classList.toggle('hidden', type !== 'exam');
+            if (type === 'exam') await ensureAppreciationExamOptions();
+            previewAppreciationRank();
+        }
+
+        async function previewAppreciationRank() {
+            const preview = document.getElementById('appr-rank-preview');
+            const sapId = document.getElementById('appr-sap-id').value.trim();
+            const rankType = document.getElementById('appr-rank-type').value;
+            const examId = document.getElementById('appr-exam-select').value;
+            preview.innerText = '';
+            if (!sapId || rankType === 'none') return;
+            if (rankType === 'exam' && !examId) return;
+            let url = `/api/admin/appreciation/preview-rank?sap_id=${encodeURIComponent(sapId)}&rank_type=${rankType}`;
+            if (rankType === 'exam') url += `&exam_id=${examId}`;
+            const res = await apiFetch(url);
+            if (!res.ok) { preview.className = 'text-xs font-bold text-rose-500'; preview.innerText = 'تعذّر حساب الترتيب.'; return; }
+            const data = await res.json();
+            if (data.rank) {
+                preview.className = 'text-xs font-bold text-emerald-600';
+                preview.innerText = `الترتيب الحالي: المركز ${data.rank}`;
+            } else {
+                preview.className = 'text-xs font-bold text-amber-600';
+                preview.innerText = 'لا توجد نتيجة مسجّلة لحساب الترتيب.';
+            }
+        }
+
+        async function grantAppreciation() {
+            const sapId = document.getElementById('appr-sap-id').value.trim();
+            const reason = document.getElementById('appr-reason').value.trim();
+            const rankType = document.getElementById('appr-rank-type').value;
+            const examId = document.getElementById('appr-exam-select').value;
+            if (!sapId || !reason) return alert('من فضلك أدخل رقم الساب ونص التقدير.');
+            if (rankType === 'exam' && !examId) return alert('من فضلك اختر الدورة.');
+            const fd = new FormData();
+            fd.append('sap_id', sapId);
+            fd.append('reason_text', reason);
+            fd.append('rank_type', rankType);
+            if (rankType === 'exam') fd.append('exam_id', examId);
+            const res = await apiFetch('/api/admin/appreciation/grant', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (!res.ok) return alert(data.detail || 'فشل منح الشهادة.');
+            alert(data.message);
+            document.getElementById('appr-sap-id').value = '';
+            document.getElementById('appr-reason').value = '';
+            document.getElementById('appr-rank-type').value = 'none';
+            document.getElementById('appr-exam-select').classList.add('hidden');
+            document.getElementById('appr-rank-preview').innerText = '';
+            loadAppreciationList();
+        }
+
+        async function deleteAppreciation(id) {
+            if (!confirm('حذف شهادة التقدير دي؟')) return;
+            await apiFetch(`/api/admin/appreciation/${id}`, { method: 'DELETE' });
+            loadAppreciationList();
+        }
+
+        // --- نسخة احتياطية ---
+        async function downloadBackup() {
+            const res = await apiFetch('/api/admin/backup/download');
+            if (!res.ok) { alert('تعذّر إنشاء النسخة الاحتياطية.'); return; }
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `tpm_backup_${new Date().toISOString().slice(0,10)}.xlsx`;
+            document.body.appendChild(a); a.click(); a.remove();
+            window.URL.revokeObjectURL(url);
+        }
+
+        async function uploadTpmResults() {
+            const fileInput = document.getElementById('tpm-upload-file');
+            const half = document.getElementById('tpm-upload-half').value;
+            const msg = document.getElementById('tpm-upload-msg');
+            if (!fileInput.files.length) { msg.className = 'text-xs font-semibold text-rose-600'; msg.innerText = 'من فضلك اختر ملف الإكسل أولاً.'; return; }
+            const fd = new FormData();
+            fd.append('half_period', half);
+            fd.append('file', fileInput.files[0]);
+            msg.className = 'text-xs font-semibold text-slate-400';
+            msg.innerText = 'جارِ الرفع...';
+            try {
+                const res = await apiFetch('/api/admin/tpm-results/upload', { method: 'POST', body: fd });
+                const data = await res.json();
+                if (!res.ok) { msg.className = 'text-xs font-semibold text-rose-600'; msg.innerText = data.detail || 'فشل رفع الملف.'; return; }
+                msg.className = 'text-xs font-semibold text-emerald-600';
+                msg.innerText = `تم استيراد ${data.rows_imported} صف بنجاح لنتائج ${data.half_period === 'H1' ? 'النصف الأول' : 'النصف الثاني'}.`;
+                fileInput.value = '';
+                if (typeof loadTpmResultsChart === 'function') loadTpmResultsChart(half);
+            } catch (e) {
+                msg.className = 'text-xs font-semibold text-rose-600';
+                msg.innerText = 'تعذّر رفع الملف، تأكد من الاتصال.';
+            }
         }
 
         async function loadResetRequests() {
@@ -1265,6 +2214,37 @@
                     </div>
                 `;
                 }).join('');
+            }
+        }
+
+        async function toggleUserTeamsView() {
+            const card = document.getElementById('user-teams-card');
+            card.classList.toggle('hidden');
+            if (!card.classList.contains('hidden')) {
+                const cont = document.getElementById('user-teams-list');
+                cont.innerHTML = '<p class="text-xs text-slate-400">جارِ التحميل...</p>';
+                const res = await apiFetch('/api/user/teams');
+                const teams = await res.json();
+                if (!res.ok || teams.length === 0) {
+                    cont.innerHTML = '<p class="text-slate-500 text-xs">لا توجد فرق متاحة للعرض حاليًا.</p>';
+                    return;
+                }
+                cont.innerHTML = teams.map(t => `
+                    <div class="border border-slate-200/70 rounded-2xl p-3.5 bg-slate-50/50">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="font-bold text-slate-700 text-xs">🧩 ${t.name}</span>
+                            <span class="text-[10px] text-slate-400">${t.members.length} عضو</span>
+                        </div>
+                        ${t.members.length === 0
+                            ? '<p class="text-[11px] text-slate-400">لا يوجد أعضاء بعد.</p>'
+                            : `<div class="grid sm:grid-cols-2 gap-1.5">${t.members.map(m => `
+                                <div class="flex items-center justify-between bg-white border border-slate-100 rounded-lg px-2.5 py-1.5 text-[11px]">
+                                    <span class="font-semibold text-slate-700">${m.name}</span>
+                                    <span class="text-indigo-600 font-bold">${m.role_in_team || '—'}</span>
+                                </div>`).join('')}</div>`
+                        }
+                    </div>
+                `).join('');
             }
         }
 
@@ -2319,9 +3299,65 @@
             cont.innerHTML = allTeamsCache.map(t => `
                 <div class="flex items-center justify-between p-3 bg-slate-50/80 border border-slate-200/70 rounded-xl text-xs">
                     <span class="font-bold text-slate-700">🧩 ${t.name}</span>
-                    <button onclick="deleteTeam(${t.id}, '${t.name}')" class="text-rose-600 hover:text-rose-800 font-bold">حذف</button>
+                    <div class="flex items-center gap-2">
+                        <select onchange="setTeamVisibility(${t.id}, this.value)" class="text-[10px] border border-slate-200 rounded-lg px-1.5 py-1 bg-white outline-none cursor-pointer">
+                            <option value="public" ${t.visibility === 'public' ? 'selected' : ''}>🌐 يشوفه الجميع</option>
+                            <option value="team_only" ${t.visibility === 'team_only' ? 'selected' : ''}>🔒 لأعضاء الفريق فقط</option>
+                        </select>
+                        <button onclick="deleteTeam(${t.id}, '${t.name}')" class="text-rose-600 hover:text-rose-800 font-bold">حذف</button>
+                    </div>
                 </div>
             `).join('');
+        }
+
+        async function setTeamVisibility(teamId, visibility) {
+            const fd = new FormData();
+            fd.append('visibility', visibility);
+            const res = await apiFetch(`/api/admin/teams/${teamId}/visibility`, { method: 'POST', body: fd });
+            if (!res.ok) { const d = await res.json(); alert(d.detail || 'فشل تحديث الرؤية.'); return; }
+            loadTeamsList();
+        }
+
+        async function loadTeamsRoster() {
+            const cont = document.getElementById('adm-teams-roster');
+            if (!cont) return;
+            cont.innerHTML = '<p class="text-xs text-slate-400">جارِ التحميل...</p>';
+            const res = await apiFetch('/api/admin/teams/roster');
+            const data = await res.json();
+
+            let html = '';
+            data.teams.forEach(t => {
+                html += `
+                <div class="border border-slate-200/70 rounded-2xl p-3.5 bg-slate-50/50">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="font-bold text-slate-700 text-xs">🧩 ${t.name}</span>
+                        <span class="text-[10px] font-bold ${t.visibility === 'public' ? 'text-emerald-600' : 'text-amber-600'}">${t.visibility === 'public' ? '🌐 يشوفه الجميع' : '🔒 لأعضاء الفريق فقط'} — ${t.members.length} عضو</span>
+                    </div>
+                    ${t.members.length === 0
+                        ? '<p class="text-[11px] text-slate-400">لا يوجد أعضاء في هذا الفريق بعد.</p>'
+                        : `<div class="grid sm:grid-cols-2 gap-1.5">${t.members.map(m => `
+                            <div class="flex items-center justify-between bg-white border border-slate-100 rounded-lg px-2.5 py-1.5 text-[11px]">
+                                <span class="font-semibold text-slate-700">${m.name} <span class="text-slate-400 font-mono">(${m.sap_id})</span></span>
+                                <span class="text-indigo-600 font-bold">${m.role_in_team || '—'}</span>
+                            </div>`).join('')}</div>`
+                    }
+                </div>`;
+            });
+
+            html += `
+                <div class="border border-dashed border-slate-300 rounded-2xl p-3.5">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="font-bold text-slate-700 text-xs">🚫 أفراد بدون فريق</span>
+                        <span class="text-[10px] font-bold text-slate-400">${data.users_without_team.length} فرد</span>
+                    </div>
+                    ${data.users_without_team.length === 0
+                        ? '<p class="text-[11px] text-slate-400">كل الأفراد مسجّلين في فريق واحد على الأقل.</p>'
+                        : `<div class="grid sm:grid-cols-2 gap-1.5">${data.users_without_team.map(u => `
+                            <div class="bg-white border border-slate-100 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-slate-700">${u.name} <span class="text-slate-400 font-mono">(${u.sap_id})</span> <span class="text-slate-400">— ${u.department || ''}</span></div>`).join('')}</div>`
+                    }
+                </div>`;
+
+            cont.innerHTML = html || '<p class="text-xs text-slate-400">لا توجد بيانات بعد.</p>';
         }
 
         async function addTeam() {
@@ -3017,18 +4053,42 @@
             document.getElementById('team-assign-user-label').innerText = `${userName} (SAP: ${sapId})`;
             const res = await apiFetch(`/api/admin/users/${sapId}/teams`);
             const currentTeams = await res.json();
-            const currentIds = currentTeams.map(t => t.id);
+            const currentById = {};
+            currentTeams.forEach(t => { currentById[t.id] = t.role_in_team || ''; });
+
+            if (!teamMemberRolesCache.length) {
+                const rres = await apiFetch('/api/admin/team-roles');
+                teamMemberRolesCache = await rres.json();
+            }
+            const roleOptions = (selected) => teamMemberRolesCache.map(r =>
+                `<option value="${r}" ${r === selected ? 'selected' : ''}>${r}</option>`
+            ).join('');
 
             const cont = document.getElementById('team-assign-checkboxes');
             if (allTeamsCache.length === 0) {
                 cont.innerHTML = '<p class="text-slate-500 text-xs">لا توجد فرق بعد. أنشئ فرقاً أولاً من تبويب "إدارة الفرق".</p>';
             } else {
-                cont.innerHTML = allTeamsCache.map(t => `
-                    <label class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 cursor-pointer">
-                        <input type="checkbox" name="team_assign_cb" value="${t.id}" ${currentIds.includes(t.id) ? 'checked' : ''} onchange="enforceMaxTwoTeams(this)">
-                        <span class="text-sm">${t.name}</span>
-                    </label>
-                `).join('');
+                cont.innerHTML = allTeamsCache.map(t => {
+                    const checked = currentById.hasOwnProperty(t.id);
+                    return `
+                    <div class="p-2 rounded-lg hover:bg-slate-50">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" name="team_assign_cb" value="${t.id}" ${checked ? 'checked' : ''} onchange="enforceMaxTwoTeams(this)">
+                            <span class="text-sm">${t.name}</span>
+                        </label>
+                        <select name="team_role_${t.id}" class="mt-1.5 w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white outline-none ${checked ? '' : 'hidden'}">
+                            <option value="">— بدون مهمة محددة —</option>
+                            ${roleOptions(currentById[t.id] || '')}
+                        </select>
+                    </div>
+                `; }).join('');
+                // إظهار/إخفاء قائمة المهمة حسب تحديد الفريق
+                cont.querySelectorAll('input[name="team_assign_cb"]').forEach(cb => {
+                    cb.addEventListener('change', () => {
+                        const sel = cont.querySelector(`select[name="team_role_${cb.value}"]`);
+                        if (sel) sel.classList.toggle('hidden', !cb.checked);
+                    });
+                });
             }
             document.getElementById('team-assign-modal').classList.remove('hidden');
         }
@@ -3048,9 +4108,13 @@
 
         async function saveTeamAssignment() {
             if (!teamAssignTargetSap) return;
-            const ids = Array.from(document.querySelectorAll('input[name="team_assign_cb"]:checked')).map(cb => parseInt(cb.value));
+            const cont = document.getElementById('team-assign-checkboxes');
+            const assignments = Array.from(document.querySelectorAll('input[name="team_assign_cb"]:checked')).map(cb => {
+                const sel = cont.querySelector(`select[name="team_role_${cb.value}"]`);
+                return { team_id: parseInt(cb.value), role_in_team: sel ? sel.value : '' };
+            });
             const fd = new FormData();
-            fd.append('team_ids', JSON.stringify(ids));
+            fd.append('team_assignments', JSON.stringify(assignments));
             const res = await apiFetch(`/api/admin/users/${teamAssignTargetSap}/set-teams`, { method: 'POST', body: fd });
             const data = await res.json();
             if (!res.ok) return alert(data.detail || "فشل حفظ الفرق.");
@@ -3075,7 +4139,9 @@
             const permLabels = {
                 resets: 'استعادة كلمة المرور', gallery: 'معرض الصور', create: 'إنشاء دورة',
                 manage: 'إدارة الامتحانات', users: 'إدارة المشتركين', teams: 'إدارة الفرق',
-                analytics: 'لوحة التحليلات', skills: 'مصفوفة المهارات'
+                analytics: 'لوحة التحليلات', skills: 'مصفوفة المهارات',
+                suggestions: 'المقترحات', appreciation: 'شهادات التقدير', backup: 'نسخة احتياطية',
+                full_access: '⚠️ كل الصلاحيات',
             };
             cont.innerHTML = admins.map(a => `
                 <div class="p-3.5 bg-slate-50/80 border border-slate-200/70 rounded-2xl flex flex-col sm:flex-row justify-between sm:items-center gap-2">
@@ -3090,6 +4156,12 @@
                     <button onclick="deleteSubAdmin('${a.sap_id}')" class="text-rose-600 hover:text-rose-800 font-bold text-xs shrink-0">حذف الحساب</button>
                 </div>
             `).join('');
+        }
+
+        function toggleFullAccessWarning(cb) {
+            if (cb.checked && !confirm("هل أنت متأكد؟ هذه الصلاحية تمنح هذا الشخص نفس صلاحيات الأدمن المركزي بالكامل، بما في ذلك القدرة على إنشاء أو حذف حسابات مديرين آخرين.")) {
+                cb.checked = false;
+            }
         }
 
         async function addSubAdmin() {
