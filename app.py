@@ -410,19 +410,21 @@ def init_db_tables():
             sap_id TEXT NOT NULL,
             team_id INTEGER NOT NULL,
             role_in_team TEXT,
+            task_description TEXT,
             UNIQUE(sap_id, team_id)
         )""")
-        # ترحيل: إضافة عمود مهمة العضو داخل الفريق لو الجدول قديم
-        try:
-            if is_pg:
-                c.execute("ALTER TABLE user_teams ADD COLUMN IF NOT EXISTS role_in_team TEXT")
-            else:
-                c.execute("PRAGMA table_info(user_teams)")
-                cols = [r[1] for r in c.fetchall()]
-                if "role_in_team" not in cols:
-                    c.execute("ALTER TABLE user_teams ADD COLUMN role_in_team TEXT")
-        except Exception:
-            pass
+        # ترحيل: إضافة عمود مهمة العضو ووصف المهام المطلوبة منه، لو الجدول قديم
+        for col, coldef in [("role_in_team", "TEXT"), ("task_description", "TEXT")]:
+            try:
+                if is_pg:
+                    c.execute(f"ALTER TABLE user_teams ADD COLUMN IF NOT EXISTS {col} {coldef}")
+                else:
+                    c.execute("PRAGMA table_info(user_teams)")
+                    cols = [r[1] for r in c.fetchall()]
+                    if col not in cols:
+                        c.execute(f"ALTER TABLE user_teams ADD COLUMN {col} {coldef}")
+            except Exception:
+                pass
 
         # 12. جدول جلسات دخول الامتحان (لمنع دخول الامتحان مرتين أو تركه دون تسليم)
         c.execute(f"""CREATE TABLE IF NOT EXISTS exam_sessions (
@@ -2423,14 +2425,14 @@ async def set_team_visibility(
 
 @app.get("/api/admin/teams/roster")
 async def get_teams_roster(_admin: Dict[str, object] = Depends(require_permission("teams"))):
-    """يرجّع كل الفرق مع أعضائها ومهمة كل عضو، بالإضافة لقائمة الأفراد اللي مش في أي فريق —
+    """يرجّع كل الفرق مع أعضائها ومهمة كل عضو ووصف مهامه، بالإضافة لقائمة الأفراد اللي مش في أي فريق —
     للأدمن عشان يشوف الصورة الكاملة لتوزيع الفرق."""
     conn, is_pg = get_db()
     c = conn.cursor()
     c.execute("SELECT id, name, visibility FROM teams ORDER BY name ASC")
     teams_rows = c.fetchall()
 
-    c.execute("""SELECT ut.team_id, ut.sap_id, u.name, u.department, ut.role_in_team
+    c.execute("""SELECT ut.team_id, ut.sap_id, u.name, u.department, ut.role_in_team, ut.task_description
                  FROM user_teams ut JOIN users u ON ut.sap_id = u.sap_id
                  ORDER BY u.name ASC""")
     members_rows = c.fetchall()
@@ -2442,9 +2444,9 @@ async def get_teams_roster(_admin: Dict[str, object] = Depends(require_permissio
     conn.close()
 
     members_by_team: Dict[int, List[Dict[str, object]]] = {}
-    for team_id, sap_id, name, dept, role in members_rows:
+    for team_id, sap_id, name, dept, role, task_desc in members_rows:
         members_by_team.setdefault(team_id, []).append(
-            {"sap_id": sap_id, "name": name, "department": dept, "role_in_team": role}
+            {"sap_id": sap_id, "name": name, "department": dept, "role_in_team": role, "task_description": task_desc}
         )
 
     teams = [
@@ -2457,6 +2459,71 @@ async def get_teams_roster(_admin: Dict[str, object] = Depends(require_permissio
     users_without_team = [{"sap_id": r[0], "name": r[1], "department": r[2]} for r in no_team_rows]
 
     return {"teams": teams, "users_without_team": users_without_team}
+
+
+@app.get("/api/admin/teams/{team_id}/org-chart")
+async def get_team_org_chart(
+    team_id: int, _admin: Dict[str, object] = Depends(require_permission("teams"))
+):
+    """يبني هيكل الفريق الهرمي: قائد الفريق أعلى الهرم، وتحته الميسر والإداري،
+    وفي نفس المستوى الأعضاء وقادة الحلقات، وتحت كل قائد حلقة أعضاء حلقته."""
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q_team = "SELECT id, name FROM teams WHERE id = %s" if is_pg else "SELECT id, name FROM teams WHERE id = ?"
+    c.execute(q_team, (team_id,))
+    team_row = c.fetchone()
+    if not team_row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="الفريق غير موجود.")
+
+    q_members = (
+        """SELECT u.sap_id, u.name, u.department, ut.role_in_team, ut.task_description
+           FROM user_teams ut JOIN users u ON ut.sap_id = u.sap_id
+           WHERE ut.team_id = %s""" if is_pg
+        else """SELECT u.sap_id, u.name, u.department, ut.role_in_team, ut.task_description
+           FROM user_teams ut JOIN users u ON ut.sap_id = u.sap_id
+           WHERE ut.team_id = ?"""
+    )
+    c.execute(q_members, (team_id,))
+    rows = c.fetchall()
+    conn.close()
+
+    def person(r):
+        return {"sap_id": r[0], "name": r[1], "department": r[2], "role_in_team": r[3], "task_description": r[4]}
+
+    leader = [person(r) for r in rows if r[3] == "قائد الفريق"]
+    facilitator = [person(r) for r in rows if r[3] == "ميسر الفريق"]
+    team_admin = [person(r) for r in rows if r[3] == "اداري الفريق"]
+    members = [person(r) for r in rows if r[3] == "عضو الفريق"]
+    other = [person(r) for r in rows if r[3] in (None, "") or r[3] not in TEAM_MEMBER_ROLES]
+
+    circles = {}
+    for letter in ("A", "B", "C"):
+        circle_leader = [person(r) for r in rows if r[3] == f"قائد الحلقة {letter}"]
+        circle_members = [person(r) for r in rows if r[3] == f"عضو الحلقة {letter}"]
+        if circle_leader or circle_members:
+            circles[letter] = {"leader": circle_leader[0] if circle_leader else None, "members": circle_members}
+
+    return {
+        "team_id": team_row[0], "team_name": team_row[1],
+        "leader": leader[0] if leader else None,
+        "facilitator": facilitator[0] if facilitator else None,
+        "team_admin": team_admin[0] if team_admin else None,
+        "members": members,
+        "circles": circles,
+        "unclassified": other,  # أعضاء بدون مهمة محددة، أو انضموا قبل نظام المهام
+    }
+
+
+@app.get("/api/admin/person-photo/{sap_id}")
+async def get_admin_person_photo(
+    sap_id: str, _admin: Dict[str, object] = Depends(require_permission("teams"))
+):
+    """يعرض صورة فرد لعرضها في هيكل الفريق للأدمن فقط (وليست عامة، حفاظًا على خصوصية الأفراد)."""
+    path = _find_asset_image(sap_id.strip())
+    if not path:
+        raise HTTPException(status_code=404, detail="لا توجد صورة لهذا الفرد.")
+    return FileResponse(str(path))
 
 
 @app.post("/api/admin/teams/add")
@@ -2504,14 +2571,14 @@ async def get_user_teams(
     conn, is_pg = get_db()
     c = conn.cursor()
     q = (
-        """SELECT t.id, t.name, ut.role_in_team FROM user_teams ut JOIN teams t ON ut.team_id = t.id WHERE ut.sap_id = %s"""
+        """SELECT t.id, t.name, ut.role_in_team, ut.task_description FROM user_teams ut JOIN teams t ON ut.team_id = t.id WHERE ut.sap_id = %s"""
         if is_pg
-        else """SELECT t.id, t.name, ut.role_in_team FROM user_teams ut JOIN teams t ON ut.team_id = t.id WHERE ut.sap_id = ?"""
+        else """SELECT t.id, t.name, ut.role_in_team, ut.task_description FROM user_teams ut JOIN teams t ON ut.team_id = t.id WHERE ut.sap_id = ?"""
     )
     c.execute(q, (sap_id.strip(),))
     rows = c.fetchall()
     conn.close()
-    return [{"id": r[0], "name": r[1], "role_in_team": r[2]} for r in rows]
+    return [{"id": r[0], "name": r[1], "role_in_team": r[2], "task_description": r[3]} for r in rows]
 
 
 @app.post("/api/admin/users/{sap_id}/set-teams")
@@ -2520,12 +2587,16 @@ async def set_user_teams(
     team_assignments: str = Form("[]"),
     _admin: Dict[str, object] = Depends(require_permission("users")),
 ):
-    """يحدد فرق المستخدم مع مهمته في كل فريق (بحد أقصى فريقين)، ويستبدل أي تعيين سابق بالكامل.
-    الصيغة: [{"team_id": 1, "role_in_team": "قائد الفريق"}, ...]"""
+    """يحدد فرق المستخدم مع مهمته ووصف مهامه في كل فريق (بحد أقصى فريقين)، ويستبدل أي تعيين سابق بالكامل.
+    الصيغة: [{"team_id": 1, "role_in_team": "قائد الفريق", "task_description": "..."}, ...]"""
     try:
         assignments = json.loads(team_assignments) if team_assignments else []
         parsed = [
-            (int(a["team_id"]), (a.get("role_in_team") or "").strip() or None)
+            (
+                int(a["team_id"]),
+                (a.get("role_in_team") or "").strip() or None,
+                (a.get("task_description") or "").strip() or None,
+            )
             for a in assignments
         ]
     except Exception:
@@ -2546,12 +2617,12 @@ async def set_user_teams(
     c.execute(q_del, (sap_id.strip(),))
 
     q_ins = (
-        "INSERT INTO user_teams (sap_id, team_id, role_in_team) VALUES (%s, %s, %s)"
+        "INSERT INTO user_teams (sap_id, team_id, role_in_team, task_description) VALUES (%s, %s, %s, %s)"
         if is_pg
-        else "INSERT INTO user_teams (sap_id, team_id, role_in_team) VALUES (?, ?, ?)"
+        else "INSERT INTO user_teams (sap_id, team_id, role_in_team, task_description) VALUES (?, ?, ?, ?)"
     )
-    for tid, role in parsed:
-        c.execute(q_ins, (sap_id.strip(), tid, role))
+    for tid, role, task_desc in parsed:
+        c.execute(q_ins, (sap_id.strip(), tid, role, task_desc))
 
     conn.commit()
     conn.close()
