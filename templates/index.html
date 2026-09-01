@@ -137,11 +137,13 @@
         </div>
     </div>
 
-    <!-- 🏆 زرار لوحة الشرف العائم (ظاهر دايمًا، قبل وبعد تسجيل الدخول) -->
-    <button id="leaderboard-float-btn" onclick="switchView('view-leaderboards')" title="لوحة الشرف" class="no-print fixed bottom-5 left-5 z-50 flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-bold pl-4 pr-3 py-3 rounded-full shadow-lg shadow-amber-900/30 hover:shadow-xl hover:-translate-y-0.5 transition-all">
-        <span class="text-lg">🏆</span>
-        <span class="hidden sm:inline text-sm">لوحة الشرف</span>
-    </button>
+    <!-- نافذة تسجيل الدخول المنبثقة -->
+    <div id="login-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div class="relative w-full max-w-md my-8">
+            <button onclick="closeLoginModal()" class="absolute -top-3 -left-3 z-10 w-9 h-9 rounded-full bg-white shadow-lg text-slate-500 hover:text-rose-600 font-bold flex items-center justify-center">✕</button>
+            <div id="login-modal-content"></div>
+        </div>
+    </div>
 
     <!-- شريط جلسة عائم صغير (بيظهر بس بعد تسجيل الدخول بدل الشريط العلوي الكامل) -->
     <div id="floating-session-pill" class="hidden no-print fixed top-4 right-4 z-50 items-center gap-2 bg-slate-900/90 backdrop-blur-xl text-white pl-2 pr-4 py-2 rounded-full shadow-lg border border-white/10">
@@ -154,34 +156,34 @@
         <!-- ============ الصفحة التعريفية (تظهر بس في شاشتي تسجيل الدخول) ============ -->
         <div id="site-intro-landing" class="space-y-14 mb-14">
 
-            <!-- صورة وتعريف مصمم المنصة -->
-            <div class="flex flex-col items-center text-center pt-2">
-                <div class="w-24 h-24 rounded-full overflow-hidden bg-gradient-to-br from-indigo-100 to-violet-100 border-4 border-white shadow-xl shadow-indigo-200/60 flex items-center justify-center text-3xl">
-                    <img src="/api/public/site-image/site-designer-avatar" alt="م. محمد عادل" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='👤'">
-                </div>
-                <p class="designer-caption mt-3 text-base text-indigo-700">إعداد وتصميم م. محمد عادل</p>
-            </div>
+            <!-- الأفتار + Hero + خطة المنصة (صف واحد) -->
+            <div class="flex flex-col lg:flex-row gap-5 items-stretch">
 
-            <!-- Hero + خطة المنصة -->
-            <div class="grid lg:grid-cols-2 gap-6 items-stretch">
-                <div class="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white shadow-2xl shadow-indigo-950/40">
+                <!-- صورة وتعريف مصمم المنصة -->
+                <div class="lg:w-44 shrink-0 flex flex-row lg:flex-col items-center justify-center gap-3 lg:gap-2 text-center bg-white/70 backdrop-blur border border-slate-100 rounded-[2rem] shadow-sm p-4">
+                    <div class="w-16 h-16 lg:w-20 lg:h-20 rounded-full overflow-hidden bg-gradient-to-br from-indigo-100 to-violet-100 border-4 border-white shadow-lg shadow-indigo-200/60 flex items-center justify-center text-2xl shrink-0">
+                        <img src="/api/public/site-image/site-designer-avatar" alt="م. محمد عادل" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='👤'">
+                    </div>
+                    <p class="designer-caption text-sm lg:text-base text-indigo-700 leading-tight">إعداد وتصميم<br class="hidden lg:block"> م. محمد عادل</p>
+                </div>
+
+                <!-- Hero -->
+                <div class="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white shadow-2xl shadow-indigo-950/40 flex-1">
                     <div class="absolute -top-24 -right-24 w-72 h-72 bg-indigo-500/30 rounded-full blur-3xl animate-float pointer-events-none"></div>
                     <div class="absolute -bottom-24 -left-24 w-80 h-80 bg-amber-400/15 rounded-full blur-3xl animate-float-slow pointer-events-none"></div>
-                    <div class="relative flex flex-col justify-center h-full p-8 md:p-10">
-                        <span class="inline-block text-[11px] font-bold tracking-wide bg-white/10 border border-white/15 text-indigo-200 px-3 py-1.5 rounded-full mb-5 w-fit">شركة العربي المتحدة — مصنع فوم بنها</span>
-                        <h1 class="font-display text-2xl md:text-3xl font-extrabold leading-tight mb-4">منصة التدريب والتقييم الفني<br><span class="bg-gradient-to-l from-amber-300 via-white to-indigo-300 bg-clip-text text-transparent">لمصنع فوم بنها</span></h1>
-                        <p class="text-slate-300 text-sm md:text-base leading-relaxed">منصة موحّدة لتنمية وتقييم مهارات فرق العمل في برنامج الصيانة الإنتاجية الشاملة والتقييم الفني في المهارات المتخصصة، من خلال دورات ومحتوى تدريبي متنوع، واختبارات فورية، وشهادات معتمدة لكل فرد.</p>
+                    <div class="relative flex flex-col justify-center h-full p-6 md:p-9">
+                        <span class="inline-block text-[11px] font-bold tracking-wide bg-white/10 border border-white/15 text-indigo-200 px-3 py-1.5 rounded-full mb-4 w-fit">شركة العربي المتحدة — مصنع فوم بنها</span>
+                        <h1 class="font-display text-xl md:text-2xl font-extrabold leading-tight mb-3">منصة التدريب والتقييم الفني<br><span class="bg-gradient-to-l from-amber-300 via-white to-indigo-300 bg-clip-text text-transparent">لمصنع فوم بنها</span></h1>
+                        <p class="text-slate-300 text-xs md:text-sm leading-relaxed">منصة موحّدة لتنمية وتقييم مهارات فرق العمل في برنامج الصيانة الإنتاجية الشاملة والتقييم الفني في المهارات المتخصصة، من خلال دورات ومحتوى تدريبي متنوع، واختبارات فورية، وشهادات معتمدة لكل فرد.</p>
                     </div>
                 </div>
 
-                <div class="bg-white/85 backdrop-blur border border-slate-100 rounded-[2rem] shadow-sm p-6 md:p-7 flex flex-col">
-                    <h3 class="font-bold text-slate-800 mb-4 flex items-center gap-2">🗺️ خطة المنصة</h3>
-                    <div id="platform-roadmap" class="space-y-0 overflow-y-auto pr-1 max-h-[280px] lg:max-h-none lg:flex-1"></div>
+                <!-- خطة المنصة (صغيرة) -->
+                <div class="lg:w-56 shrink-0 bg-white/85 backdrop-blur border border-slate-100 rounded-[2rem] shadow-sm p-4 flex flex-col">
+                    <h3 class="font-bold text-slate-800 mb-2 text-sm flex items-center gap-1.5">🗺️ خطة المنصة</h3>
+                    <div id="platform-roadmap" class="space-y-0 overflow-y-auto pr-1 max-h-[210px] text-[11px]"></div>
                 </div>
             </div>
-
-            <!-- مكان تسجيل الدخول (يُنقل هنا تلقائيًا بالجافاسكريبت) -->
-            <div id="login-anchor"></div>
 
             <!-- نتائج الصيانة الإنتاجية الشاملة (TPM) -->
             <div id="tpm-results-section" class="hidden">
@@ -281,7 +283,7 @@
                     </div>
                     <div class="p-6">
                         <h3 class="font-bold text-slate-800 mb-2">الصيانة الإنتاجية الشاملة (TPM)</h3>
-                        <p class="text-xs text-slate-500 leading-relaxed">برنامج Jishu Hozen (الصيانة الذاتية) وفرقه، بيهدف لتمكين فرق الإنتاج من صيانة معداتهم بأنفسهم، ورفع كفاءة التشغيل وتقليل الأعطال من خلال التدريب المستمر.</p>
+                        <p class="text-xs text-slate-500 leading-relaxed">الهدف من الصيانة الانتاجية الشاملة تحقيق أقصى كفاءة تشغيلية للمعدات طوال دورة حياتها من خلال إشراك جميع العاملين للوصول إلى صفر أعطال، صفر عيوب، وصفر حوادث.</p>
                     </div>
                 </div>
                 <div class="bg-white/80 backdrop-blur border border-slate-100 rounded-3xl overflow-hidden shadow-sm">
@@ -316,20 +318,26 @@
             <!-- معرض صور التدريبات -->
             <div>
                 <h2 class="text-center font-display text-2xl font-extrabold text-slate-800 mb-2">لقطات من التدريبات</h2>
-                <p class="text-center text-slate-400 text-sm mb-8">صور عامة من فعاليات وورش التدريب الميدانية</p>
-                <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
-                    <div class="aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm"><img src="/api/public/site-image/site-training-1" class="w-full h-full object-cover" onerror="this.closest('.aspect-square').style.display='none'"></div>
-                    <div class="aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm"><img src="/api/public/site-image/site-training-2" class="w-full h-full object-cover" onerror="this.closest('.aspect-square').style.display='none'"></div>
-                    <div class="aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm"><img src="/api/public/site-image/site-training-3" class="w-full h-full object-cover" onerror="this.closest('.aspect-square').style.display='none'"></div>
-                    <div class="aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm"><img src="/api/public/site-image/site-training-4" class="w-full h-full object-cover" onerror="this.closest('.aspect-square').style.display='none'"></div>
-                    <div class="aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm"><img src="/api/public/site-image/site-training-5" class="w-full h-full object-cover" onerror="this.closest('.aspect-square').style.display='none'"></div>
-                    <div class="aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm"><img src="/api/public/site-image/site-training-6" class="w-full h-full object-cover" onerror="this.closest('.aspect-square').style.display='none'"></div>
-                    <div class="aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm"><img src="/api/public/site-image/site-training-7" class="w-full h-full object-cover" onerror="this.closest('.aspect-square').style.display='none'"></div>
-                    <div class="aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm"><img src="/api/public/site-image/site-training-8" class="w-full h-full object-cover" onerror="this.closest('.aspect-square').style.display='none'"></div>
-                    <div class="aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm"><img src="/api/public/site-image/site-training-9" class="w-full h-full object-cover" onerror="this.closest('.aspect-square').style.display='none'"></div>
-                    <div class="aspect-square rounded-2xl overflow-hidden bg-slate-100 shadow-sm"><img src="/api/public/site-image/site-training-10" class="w-full h-full object-cover" onerror="this.closest('.aspect-square').style.display='none'"></div>
+                <p class="text-center text-slate-400 text-sm mb-8">صور عامة من فعاليات وورش التدريب الميدانية (اضغط على أي صورة للتكبير)</p>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="training-gallery-grid">
+                    <div class="training-gallery-tile aspect-[4/3] rounded-2xl overflow-hidden bg-slate-100 shadow-sm cursor-zoom-in group relative" onclick="openTrainingLightbox(1)"><img src="/api/public/site-image/site-training-1" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onerror="this.closest('.training-gallery-tile').style.display='none'"></div>
+                    <div class="training-gallery-tile aspect-[4/3] rounded-2xl overflow-hidden bg-slate-100 shadow-sm cursor-zoom-in group relative" onclick="openTrainingLightbox(2)"><img src="/api/public/site-image/site-training-2" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onerror="this.closest('.training-gallery-tile').style.display='none'"></div>
+                    <div class="training-gallery-tile aspect-[4/3] rounded-2xl overflow-hidden bg-slate-100 shadow-sm cursor-zoom-in group relative" onclick="openTrainingLightbox(3)"><img src="/api/public/site-image/site-training-3" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onerror="this.closest('.training-gallery-tile').style.display='none'"></div>
+                    <div class="training-gallery-tile aspect-[4/3] rounded-2xl overflow-hidden bg-slate-100 shadow-sm cursor-zoom-in group relative" onclick="openTrainingLightbox(4)"><img src="/api/public/site-image/site-training-4" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onerror="this.closest('.training-gallery-tile').style.display='none'"></div>
+                    <div class="training-gallery-tile aspect-[4/3] rounded-2xl overflow-hidden bg-slate-100 shadow-sm cursor-zoom-in group relative" onclick="openTrainingLightbox(5)"><img src="/api/public/site-image/site-training-5" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onerror="this.closest('.training-gallery-tile').style.display='none'"></div>
+                    <div class="training-gallery-tile aspect-[4/3] rounded-2xl overflow-hidden bg-slate-100 shadow-sm cursor-zoom-in group relative" onclick="openTrainingLightbox(6)"><img src="/api/public/site-image/site-training-6" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onerror="this.closest('.training-gallery-tile').style.display='none'"></div>
+                    <div class="training-gallery-tile aspect-[4/3] rounded-2xl overflow-hidden bg-slate-100 shadow-sm cursor-zoom-in group relative" onclick="openTrainingLightbox(7)"><img src="/api/public/site-image/site-training-7" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onerror="this.closest('.training-gallery-tile').style.display='none'"></div>
+                    <div class="training-gallery-tile aspect-[4/3] rounded-2xl overflow-hidden bg-slate-100 shadow-sm cursor-zoom-in group relative" onclick="openTrainingLightbox(8)"><img src="/api/public/site-image/site-training-8" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onerror="this.closest('.training-gallery-tile').style.display='none'"></div>
+                    <div class="training-gallery-tile aspect-[4/3] rounded-2xl overflow-hidden bg-slate-100 shadow-sm cursor-zoom-in group relative" onclick="openTrainingLightbox(9)"><img src="/api/public/site-image/site-training-9" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onerror="this.closest('.training-gallery-tile').style.display='none'"></div>
+                    <div class="training-gallery-tile aspect-[4/3] rounded-2xl overflow-hidden bg-slate-100 shadow-sm cursor-zoom-in group relative" onclick="openTrainingLightbox(10)"><img src="/api/public/site-image/site-training-10" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onerror="this.closest('.training-gallery-tile').style.display='none'"></div>
                 </div>
             </div>
+        </div>
+
+        <!-- نافذة تكبير صور التدريبات -->
+        <div id="training-lightbox" class="hidden fixed inset-0 bg-black/85 backdrop-blur-sm z-[60] items-center justify-center p-4" onclick="closeTrainingLightbox()">
+            <button onclick="closeTrainingLightbox()" class="absolute top-4 left-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold flex items-center justify-center text-lg">✕</button>
+            <img id="training-lightbox-img" src="" class="max-w-full max-h-[88vh] rounded-2xl shadow-2xl object-contain" onclick="event.stopPropagation()">
         </div>
         <!-- ============ نهاية الصفحة التعريفية ============ -->
 
@@ -440,6 +448,7 @@
                     </div>
                 </div>
                 <div class="flex gap-2 flex-wrap">
+                    <button onclick="switchView('view-leaderboards')" class="text-xs bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white px-3 py-2 rounded-xl font-bold transition">🏆 لوحة الشرف</button>
                     <button onclick="openMySkillMatrix()" class="text-xs bg-violet-50 hover:bg-violet-100 text-violet-700 px-3 py-2 rounded-xl font-bold transition">🎯 مصفوفة مهاراتي</button>
                     <button onclick="toggleUserTeamsView()" class="text-xs bg-amber-50 hover:bg-amber-100 text-amber-700 px-3 py-2 rounded-xl font-bold transition">👥 الفرق</button>
                     <button onclick="toggleUserHistory()" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-xl font-bold transition">📊 سجل نتائجي السابقة</button>
@@ -591,6 +600,9 @@
                             </button>
                         </div>
                     </div>
+                    <button type="button" onclick="switchView('view-leaderboards')" class="w-full mt-2.5 flex items-center justify-center gap-2 text-xs font-bold px-4 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white transition-all">
+                        🏆 لوحة الشرف
+                    </button>
                     <button type="button" id="sub-admin-change-pass-btn" onclick="subAdminChangePassword()" class="hidden w-full mt-2.5 flex items-center justify-center gap-2 text-xs font-bold px-4 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all">
                         🔑 تغيير كلمة مروري
                     </button>
@@ -1098,7 +1110,10 @@
         <div id="view-leaderboards" class="view-panel hidden space-y-6">
             <div class="bg-white/95 backdrop-blur-sm p-4 sm:p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
                 <div class="flex flex-col md:flex-row justify-between md:items-center gap-3 border-b pb-4">
-                    <h3 class="text-lg sm:text-xl font-bold text-slate-800 flex items-center gap-2">🏆 لوحة الشرف وترتيب الكفاءات</h3>
+                    <div class="flex items-center gap-2">
+                        <button id="leaderboard-back-btn" onclick="goBackFromLeaderboard()" class="hidden shrink-0 w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold items-center justify-center transition-all" title="رجوع">⬅️</button>
+                        <h3 class="text-lg sm:text-xl font-bold text-slate-800 flex items-center gap-2">🏆 لوحة الشرف وترتيب الكفاءات</h3>
+                    </div>
                     <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                         <select id="lb-department-select" onchange="onLeaderboardDeptChange()" class="border border-slate-200 px-3 py-2.5 sm:py-2 rounded-xl text-xs bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-400 transition-all cursor-pointer">
                             <option value="">🏢 كل الإدارات</option>
@@ -1362,19 +1377,34 @@
             }
         }
 
-        // --- فتح تسجيل الدخول من الشريط العلوي (بقى مكانه أعلى الصفحة بجوار الـ Hero) ---
+        // --- تسجيل الدخول كنافذة منبثقة (Modal) بدل ما يكون جزء من الصفحة التعريفية ---
         function openLoginAtTop() {
+            document.getElementById('login-modal').classList.remove('hidden');
             switchView('view-login-user');
-            const el = document.getElementById('view-login-user');
-            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        function closeLoginModal() {
+            document.getElementById('login-modal').classList.add('hidden');
         }
 
-        // --- نقل كارت تسجيل الدخول ليظهر أعلى الصفحة بجوار قسم الـ Hero بدل أسفلها ---
+        // --- تكبير صور معرض التدريبات ---
+        function openTrainingLightbox(n) {
+            const box = document.getElementById('training-lightbox');
+            document.getElementById('training-lightbox-img').src = `/api/public/site-image/site-training-${n}`;
+            box.classList.remove('hidden');
+            box.classList.add('flex');
+        }
+        function closeTrainingLightbox() {
+            const box = document.getElementById('training-lightbox');
+            box.classList.add('hidden');
+            box.classList.remove('flex');
+        }
+
+        // --- نقل كارت تسجيل الدخول ليعيش جوه النافذة المنبثقة بدل الصفحة التعريفية ---
         (function relocateLoginCards() {
-            const anchor = document.getElementById('login-anchor');
+            const anchor = document.getElementById('login-modal-content');
             const u = document.getElementById('view-login-user');
             const a = document.getElementById('view-login-admin');
-            if (anchor && u && a) { anchor.after(u, a); }
+            if (anchor && u && a) { anchor.append(u, a); }
         })();
 
         // --- خطة المنصة (Roadmap) ---
@@ -1405,7 +1435,7 @@
             let html = '';
             PLATFORM_ROADMAP.forEach((item, idx) => {
                 if (item.divider) {
-                    html += `<div class="my-3 text-center"><span class="inline-block text-[11px] font-bold bg-gradient-to-r from-amber-500 to-orange-500 text-white px-3 py-1.5 rounded-full shadow-sm">🚀 ${item.divider}</span></div>`;
+                    html += `<div class="my-1.5 text-center"><span class="inline-block text-[9px] font-bold bg-gradient-to-r from-amber-500 to-orange-500 text-white px-2 py-1 rounded-full shadow-sm">🚀 ${item.divider}</span></div>`;
                     return;
                 }
                 const d = new Date(item.date);
@@ -1417,12 +1447,12 @@
                 const textClass = status === 'upcoming' ? 'text-slate-400' : 'text-slate-700';
                 const dateLabel = `${d.getDate()} ${monthsAr[d.getMonth()]} ${d.getFullYear()}`;
                 html += `
-                <div class="flex gap-3 ${isLast ? '' : 'pb-4'} relative">
-                    ${isLast ? '' : '<span class="absolute right-[5px] top-4 bottom-0 w-px bg-slate-200"></span>'}
-                    <span class="mt-1.5 w-3 h-3 rounded-full ${dotClass} shrink-0 z-10"></span>
+                <div class="flex gap-2 ${isLast ? '' : 'pb-2'} relative">
+                    ${isLast ? '' : '<span class="absolute right-[4px] top-3.5 bottom-0 w-px bg-slate-200"></span>'}
+                    <span class="mt-1 w-2 h-2 rounded-full ${dotClass} shrink-0 z-10"></span>
                     <div class="flex-1">
-                        <p class="text-xs font-bold ${textClass}">${item.label}${status === 'today' ? ' <span class="text-amber-600">(جاري العمل عليه الآن)</span>' : ''}</p>
-                        <p class="text-[10px] text-slate-400 mt-0.5">${dateLabel}</p>
+                        <p class="text-[10.5px] font-bold ${textClass} leading-snug">${item.label}${status === 'today' ? ' <span class="text-amber-600">(جاري الآن)</span>' : ''}</p>
+                        <p class="text-[9px] text-slate-400">${dateLabel}</p>
                     </div>
                 </div>`;
             });
@@ -1606,7 +1636,15 @@
             pill.classList.remove('flex');
         }
 
+        let previousViewBeforeLeaderboard = null;
+
         function switchView(viewId) {
+            // نتذكر آخر شاشة كان الشخص فيها قبل ما يروح لوحة الشرف، عشان زرار "رجوع"
+            const current = document.querySelector('.view-panel:not(.hidden)');
+            if (current && current.id !== 'view-leaderboards' && viewId === 'view-leaderboards') {
+                previousViewBeforeLeaderboard = current.id;
+            }
+
             document.querySelectorAll('.view-panel').forEach(el => el.classList.add('hidden'));
             document.getElementById(viewId).classList.remove('hidden');
             const timerFloat = document.getElementById('exam-timer-float');
@@ -1614,11 +1652,16 @@
             const introLanding = document.getElementById('site-intro-landing');
             if (introLanding) introLanding.classList.toggle('hidden', viewId !== 'view-login-user' && viewId !== 'view-login-admin');
 
-            // إخفاء الأزرار العائمة (لوحة الشرف + شريط الجلسة) أثناء الامتحان
-            // عشان ميحجبوش زرار التسليم أو عنوان الامتحان
+            // نافذة تسجيل الدخول المنبثقة: تتفتح تلقائيًا لو الشاشة المطلوبة هي شاشة دخول،
+            // وتتقفل لوحدها لو الشخص روّح لأي شاشة تانية (بعد نجاح الدخول مثلاً)
+            const loginModal = document.getElementById('login-modal');
+            if (loginModal) {
+                const isLoginView = (viewId === 'view-login-user' || viewId === 'view-login-admin');
+                loginModal.classList.toggle('hidden', !isLoginView);
+            }
+
+            // إخفاء الأزرار العائمة (شريط الجلسة) أثناء الامتحان عشان ميحجبش زرار التسليم أو عنوان الامتحان
             const inExam = (viewId === 'view-exam-active');
-            const leaderboardFloat = document.getElementById('leaderboard-float-btn');
-            if (leaderboardFloat) leaderboardFloat.classList.toggle('hidden', inExam);
             const sessionPill = document.getElementById('floating-session-pill');
             if (sessionPill) {
                 if (inExam) {
@@ -1633,7 +1676,21 @@
             if (viewId === 'view-leaderboards') {
                 loadLeaderboardExams();
                 loadGeneralLeaderboard();
+                const backBtn = document.getElementById('leaderboard-back-btn');
+                if (backBtn) {
+                    const show = !!previousViewBeforeLeaderboard;
+                    backBtn.classList.toggle('hidden', !show);
+                    backBtn.classList.toggle('flex', show);
+                }
             }
+        }
+
+        function goBackFromLeaderboard() {
+            const type = currentUser?.accountType;
+            let target = 'view-login-user';
+            if (type === 'user') target = 'view-user-dashboard';
+            else if (type === 'admin' || type === 'super_admin') target = 'view-admin-dashboard';
+            switchView(previousViewBeforeLeaderboard || target);
         }
 
         // --- تبويبات لوحة تحكم الإدارة ---
@@ -1653,6 +1710,7 @@
         }
 
         function setSession(user, role) {
+            user.accountType = role; // نستخدمها للتفرقة بين حساب فرد وأدمن (role نفسه قد يكون مسمى وظيفي)
             currentUser = user;
             const badge = document.getElementById('session-badge');
             const logoutBtn = document.getElementById('logout-btn');
@@ -1957,11 +2015,27 @@
                         <p class="text-[11px] text-slate-500 mt-0.5">${a.reason_text}</p>
                     </div>
                     <div class="flex items-center gap-2 shrink-0">
-                        <a href="/api/admin/appreciation/${a.id}/download" target="_blank" class="text-[11px] font-bold bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-2.5 py-1.5 rounded-lg transition-all">⬇️ تنزيل</a>
+                        <button onclick="downloadAppreciationCert(${a.id})" class="text-[11px] font-bold bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-2.5 py-1.5 rounded-lg transition-all">⬇️ تنزيل</button>
                         <button onclick="deleteAppreciation(${a.id})" class="text-rose-600 hover:text-rose-800 font-bold">حذف</button>
                     </div>
                 </div>`;
             }).join('');
+        }
+
+        async function downloadAppreciationCert(id) {
+            const res = await apiFetch(`/api/admin/appreciation/${id}/download`);
+            if (!res.ok) {
+                let msg = 'تعذّر تنزيل الشهادة.';
+                try { const d = await res.json(); msg = d.detail || msg; } catch (e) {}
+                alert(msg);
+                return;
+            }
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `appreciation_certificate_${id}.pdf`;
+            document.body.appendChild(a); a.click(); a.remove();
+            window.URL.revokeObjectURL(url);
         }
 
         async function ensureAppreciationExamOptions() {
