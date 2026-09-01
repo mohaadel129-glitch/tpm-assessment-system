@@ -283,7 +283,7 @@
                     </div>
                     <div class="p-6">
                         <h3 class="font-bold text-slate-800 mb-2">الصيانة الإنتاجية الشاملة (TPM)</h3>
-                        <p class="text-xs text-slate-500 leading-relaxed">الهدف من الصيانة الانتاجية الشاملة تحقيق أقصى كفاءة تشغيلية للمعدات طوال دورة حياتها من خلال إشراك جميع العاملين للوصول إلى صفر أعطال، صفر عيوب، وصفر حوادث.</p>
+                        <p class="text-xs text-slate-500 leading-relaxed">برنامج Jishu Hozen (الصيانة الذاتية) وفرقه، بيهدف لتمكين فرق الإنتاج من صيانة معداتهم بأنفسهم، ورفع كفاءة التشغيل وتقليل الأعطال من خلال التدريب المستمر.</p>
                     </div>
                 </div>
                 <div class="bg-white/80 backdrop-blur border border-slate-100 rounded-3xl overflow-hidden shadow-sm">
@@ -832,7 +832,10 @@
 
             <!-- ز. إدارة الفرق -->
             <div id="admin-tab-teams" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
-                <h3 class="text-lg font-bold text-slate-800 border-b pb-2">🧩 إدارة الفرق</h3>
+                <div class="flex justify-between items-center border-b pb-2 flex-wrap gap-2">
+                    <h3 class="text-lg font-bold text-slate-800">🧩 إدارة الفرق</h3>
+                    <button onclick="openTeamOrgChartModal()" class="text-xs font-bold bg-violet-50 hover:bg-violet-100 text-violet-700 px-3 py-1.5 rounded-full transition-all">🗂️ هيكل الفريق</button>
+                </div>
                 <p class="text-[11px] text-slate-500">أنشئ الفرق هنا، ثم خصّص فريق كل مستخدم ومهمته داخل الفريق من تبويب "إدارة المشتركين" (حتى فريقين لكل فرد كحد أقصى). يمكنك أيضاً إتاحة امتحان معين لفريق محدد فقط من تبويب "إنشاء دورة جديدة".</p>
                 <div class="flex flex-col sm:flex-row gap-2">
                     <input type="text" id="adm-team-name" placeholder="اسم الفريق الجديد (مثال: فريق الصيانة الوقائية)" class="flex-1 px-3 py-2.5 border border-slate-200 bg-slate-50/60 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white transition-all">
@@ -1160,6 +1163,25 @@
             <p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">يمكن اختيار فريقين كحد أقصى لكل فرد.</p>
             <div id="team-assign-checkboxes" class="space-y-1 overflow-y-auto flex-1"></div>
             <button onclick="saveTeamAssignment()" class="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold py-2.5 rounded-xl transition-all shadow-md shadow-indigo-200">حفظ الفرق</button>
+        </div>
+    </div>
+
+    <!-- نافذة هيكل الفريق الهرمي -->
+    <div id="team-org-chart-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-4xl w-full p-6 space-y-4 max-h-[90vh] flex flex-col shadow-2xl">
+            <div class="flex justify-between items-center border-b pb-3 flex-wrap gap-2">
+                <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">🗂️ هيكل الفريق</h3>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <select id="org-chart-team-select" onchange="loadTeamOrgChart()" class="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-indigo-400 transition-all cursor-pointer">
+                        <option value="">اختر فريقًا...</option>
+                    </select>
+                    <button onclick="printTeamOrgChart()" class="text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl transition-all">🖨️ طباعة</button>
+                    <button onclick="closeTeamOrgChartModal()" class="text-slate-400 hover:text-slate-600 font-bold px-1">✕</button>
+                </div>
+            </div>
+            <div id="org-chart-container" class="overflow-auto flex-1 py-4">
+                <p class="text-center text-slate-400 text-sm">اختر فريقًا من القائمة أعلاه لعرض هيكله.</p>
+            </div>
         </div>
     </div>
 
@@ -3434,6 +3456,115 @@
             cont.innerHTML = html || '<p class="text-xs text-slate-400">لا توجد بيانات بعد.</p>';
         }
 
+        // --- هيكل الفريق الهرمي ---
+        function personPhotoTag(p, sizeClass) {
+            return `<img src="/api/admin/person-photo/${p.sap_id}" class="${sizeClass} rounded-full object-cover border-2 border-white shadow" onerror="this.replaceWith(Object.assign(document.createElement('div'), {className:'${sizeClass} rounded-full bg-slate-200 border-2 border-white shadow flex items-center justify-center text-slate-500 font-bold', innerText:'${(p.name || '؟').trim().charAt(0)}'}))">`;
+        }
+
+        function personCard(p, opts = {}) {
+            if (!p) return '';
+            const size = opts.large ? 'w-14 h-14' : 'w-11 h-11';
+            const ring = opts.large ? 'ring-2 ring-amber-400' : '';
+            const taskTip = p.task_description ? `title="${p.task_description.replace(/"/g, '&quot;')}"` : '';
+            return `
+            <div class="flex flex-col items-center text-center w-24" ${taskTip}>
+                <div class="${ring} rounded-full">${personPhotoTag(p, size)}</div>
+                <p class="text-[11px] font-bold text-slate-800 mt-1.5 leading-tight">${p.name}</p>
+                <p class="text-[9px] text-slate-400">${p.role_in_team || ''}</p>
+                ${p.task_description ? `<p class="text-[8.5px] text-indigo-500 mt-0.5 line-clamp-2">${p.task_description}</p>` : ''}
+            </div>`;
+        }
+
+        function buildOrgChartHtml(data) {
+            const rows = [];
+
+            if (data.leader) {
+                rows.push(`<div class="flex justify-center">${personCard(data.leader, { large: true })}</div>`);
+                rows.push(`<div class="w-px h-5 bg-slate-300 mx-auto"></div>`);
+            }
+
+            const secondLevel = [data.facilitator, data.team_admin].filter(Boolean);
+            if (secondLevel.length) {
+                rows.push(`<div class="flex justify-center gap-8">${secondLevel.map(p => personCard(p)).join('')}</div>`);
+                rows.push(`<div class="w-px h-5 bg-slate-300 mx-auto"></div>`);
+            }
+
+            const thirdLevelBlocks = [];
+            data.members.forEach(m => thirdLevelBlocks.push(`<div class="flex flex-col items-center">${personCard(m)}</div>`));
+            Object.keys(data.circles).sort().forEach(letter => {
+                const circle = data.circles[letter];
+                let block = `<div class="flex flex-col items-center gap-1.5 px-3 border-x border-dashed border-slate-200 first:border-r-0">`;
+                block += `<span class="text-[9px] font-bold text-violet-500 bg-violet-50 px-2 py-0.5 rounded-full">حلقة ${letter}</span>`;
+                if (circle.leader) block += personCard(circle.leader);
+                if (circle.members.length) {
+                    block += `<div class="w-px h-4 bg-slate-300"></div>`;
+                    block += `<div class="flex flex-wrap justify-center gap-3">${circle.members.map(m => personCard(m)).join('')}</div>`;
+                }
+                block += `</div>`;
+                thirdLevelBlocks.push(block);
+            });
+
+            if (thirdLevelBlocks.length) {
+                rows.push(`<div class="flex flex-wrap justify-center items-start gap-5">${thirdLevelBlocks.join('')}</div>`);
+            }
+
+            if (data.unclassified.length) {
+                rows.push(`<div class="mt-4 pt-3 border-t border-dashed border-slate-200">
+                    <p class="text-[10px] font-bold text-slate-400 mb-2 text-center">أعضاء بدون مهمة محددة</p>
+                    <div class="flex flex-wrap justify-center gap-3">${data.unclassified.map(m => personCard(m)).join('')}</div>
+                </div>`);
+            }
+
+            if (!data.leader && !secondLevel.length && !thirdLevelBlocks.length && !data.unclassified.length) {
+                return '<p class="text-center text-slate-400 text-sm py-10">لا يوجد أعضاء في هذا الفريق بعد.</p>';
+            }
+
+            return `<div class="flex flex-col items-center">${rows.join('')}</div>`;
+        }
+
+        async function openTeamOrgChartModal() {
+            const sel = document.getElementById('org-chart-team-select');
+            if (allTeamsCache.length === 0) {
+                const res = await apiFetch('/api/admin/teams');
+                allTeamsCache = await res.json();
+            }
+            sel.innerHTML = '<option value="">اختر فريقًا...</option>' + allTeamsCache.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+            document.getElementById('org-chart-container').innerHTML = '<p class="text-center text-slate-400 text-sm">اختر فريقًا من القائمة أعلاه لعرض هيكله.</p>';
+            document.getElementById('team-org-chart-modal').classList.remove('hidden');
+        }
+
+        function closeTeamOrgChartModal() {
+            document.getElementById('team-org-chart-modal').classList.add('hidden');
+        }
+
+        let lastOrgChartData = null;
+
+        async function loadTeamOrgChart() {
+            const teamId = document.getElementById('org-chart-team-select').value;
+            const cont = document.getElementById('org-chart-container');
+            if (!teamId) { cont.innerHTML = '<p class="text-center text-slate-400 text-sm">اختر فريقًا من القائمة أعلاه لعرض هيكله.</p>'; return; }
+            cont.innerHTML = '<p class="text-center text-slate-400 text-sm">جارِ التحميل...</p>';
+            const res = await apiFetch(`/api/admin/teams/${teamId}/org-chart`);
+            if (!res.ok) { cont.innerHTML = '<p class="text-center text-rose-500 text-sm">تعذّر تحميل هيكل الفريق.</p>'; return; }
+            const data = await res.json();
+            lastOrgChartData = data;
+            cont.innerHTML = buildOrgChartHtml(data);
+        }
+
+        function printTeamOrgChart() {
+            if (!lastOrgChartData) return alert('اختر فريقًا أولاً.');
+            const pArea = document.getElementById('print-area');
+            pArea.innerHTML = `
+                <div style="text-align:center; border-bottom:2px solid #000; padding-bottom:12px; margin-bottom:20px;">
+                    <h2 style="font-size:20px; font-weight:bold; margin:0;">هيكل فريق: ${lastOrgChartData.team_name}</h2>
+                </div>
+                <div style="direction:rtl;">${buildOrgChartHtml(lastOrgChartData)}</div>
+            `;
+            pArea.classList.remove('hidden');
+            window.print();
+            pArea.classList.add('hidden');
+        }
+
         async function addTeam() {
             const input = document.getElementById('adm-team-name');
             const name = input.value.trim();
@@ -4128,7 +4259,7 @@
             const res = await apiFetch(`/api/admin/users/${sapId}/teams`);
             const currentTeams = await res.json();
             const currentById = {};
-            currentTeams.forEach(t => { currentById[t.id] = t.role_in_team || ''; });
+            currentTeams.forEach(t => { currentById[t.id] = { role: t.role_in_team || '', task: t.task_description || '' }; });
 
             if (!teamMemberRolesCache.length) {
                 const rres = await apiFetch('/api/admin/team-roles');
@@ -4144,6 +4275,7 @@
             } else {
                 cont.innerHTML = allTeamsCache.map(t => {
                     const checked = currentById.hasOwnProperty(t.id);
+                    const cur = currentById[t.id] || { role: '', task: '' };
                     return `
                     <div class="p-2 rounded-lg hover:bg-slate-50">
                         <label class="flex items-center gap-2 cursor-pointer">
@@ -4152,15 +4284,18 @@
                         </label>
                         <select name="team_role_${t.id}" class="mt-1.5 w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white outline-none ${checked ? '' : 'hidden'}">
                             <option value="">— بدون مهمة محددة —</option>
-                            ${roleOptions(currentById[t.id] || '')}
+                            ${roleOptions(cur.role)}
                         </select>
+                        <textarea name="team_task_${t.id}" rows="2" placeholder="وصف المهمة أو المهام المطلوبة (اختياري)" class="mt-1.5 w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white outline-none focus:ring-2 focus:ring-indigo-300 ${checked ? '' : 'hidden'}">${cur.task}</textarea>
                     </div>
                 `; }).join('');
-                // إظهار/إخفاء قائمة المهمة حسب تحديد الفريق
+                // إظهار/إخفاء قائمة المهمة ووصفها حسب تحديد الفريق
                 cont.querySelectorAll('input[name="team_assign_cb"]').forEach(cb => {
                     cb.addEventListener('change', () => {
                         const sel = cont.querySelector(`select[name="team_role_${cb.value}"]`);
+                        const txt = cont.querySelector(`textarea[name="team_task_${cb.value}"]`);
                         if (sel) sel.classList.toggle('hidden', !cb.checked);
+                        if (txt) txt.classList.toggle('hidden', !cb.checked);
                     });
                 });
             }
@@ -4185,7 +4320,8 @@
             const cont = document.getElementById('team-assign-checkboxes');
             const assignments = Array.from(document.querySelectorAll('input[name="team_assign_cb"]:checked')).map(cb => {
                 const sel = cont.querySelector(`select[name="team_role_${cb.value}"]`);
-                return { team_id: parseInt(cb.value), role_in_team: sel ? sel.value : '' };
+                const txt = cont.querySelector(`textarea[name="team_task_${cb.value}"]`);
+                return { team_id: parseInt(cb.value), role_in_team: sel ? sel.value : '', task_description: txt ? txt.value : '' };
             });
             const fd = new FormData();
             fd.append('team_assignments', JSON.stringify(assignments));
