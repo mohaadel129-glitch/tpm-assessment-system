@@ -1828,10 +1828,13 @@ async def download_appreciation_certificate(
     if not row:
         raise HTTPException(status_code=404, detail="شهادة التقدير غير موجودة.")
     sap_id, user_name, reason_text, created_at, rank_type, exam_name, rank_value = row
-    pdf_bytes = generate_appreciation_certificate_pdf(
-        user_name, reason_text, cert_id, str(created_at), sap_id.strip(),
-        rank_type=rank_type or "none", exam_name=exam_name, rank_value=rank_value,
-    )
+    try:
+        pdf_bytes = generate_appreciation_certificate_pdf(
+            user_name, reason_text, cert_id, str(created_at), sap_id.strip(),
+            rank_type=rank_type or "none", exam_name=exam_name, rank_value=rank_value,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"تعذّر توليد ملف الشهادة: {e}")
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
