@@ -619,6 +619,17 @@ def init_db_tables():
             created_at TIMESTAMP DEFAULT {ts_default}
         )""")
 
+        # 21. تتبع مشاهدة المواد التدريبية لكل فرد (فتح + إنهاء)
+        c.execute(f"""CREATE TABLE IF NOT EXISTS content_progress (
+            id {id_type},
+            sap_id TEXT NOT NULL,
+            material_id INTEGER NOT NULL,
+            first_viewed_at TIMESTAMP DEFAULT {ts_default},
+            completed INTEGER DEFAULT 0,
+            completed_at TIMESTAMP,
+            UNIQUE(sap_id, material_id)
+        )""")
+
         # ملاحظة: تم حذف الإدراج التلقائي لمستخدم تجريبي هنا نهائيًا لمنع رجوعه بعد الحذف
 
         conn.commit()
@@ -738,6 +749,7 @@ PUBLIC_SITE_IMAGE_NAMES = {
     "site-training-1", "site-training-2", "site-training-3", "site-training-4",
     "site-training-5", "site-training-6", "site-training-7", "site-training-8",
     "site-training-9", "site-training-10",
+    "site-icon-192", "site-icon-512",
 }
 PUBLIC_SITE_VIDEO_NAMES = {"site-video-1", "site-video-2"}
 VIDEO_EXTENSIONS = [".mp4", ".webm", ".mov", ".MP4"]
@@ -1975,6 +1987,47 @@ async def serve_home(request: Request):
     return templates.TemplateResponse(request, "index.html", {})
 
 
+@app.get("/manifest.json")
+def serve_manifest():
+    """ملف PWA — بيسمح بتثبيت المنصة كتطبيق على الشاشة الرئيسية للموبايل."""
+    manifest = {
+        "name": "منصة التدريب والتقييم الفني - فوم بنها",
+        "short_name": "فوم بنها TPM",
+        "description": "منصة موحّدة لتنمية وتقييم مهارات فرق العمل في الصيانة الإنتاجية الشاملة",
+        "start_url": "/",
+        "scope": "/",
+        "display": "standalone",
+        "orientation": "portrait-primary",
+        "background_color": "#f4f5fb",
+        "theme_color": "#4f46e5",
+        "dir": "rtl",
+        "lang": "ar",
+        "icons": [
+            {"src": "/api/public/site-image/site-icon-192", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+            {"src": "/api/public/site-image/site-icon-512", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+        ],
+    }
+    return Response(content=json.dumps(manifest, ensure_ascii=False), media_type="application/manifest+json")
+
+
+@app.get("/sw.js")
+def serve_service_worker():
+    """Service Worker بسيط — شرط أساسي عند أندرويد/كروم لإظهار اقتراح التثبيت التلقائي."""
+    sw_code = """
+const CACHE_NAME = 'tpm-platform-v1';
+self.addEventListener('install', (event) => { self.skipWaiting(); });
+self.addEventListener('activate', (event) => { self.clients.claim(); });
+self.addEventListener('fetch', (event) => {
+    // استراتيجية شبكة أولاً (Network First) — يضمن دايمًا آخر نسخة من المنصة،
+    // مع رجوع بسيط للكاش لو الاتصال انقطع مؤقتًا
+    event.respondWith(
+        fetch(event.request).catch(() => caches.match(event.request))
+    );
+});
+"""
+    return Response(content=sw_code, media_type="application/javascript")
+
+
 # --- المصادقة والأدمن ---
 @app.post("/api/auth/admin-login")
 async def admin_login(
@@ -2464,8 +2517,10 @@ CONTENT_TABS = ("training", "instructions")
 CONTENT_TYPES = ("video", "audio", "pdf")
 
 
-def _browse_content(tab: str, folder_id: Optional[int]) -> Dict[str, object]:
-    """يرجّع الفولدرات الفرعية والمواد الموجودة داخل مستوى معيّن، مع مسار التنقل (breadcrumb)."""
+def _browse_content(tab: str, folder_id: Optional[int], sap_id: Optional[str] = None) -> Dict[str, object]:
+    """يرجّع الفولدرات الفرعية والمواد الموجودة داخل مستوى معيّن، مع مسار التنقل (breadcrumb).
+    لو اتبعت sap_id (تصفح فرد)، بيضيف حالة المشاهدة/الإنهاء لكل مادة بالنسبة لهذا الفرد.
+    لو من غير sap_id (تصفح أدمن)، بيضيف عدد الأفراد اللي أنهوا كل مادة."""
     conn, is_pg = get_db()
     c = conn.cursor()
 
@@ -2507,6 +2562,24 @@ def _browse_content(tab: str, folder_id: Optional[int]) -> Dict[str, object]:
         {"id": r[0], "name": r[1], "description": r[2], "content_type": r[3], "video_url": r[4], "file_url": r[5]}
         for r in c.fetchall()
     ]
+
+    if materials:
+        mat_ids = [m["id"] for m in materials]
+        if sap_id:
+            placeholders = ",".join(["%s" if is_pg else "?"] * len(mat_ids))
+            q_prog = f"SELECT material_id, completed FROM content_progress WHERE sap_id = {'%s' if is_pg else '?'} AND material_id IN ({placeholders})"
+            c.execute(q_prog, (sap_id, *mat_ids))
+            progress_map = {r[0]: bool(r[1]) for r in c.fetchall()}
+            for m in materials:
+                m["completed"] = progress_map.get(m["id"], False)
+        else:
+            placeholders = ",".join(["%s" if is_pg else "?"] * len(mat_ids))
+            q_counts = f"SELECT material_id, COUNT(*) FROM content_progress WHERE completed = 1 AND material_id IN ({placeholders}) GROUP BY material_id"
+            c.execute(q_counts, tuple(mat_ids))
+            counts_map = {r[0]: r[1] for r in c.fetchall()}
+            for m in materials:
+                m["completed_count"] = counts_map.get(m["id"], 0)
+
     conn.close()
     return {"breadcrumb": breadcrumb, "folders": folders, "materials": materials}
 
@@ -2519,6 +2592,34 @@ async def admin_browse_content(
     if tab not in CONTENT_TABS:
         raise HTTPException(status_code=400, detail="تبويب غير صحيح.")
     return _browse_content(tab, folder_id)
+
+
+@app.get("/api/admin/content/materials/{material_id}/progress")
+async def get_material_progress(
+    material_id: int, _admin: Dict[str, object] = Depends(require_permission("content"))
+):
+    """يرجّع قائمة الأفراد اللي فتحوا/أنهوا مادة تدريبية معيّنة — لتتبع المشاهدة من جهة الأدمن."""
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q = (
+        """SELECT u.sap_id, u.name, u.department, cp.completed, cp.first_viewed_at, cp.completed_at
+           FROM content_progress cp JOIN users u ON cp.sap_id = u.sap_id
+           WHERE cp.material_id = %s ORDER BY cp.first_viewed_at DESC"""
+        if is_pg
+        else """SELECT u.sap_id, u.name, u.department, cp.completed, cp.first_viewed_at, cp.completed_at
+           FROM content_progress cp JOIN users u ON cp.sap_id = u.sap_id
+           WHERE cp.material_id = ? ORDER BY cp.first_viewed_at DESC"""
+    )
+    c.execute(q, (material_id,))
+    rows = c.fetchall()
+    conn.close()
+    return [
+        {
+            "sap_id": r[0], "name": r[1], "department": r[2], "completed": bool(r[3]),
+            "first_viewed_at": str(r[4]), "completed_at": str(r[5]) if r[5] else None,
+        }
+        for r in rows
+    ]
 
 
 @app.post("/api/admin/content/folders")
@@ -2682,13 +2783,61 @@ async def delete_content_material(
 @app.get("/api/user/content/browse")
 async def user_browse_content(
     tab: str, folder_id: Optional[int] = None,
-    _user: Dict[str, object] = Depends(get_current_user),
+    user: Dict[str, object] = Depends(get_current_user),
 ):
     """تصفح المحتوى التدريبي المتاح للفرد (بعد تسجيل الدخول) — نفس منطق تصفح الأدمن،
-    من غير أي أدوات إدارة (إضافة/حذف)."""
+    من غير أي أدوات إدارة (إضافة/حذف)، مع حالة المشاهدة/الإنهاء الخاصة بيه."""
     if tab not in CONTENT_TABS:
         raise HTTPException(status_code=400, detail="تبويب غير صحيح.")
-    return _browse_content(tab, folder_id)
+    return _browse_content(tab, folder_id, sap_id=user.get("sap_id"))
+
+
+@app.post("/api/user/content/materials/{material_id}/view")
+async def record_material_view(
+    material_id: int, user: Dict[str, object] = Depends(get_current_user)
+):
+    """يسجّل إن الفرد فتح المادة دي (تتبع المشاهدة) — بيُستدعى أول ما تُفتح نافذة العرض."""
+    sap_id = user.get("sap_id")
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q = (
+        "INSERT INTO content_progress (sap_id, material_id) VALUES (%s, %s) ON CONFLICT(sap_id, material_id) DO NOTHING"
+        if is_pg
+        else "INSERT OR IGNORE INTO content_progress (sap_id, material_id) VALUES (?, ?)"
+    )
+    c.execute(q, (sap_id, material_id))
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
+
+
+@app.post("/api/user/content/materials/{material_id}/complete")
+async def mark_material_complete(
+    material_id: int, user: Dict[str, object] = Depends(get_current_user)
+):
+    """يعلّم إن الفرد أنهى مشاهدة/استماع/قراءة المادة دي بالكامل."""
+    sap_id = user.get("sap_id")
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    if is_pg:
+        c.execute(
+            """INSERT INTO content_progress (sap_id, material_id, completed, completed_at)
+               VALUES (%s, %s, 1, CURRENT_TIMESTAMP)
+               ON CONFLICT(sap_id, material_id) DO UPDATE SET completed = 1, completed_at = CURRENT_TIMESTAMP""",
+            (sap_id, material_id),
+        )
+    else:
+        c.execute(
+            "INSERT OR IGNORE INTO content_progress (sap_id, material_id) VALUES (?, ?)",
+            (sap_id, material_id),
+        )
+        c.execute(
+            "UPDATE content_progress SET completed = 1, completed_at = CURRENT_TIMESTAMP WHERE sap_id = ? AND material_id = ?",
+            (sap_id, material_id),
+        )
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
 
 
 # --- إدارة المستخدمين ---
