@@ -88,7 +88,7 @@
             </div>
             <div class="flex items-center gap-1.5 md:gap-2 flex-wrap" id="nav-buttons">
                 <button onclick="openContactModal()" class="px-3 md:px-4 py-2 rounded-full bg-white/10 hover:bg-white/15 text-xs md:text-sm font-bold border border-white/15 transition-all hover:-translate-y-0.5 flex items-center gap-1.5">📞 <span class="hidden sm:inline">تواصل معنا</span></button>
-                <button onclick="openSuggestionModal()" class="px-3 md:px-4 py-2 rounded-full bg-white/10 hover:bg-white/15 text-xs md:text-sm font-bold border border-white/15 transition-all hover:-translate-y-0.5 flex items-center gap-1.5">💡 <span class="hidden sm:inline">اقتراح بتعديل</span></button>
+                <button onclick="openSuggestionModal()" class="feature-suggestions-btn px-3 md:px-4 py-2 rounded-full bg-white/10 hover:bg-white/15 text-xs md:text-sm font-bold border border-white/15 transition-all hover:-translate-y-0.5 flex items-center gap-1.5">💡 <span class="hidden sm:inline">اقتراح بتعديل</span></button>
                 <button onclick="openLoginAtTop()" class="px-3 md:px-4 py-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-xs md:text-sm font-bold transition-all shadow-md shadow-indigo-900/30 hover:-translate-y-0.5">تسجيل الدخول</button>
                 <button id="logout-btn" onclick="logout()" class="hidden px-3 md:px-4 py-2 rounded-full bg-rose-600/90 hover:bg-rose-500 text-xs md:text-sm font-bold transition-all hover:-translate-y-0.5">خروج</button>
             </div>
@@ -156,6 +156,11 @@
         <!-- ============ الصفحة التعريفية (تظهر بس في شاشتي تسجيل الدخول) ============ -->
         <div id="site-intro-landing" class="space-y-14 mb-14">
 
+            <!-- تنبيه وضع الصيانة (يظهر بس لو الأدمن المركزي فعّله) -->
+            <div id="maintenance-banner" class="hidden bg-rose-50 border-2 border-rose-200 text-rose-700 rounded-2xl px-5 py-4 text-center font-bold text-sm flex items-center justify-center gap-2">
+                🚧 النظام تحت الصيانة حاليًا لتحديث البرنامج — نعتذر عن أي إزعاج، حاول تسجيل الدخول لاحقًا.
+            </div>
+
             <!-- الأفتار + Hero + خطة المنصة (صف واحد) -->
             <div class="flex flex-col lg:flex-row gap-5 items-stretch">
 
@@ -186,7 +191,7 @@
             </div>
 
             <!-- نتائج الصيانة الإنتاجية الشاملة (TPM) -->
-            <div id="tpm-results-section" class="hidden">
+            <div id="tpm-results-section" class="feature-tpm-charts hidden">
                 <div class="flex flex-col items-center mb-2">
                     <h2 class="text-center font-display text-2xl font-extrabold text-slate-800 mb-2">نتائج الصيانة الإنتاجية الشاملة (TPM)</h2>
                     <p id="tpm-results-subtitle" class="text-center text-slate-400 text-sm mb-3">نتائج النصف الأول من العام</p>
@@ -316,7 +321,7 @@
             </div>
 
             <!-- معرض صور التدريبات -->
-            <div>
+            <div class="feature-public-gallery">
                 <h2 class="text-center font-display text-2xl font-extrabold text-slate-800 mb-2">لقطات من التدريبات</h2>
                 <p class="text-center text-slate-400 text-sm mb-8">صور عامة من فعاليات وورش التدريب الميدانية (اضغط على أي صورة للتكبير)</p>
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="training-gallery-grid">
@@ -448,9 +453,11 @@
                     </div>
                 </div>
                 <div class="flex gap-2 flex-wrap">
-                    <button onclick="switchView('view-leaderboards')" class="text-xs bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white px-3 py-2 rounded-xl font-bold transition">🏆 لوحة الشرف</button>
-                    <button onclick="openMySkillMatrix()" class="text-xs bg-violet-50 hover:bg-violet-100 text-violet-700 px-3 py-2 rounded-xl font-bold transition">🎯 مصفوفة مهاراتي</button>
-                    <button onclick="toggleUserTeamsView()" class="text-xs bg-amber-50 hover:bg-amber-100 text-amber-700 px-3 py-2 rounded-xl font-bold transition">👥 الفرق</button>
+                    <button onclick="switchView('view-leaderboards')" class="feature-leaderboard text-xs bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white px-3 py-2 rounded-xl font-bold transition">🏆 لوحة الشرف</button>
+                    <button onclick="openContentView('training')" class="feature-training-tab text-xs bg-sky-50 hover:bg-sky-100 text-sky-700 px-3 py-2 rounded-xl font-bold transition">📚 التدريب</button>
+                    <button onclick="openContentView('instructions')" class="feature-instructions-tab text-xs bg-teal-50 hover:bg-teal-100 text-teal-700 px-3 py-2 rounded-xl font-bold transition">🗺️ التعليمات والخرائط</button>
+                    <button onclick="openMySkillMatrix()" class="feature-skill-matrix text-xs bg-violet-50 hover:bg-violet-100 text-violet-700 px-3 py-2 rounded-xl font-bold transition">🎯 مصفوفة مهاراتي</button>
+                    <button onclick="toggleUserTeamsView()" class="feature-teams-view text-xs bg-amber-50 hover:bg-amber-100 text-amber-700 px-3 py-2 rounded-xl font-bold transition">👥 الفرق</button>
                     <button onclick="toggleUserHistory()" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-xl font-bold transition">📊 سجل نتائجي السابقة</button>
                     <button onclick="togglePasswordModal()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl font-bold transition">🔒 تغيير كلمة المرور</button>
                 </div>
@@ -490,6 +497,18 @@
             <div class="bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
                 <h4 class="font-bold text-slate-700">الامتحانات المتاحة لإدارتك:</h4>
                 <div id="user-exams-cards-container" class="space-y-3"></div>
+            </div>
+        </div>
+
+        <!-- 3ب. شاشة المحتوى التدريبي (التدريب / التعليمات والخرائط) -->
+        <div id="view-content-browser" class="view-panel hidden space-y-4">
+            <div class="bg-white/95 backdrop-blur-sm p-5 sm:p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
+                <div class="flex justify-between items-center flex-wrap gap-3">
+                    <h3 id="content-view-title" class="text-lg sm:text-xl font-bold text-slate-800"></h3>
+                    <button onclick="switchView('view-user-dashboard')" class="shrink-0 flex items-center gap-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded-xl transition-all">⬅️ رجوع للرئيسية</button>
+                </div>
+                <div id="content-view-breadcrumb" class="flex items-center gap-1.5 flex-wrap text-xs font-bold text-indigo-600"></div>
+                <div id="content-view-browser" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 min-h-[120px]"></div>
             </div>
         </div>
 
@@ -598,9 +617,15 @@
                             <button type="button" data-perm="backup" onclick="switchAdminTab('admin-tab-backup')" data-tab="admin-tab-backup" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>💾</span><span>نسخة احتياطية</span>
                             </button>
+                            <button type="button" data-perm="content" onclick="switchAdminTab('admin-tab-content')" data-tab="admin-tab-content" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                                <span>📚</span><span>المحتوى التدريبي</span>
+                            </button>
+                            <button type="button" data-super-only="1" onclick="switchAdminTab('admin-tab-controls')" data-tab="admin-tab-controls" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                                <span>🛠️</span><span>التحكم بالمنصة</span>
+                            </button>
                         </div>
                     </div>
-                    <button type="button" onclick="switchView('view-leaderboards')" class="w-full mt-2.5 flex items-center justify-center gap-2 text-xs font-bold px-4 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white transition-all">
+                    <button type="button" onclick="switchView('view-leaderboards')" class="feature-leaderboard w-full mt-2.5 flex items-center justify-center gap-2 text-xs font-bold px-4 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white transition-all">
                         🏆 لوحة الشرف
                     </button>
                     <button type="button" id="sub-admin-change-pass-btn" onclick="subAdminChangePassword()" class="hidden w-full mt-2.5 flex items-center justify-center gap-2 text-xs font-bold px-4 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all">
@@ -1105,6 +1130,50 @@
                 <p class="text-[11px] text-slate-400 pt-2 border-t">💡 النسخ التلقائي الدوري عبر البريد الإلكتروني يحتاج ربط خدمة بريد (SMTP) وجدولة دورية على السيرفر — تواصل معنا لو حابب نجهزها كخطوة تانية.</p>
             </div>
 
+            <!-- إدارة المحتوى التدريبي (فيديو/صوت/PDF) -->
+            <div id="admin-tab-content" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
+                <div class="flex justify-between items-center border-b pb-2 flex-wrap gap-2">
+                    <h3 class="text-lg font-bold text-slate-800">📚 إدارة المحتوى التدريبي</h3>
+                    <div class="flex bg-slate-100 rounded-2xl p-1 text-xs font-bold">
+                        <button type="button" onclick="switchContentAdminTab('training')" id="content-admin-tab-training" class="content-admin-subtab px-3 py-1.5 rounded-xl transition-all text-slate-500">📚 التدريب</button>
+                        <button type="button" onclick="switchContentAdminTab('instructions')" id="content-admin-tab-instructions" class="content-admin-subtab px-3 py-1.5 rounded-xl transition-all text-slate-500">🗺️ التعليمات والخرائط</button>
+                    </div>
+                </div>
+
+                <!-- مسار التنقل -->
+                <div id="content-admin-breadcrumb" class="flex items-center gap-1.5 flex-wrap text-xs font-bold text-indigo-600"></div>
+
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="openCreateFolderModal()" class="text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl transition-all">📁 فولدر جديد</button>
+                    <button onclick="openCreateMaterialModal()" class="text-xs font-bold bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white px-3 py-2 rounded-xl transition-all shadow-md shadow-indigo-200">➕ إضافة مادة (فيديو/صوت/PDF)</button>
+                </div>
+
+                <div id="content-admin-browser" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 min-h-[100px]"></div>
+            </div>
+
+            <!-- التحكم بالمنصة: وضع الصيانة + إظهار/إخفاء الفيتشرز (أدمن مركزي فقط) -->
+            <div id="admin-tab-controls" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
+                <h3 class="text-lg font-bold text-slate-800 border-b pb-2">🛠️ التحكم بالمنصة</h3>
+
+                <div id="maintenance-mode-card" class="p-4 rounded-2xl border-2 border-rose-200 bg-rose-50/60 flex items-center justify-between gap-3">
+                    <div>
+                        <p class="font-bold text-rose-700 text-sm">🚧 وضع الصيانة</p>
+                        <p class="text-[11px] text-rose-500 mt-0.5">لما يتفعّل، هيتوقف دخول الأفراد والمديرين العاديين تمامًا (الأدمن المركزي بس يقدر يدخل). استخدمها وقت تحديث البرنامج.</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                        <input type="checkbox" id="maintenance-mode-toggle" onchange="onMaintenanceToggle(this)" class="sr-only peer">
+                        <div class="w-12 h-7 bg-slate-300 peer-checked:bg-rose-600 rounded-full transition-all"></div>
+                        <div class="absolute right-1 top-1 w-5 h-5 bg-white rounded-full transition-all peer-checked:-translate-x-5"></div>
+                    </label>
+                </div>
+
+                <div class="pt-2 border-t">
+                    <h4 class="text-sm font-bold text-slate-700 mb-2">إظهار/إخفاء أجزاء المنصة</h4>
+                    <p class="text-[11px] text-slate-500 mb-3">عطّل أي جزء مؤقتًا (هيختفي من واجهة الأفراد والمديرين، من غير ما تحتاج تعطّل الدخول كله).</p>
+                    <div id="feature-flags-list" class="space-y-2"></div>
+                </div>
+            </div>
+
                 </div>
             </div>
         </div>
@@ -1182,6 +1251,78 @@
             <div id="org-chart-container" class="overflow-auto flex-1 py-4">
                 <p class="text-center text-slate-400 text-sm">اختر فريقًا من القائمة أعلاه لعرض هيكله.</p>
             </div>
+        </div>
+    </div>
+
+    <!-- نافذة إنشاء فولدر جديد -->
+    <div id="create-folder-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
+            <div class="flex justify-between items-center border-b pb-2">
+                <h3 class="font-bold text-slate-800 text-base">📁 فولدر جديد</h3>
+                <button onclick="closeCreateFolderModal()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+            </div>
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">اسم الفولدر</label>
+                    <input type="text" id="new-folder-name" class="w-full px-3 py-2.5 border border-slate-200 bg-slate-50/60 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white transition-all" placeholder="مثال: دورة السلامة المهنية">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">وصف (اختياري)</label>
+                    <textarea id="new-folder-description" rows="2" class="w-full px-3 py-2.5 border border-slate-200 bg-slate-50/60 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white transition-all"></textarea>
+                </div>
+            </div>
+            <button onclick="submitCreateFolder()" class="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold py-2.5 rounded-xl transition-all shadow-md shadow-indigo-200">إنشاء الفولدر</button>
+        </div>
+    </div>
+
+    <!-- نافذة إضافة مادة تدريبية -->
+    <div id="create-material-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 max-h-[85vh] overflow-y-auto shadow-2xl">
+            <div class="flex justify-between items-center border-b pb-2">
+                <h3 class="font-bold text-slate-800 text-base">➕ إضافة مادة تدريبية</h3>
+                <button onclick="closeCreateMaterialModal()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+            </div>
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">اسم المادة</label>
+                    <input type="text" id="new-material-name" class="w-full px-3 py-2.5 border border-slate-200 bg-slate-50/60 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white transition-all" placeholder="مثال: مقدمة عن الصيانة الذاتية">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">وصف (اختياري)</label>
+                    <textarea id="new-material-description" rows="2" class="w-full px-3 py-2.5 border border-slate-200 bg-slate-50/60 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white transition-all"></textarea>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">نوع المحتوى</label>
+                    <select id="new-material-type" onchange="onMaterialTypeChange()" class="w-full px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
+                        <option value="video">🎬 فيديو (رابط يوتيوب)</option>
+                        <option value="audio">🎧 ملف صوتي</option>
+                        <option value="pdf">📄 ملف PDF</option>
+                    </select>
+                </div>
+                <div id="new-material-video-field">
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">رابط فيديو اليوتيوب</label>
+                    <input type="text" id="new-material-video-url" class="w-full px-3 py-2.5 border border-slate-200 bg-slate-50/60 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white transition-all" placeholder="https://www.youtube.com/watch?v=...">
+                </div>
+                <div id="new-material-file-field" class="hidden">
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">الملف</label>
+                    <input type="file" id="new-material-file" class="w-full text-xs text-slate-500 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:bg-indigo-50 file:text-indigo-700">
+                </div>
+            </div>
+            <button onclick="submitCreateMaterial(this)" class="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold py-2.5 rounded-xl transition-all shadow-md shadow-indigo-200">إضافة</button>
+        </div>
+    </div>
+
+    <!-- نافذة عرض المادة التدريبية (للأفراد) -->
+    <div id="material-viewer-modal" class="hidden fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-2xl w-full p-5 space-y-3 max-h-[90vh] flex flex-col shadow-2xl">
+            <div class="flex justify-between items-start border-b pb-2">
+                <div>
+                    <h3 id="material-viewer-title" class="font-bold text-slate-800 text-base"></h3>
+                    <p id="material-viewer-desc" class="text-xs text-slate-500 mt-1"></p>
+                </div>
+                <button onclick="closeMaterialViewer()" class="text-slate-400 hover:text-slate-600 font-bold shrink-0">✕</button>
+            </div>
+            <div id="material-viewer-body" class="flex-1 overflow-auto flex items-center justify-center"></div>
         </div>
     </div>
 
@@ -1729,6 +1870,8 @@
             if (tabId === 'admin-tab-teams') loadTeamsRoster();
             if (tabId === 'admin-tab-suggestions') loadSuggestions();
             if (tabId === 'admin-tab-appreciation') loadAppreciationList();
+            if (tabId === 'admin-tab-controls') loadFeatureFlagsAdmin();
+            if (tabId === 'admin-tab-content') { if (!contentAdminTab) switchContentAdminTab('training'); }
         }
 
         function setSession(user, role) {
@@ -2143,6 +2286,215 @@
             window.URL.revokeObjectURL(url);
         }
 
+        // --- التحكم بالمنصة: وضع الصيانة + الفيتشرز ---
+        // ==================== إدارة المحتوى التدريبي (أدمن) ====================
+        let contentAdminTab = null;
+        let contentAdminFolderId = null;
+
+        function switchContentAdminTab(tab) {
+            contentAdminTab = tab;
+            contentAdminFolderId = null;
+            document.querySelectorAll('.content-admin-subtab').forEach(b => b.classList.remove('bg-white', 'shadow', 'text-indigo-700'));
+            document.getElementById(`content-admin-tab-${tab}`).classList.add('bg-white', 'shadow', 'text-indigo-700');
+            loadContentAdminBrowser();
+        }
+
+        async function loadContentAdminBrowser() {
+            const cont = document.getElementById('content-admin-browser');
+            const crumbBox = document.getElementById('content-admin-breadcrumb');
+            cont.innerHTML = '<p class="text-xs text-slate-400 col-span-full">جارِ التحميل...</p>';
+
+            let url = `/api/admin/content/browse?tab=${contentAdminTab}`;
+            if (contentAdminFolderId) url += `&folder_id=${contentAdminFolderId}`;
+            const res = await apiFetch(url);
+            if (!res.ok) { cont.innerHTML = '<p class="text-xs text-rose-500 col-span-full">تعذّر تحميل المحتوى.</p>'; return; }
+            const data = await res.json();
+
+            const rootLabel = contentAdminTab === 'training' ? '📚 التدريب' : '🗺️ التعليمات والخرائط';
+            let crumbHtml = `<span class="cursor-pointer hover:underline" onclick="navigateContentAdmin(null)">${rootLabel}</span>`;
+            data.breadcrumb.forEach(b => { crumbHtml += ` <span class="text-slate-300">/</span> <span class="cursor-pointer hover:underline" onclick="navigateContentAdmin(${b.id})">${b.name}</span>`; });
+            crumbBox.innerHTML = crumbHtml;
+
+            let html = '';
+            data.folders.forEach(f => {
+                html += `
+                <div class="relative group border border-slate-200 rounded-2xl p-3 hover:shadow-md transition-all cursor-pointer bg-amber-50/40" onclick="navigateContentAdmin(${f.id})">
+                    <button onclick="event.stopPropagation(); deleteContentFolder(${f.id}, '${f.name.replace(/'/g, "\\'")}')" class="absolute top-1.5 left-1.5 w-6 h-6 rounded-full bg-white shadow text-rose-500 hover:text-rose-700 text-xs opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
+                    <div class="text-3xl text-center mb-1">📁</div>
+                    <p class="text-xs font-bold text-slate-700 text-center truncate">${f.name}</p>
+                </div>`;
+            });
+            const typeIcon = { video: '🎬', audio: '🎧', pdf: '📄' };
+            data.materials.forEach(m => {
+                html += `
+                <div class="relative group border border-slate-200 rounded-2xl p-3 hover:shadow-md transition-all bg-white">
+                    <button onclick="deleteContentMaterial(${m.id}, '${m.name.replace(/'/g, "\\'")}')" class="absolute top-1.5 left-1.5 w-6 h-6 rounded-full bg-white shadow text-rose-500 hover:text-rose-700 text-xs opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
+                    <div class="text-3xl text-center mb-1">${typeIcon[m.content_type] || '📄'}</div>
+                    <p class="text-xs font-bold text-slate-700 text-center truncate">${m.name}</p>
+                </div>`;
+            });
+
+            cont.innerHTML = html || '<p class="text-xs text-slate-400 col-span-full text-center py-6">لا يوجد محتوى هنا بعد.</p>';
+        }
+
+        function navigateContentAdmin(folderId) {
+            contentAdminFolderId = folderId;
+            loadContentAdminBrowser();
+        }
+
+        function openCreateFolderModal() {
+            document.getElementById('new-folder-name').value = '';
+            document.getElementById('new-folder-description').value = '';
+            document.getElementById('create-folder-modal').classList.remove('hidden');
+        }
+        function closeCreateFolderModal() { document.getElementById('create-folder-modal').classList.add('hidden'); }
+
+        async function submitCreateFolder() {
+            const name = document.getElementById('new-folder-name').value.trim();
+            if (!name) return alert('اكتب اسم الفولدر.');
+            const fd = new FormData();
+            fd.append('tab', contentAdminTab);
+            if (contentAdminFolderId) fd.append('parent_id', contentAdminFolderId);
+            fd.append('name', name);
+            fd.append('description', document.getElementById('new-folder-description').value.trim());
+            const res = await apiFetch('/api/admin/content/folders', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (!res.ok) return alert(data.detail || 'فشل إنشاء الفولدر.');
+            closeCreateFolderModal();
+            loadContentAdminBrowser();
+        }
+
+        async function deleteContentFolder(id, name) {
+            if (!confirm(`حذف فولدر "${name}" وكل محتوياته (فولدرات ومواد فرعية)؟ لا يمكن التراجع.`)) return;
+            await apiFetch(`/api/admin/content/folders/${id}`, { method: 'DELETE' });
+            loadContentAdminBrowser();
+        }
+
+        function onMaterialTypeChange() {
+            const type = document.getElementById('new-material-type').value;
+            document.getElementById('new-material-video-field').classList.toggle('hidden', type !== 'video');
+            document.getElementById('new-material-file-field').classList.toggle('hidden', type === 'video');
+        }
+
+        function openCreateMaterialModal() {
+            document.getElementById('new-material-name').value = '';
+            document.getElementById('new-material-description').value = '';
+            document.getElementById('new-material-type').value = 'video';
+            document.getElementById('new-material-video-url').value = '';
+            document.getElementById('new-material-file').value = '';
+            onMaterialTypeChange();
+            document.getElementById('create-material-modal').classList.remove('hidden');
+        }
+        function closeCreateMaterialModal() { document.getElementById('create-material-modal').classList.add('hidden'); }
+
+        async function submitCreateMaterial(submitBtn) {
+            const name = document.getElementById('new-material-name').value.trim();
+            const type = document.getElementById('new-material-type').value;
+            if (!name) return alert('اكتب اسم المادة.');
+            const fd = new FormData();
+            fd.append('tab', contentAdminTab);
+            if (contentAdminFolderId) fd.append('folder_id', contentAdminFolderId);
+            fd.append('name', name);
+            fd.append('description', document.getElementById('new-material-description').value.trim());
+            fd.append('content_type', type);
+            if (type === 'video') {
+                const url = document.getElementById('new-material-video-url').value.trim();
+                if (!url) return alert('اكتب رابط فيديو اليوتيوب.');
+                fd.append('video_url', url);
+            } else {
+                const fileInput = document.getElementById('new-material-file');
+                if (!fileInput.files.length) return alert('اختر الملف المطلوب رفعه.');
+                fd.append('file', fileInput.files[0]);
+            }
+            submitBtn.disabled = true;
+            submitBtn.innerText = 'جارِ الرفع...';
+            const res = await apiFetch('/api/admin/content/materials', { method: 'POST', body: fd });
+            submitBtn.disabled = false;
+            submitBtn.innerText = 'إضافة';
+            const data = await res.json();
+            if (!res.ok) return alert(data.detail || 'فشل إضافة المادة.');
+            closeCreateMaterialModal();
+            loadContentAdminBrowser();
+        }
+
+        async function deleteContentMaterial(id, name) {
+            if (!confirm(`حذف "${name}"؟`)) return;
+            await apiFetch(`/api/admin/content/materials/${id}`, { method: 'DELETE' });
+            loadContentAdminBrowser();
+        }
+
+        async function loadFeatureFlagsAdmin() {
+            const res = await apiFetch('/api/admin/feature-flags/list');
+            if (!res.ok) return;
+            const flags = await res.json();
+
+            const maintenance = flags.find(f => f.key === 'maintenance_mode');
+            const mToggle = document.getElementById('maintenance-mode-toggle');
+            if (maintenance && mToggle) mToggle.checked = maintenance.enabled;
+
+            const listCont = document.getElementById('feature-flags-list');
+            listCont.innerHTML = flags.filter(f => f.key !== 'maintenance_mode').map(f => `
+                <div class="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50/80 border border-slate-200/70">
+                    <p class="text-xs font-semibold text-slate-700">${f.label}</p>
+                    <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                        <input type="checkbox" data-flag-key="${f.key}" onchange="onFeatureFlagToggle(this)" class="sr-only peer" ${f.enabled ? 'checked' : ''}>
+                        <div class="w-11 h-6 bg-slate-300 peer-checked:bg-emerald-500 rounded-full transition-all"></div>
+                        <div class="absolute right-1 top-1 w-4 h-4 bg-white rounded-full transition-all peer-checked:-translate-x-5"></div>
+                    </label>
+                </div>
+            `).join('');
+        }
+
+        async function toggleFlag(key, enabled) {
+            const fd = new FormData();
+            fd.append('enabled', enabled ? 'true' : 'false');
+            const res = await apiFetch(`/api/admin/feature-flags/${key}/toggle`, { method: 'POST', body: fd });
+            return res.ok;
+        }
+
+        async function onMaintenanceToggle(cb) {
+            if (cb.checked && !confirm('تفعيل وضع الصيانة هيمنع كل الأفراد والمديرين العاديين من تسجيل الدخول فورًا. متأكد؟')) {
+                cb.checked = false;
+                return;
+            }
+            const ok = await toggleFlag('maintenance_mode', cb.checked);
+            if (!ok) { alert('تعذّر تحديث وضع الصيانة.'); cb.checked = !cb.checked; }
+        }
+
+        async function onFeatureFlagToggle(cb) {
+            const ok = await toggleFlag(cb.dataset.flagKey, cb.checked);
+            if (!ok) { alert('تعذّر تحديث هذا الفيتشر.'); cb.checked = !cb.checked; }
+        }
+
+        // --- تطبيق مفاتيح التحكم على الواجهة (تُجلب فور تحميل الصفحة، قبل تسجيل الدخول حتى) ---
+        let FEATURE_FLAGS = {};
+        async function loadAndApplyFeatureFlags() {
+            try {
+                const res = await fetch('/api/public/feature-flags');
+                FEATURE_FLAGS = await res.json();
+            } catch (e) { FEATURE_FLAGS = {}; return; }
+
+            const hideIfOff = (flagKey, selectorList) => {
+                if (FEATURE_FLAGS[flagKey] === false) {
+                    selectorList.forEach(sel => document.querySelectorAll(sel).forEach(el => el.classList.add('hidden')));
+                }
+            };
+            hideIfOff('leaderboard', ['.feature-leaderboard']);
+            hideIfOff('skill_matrix', ['.feature-skill-matrix']);
+            hideIfOff('teams_view', ['.feature-teams-view']);
+            hideIfOff('suggestions_button', ['.feature-suggestions-btn']);
+            hideIfOff('public_gallery', ['.feature-public-gallery']);
+            hideIfOff('tpm_charts', ['.feature-tpm-charts']);
+            hideIfOff('training_tab', ['.feature-training-tab']);
+            hideIfOff('instructions_tab', ['.feature-instructions-tab']);
+
+            if (FEATURE_FLAGS.maintenance_mode) {
+                const banner = document.getElementById('maintenance-banner');
+                if (banner) banner.classList.remove('hidden');
+            }
+        }
+        loadAndApplyFeatureFlags();
+
         async function uploadTpmResults() {
             const fileInput = document.getElementById('tpm-upload-file');
             const half = document.getElementById('tpm-upload-half').value;
@@ -2304,8 +2656,8 @@
                             <span>المستوى: <strong class="text-emerald-700">${h.overall_level}</strong></span>
                         </div>
                         <div class="flex items-center gap-3">
-                            ${h.allow_answer_review ? `<button onclick="openMyAnswerReview(${h.exam_id})" class="text-[11px] text-indigo-600 hover:underline font-bold">📋 مراجعة إجاباتي التفصيلية</button>` : ''}
-                            ${certEligible ? `<button onclick="downloadMyCertificate(${h.exam_id}, this)" class="text-[11px] text-amber-700 hover:underline font-bold">🎓 تنزيل شهادة الاجتياز</button>` : ''}
+                            ${(h.allow_answer_review && FEATURE_FLAGS.answer_review !== false) ? `<button onclick="openMyAnswerReview(${h.exam_id})" class="text-[11px] text-indigo-600 hover:underline font-bold">📋 مراجعة إجاباتي التفصيلية</button>` : ''}
+                            ${(certEligible && FEATURE_FLAGS.certificates_download !== false) ? `<button onclick="downloadMyCertificate(${h.exam_id}, this)" class="text-[11px] text-amber-700 hover:underline font-bold">🎓 تنزيل شهادة الاجتياز</button>` : ''}
                         </div>
                     </div>
                 `;
@@ -3520,6 +3872,93 @@
             }
 
             return `<div class="flex flex-col items-center">${rows.join('')}</div>`;
+        }
+
+        // ==================== المحتوى التدريبي (عرض الأفراد) ====================
+        let userContentTab = null;
+        let userContentFolderId = null;
+
+        function openContentView(tab) {
+            userContentTab = tab;
+            userContentFolderId = null;
+            document.getElementById('content-view-title').innerText = tab === 'training' ? '📚 التدريب' : '🗺️ التعليمات والخرائط';
+            switchView('view-content-browser');
+            loadContentUserBrowser();
+        }
+
+        async function loadContentUserBrowser() {
+            const cont = document.getElementById('content-view-browser');
+            const crumbBox = document.getElementById('content-view-breadcrumb');
+            cont.innerHTML = '<p class="text-xs text-slate-400 col-span-full">جارِ التحميل...</p>';
+
+            let url = `/api/user/content/browse?tab=${userContentTab}`;
+            if (userContentFolderId) url += `&folder_id=${userContentFolderId}`;
+            const res = await apiFetch(url);
+            if (!res.ok) { cont.innerHTML = '<p class="text-xs text-rose-500 col-span-full">تعذّر تحميل المحتوى.</p>'; return; }
+            const data = await res.json();
+
+            const rootLabel = userContentTab === 'training' ? '📚 التدريب' : '🗺️ التعليمات والخرائط';
+            let crumbHtml = `<span class="cursor-pointer hover:underline" onclick="navigateContentUser(null)">${rootLabel}</span>`;
+            data.breadcrumb.forEach(b => { crumbHtml += ` <span class="text-slate-300">/</span> <span class="cursor-pointer hover:underline" onclick="navigateContentUser(${b.id})">${b.name}</span>`; });
+            crumbBox.innerHTML = crumbHtml;
+
+            let html = '';
+            data.folders.forEach(f => {
+                html += `
+                <div class="border border-slate-200 rounded-2xl p-3 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer bg-amber-50/40" onclick="navigateContentUser(${f.id})" title="${f.description ? f.description.replace(/"/g, '&quot;') : ''}">
+                    <div class="text-3xl text-center mb-1">📁</div>
+                    <p class="text-xs font-bold text-slate-700 text-center truncate">${f.name}</p>
+                </div>`;
+            });
+            const typeIcon = { video: '🎬', audio: '🎧', pdf: '📄' };
+            data.materials.forEach(m => {
+                html += `
+                <div class="border border-slate-200 rounded-2xl p-3 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer bg-white" onclick='openMaterialViewer(${JSON.stringify(m).replace(/'/g, "&apos;")})'>
+                    <div class="text-3xl text-center mb-1">${typeIcon[m.content_type] || '📄'}</div>
+                    <p class="text-xs font-bold text-slate-700 text-center truncate">${m.name}</p>
+                </div>`;
+            });
+
+            cont.innerHTML = html || '<p class="text-xs text-slate-400 col-span-full text-center py-8">لا يوجد محتوى هنا بعد.</p>';
+        }
+
+        function navigateContentUser(folderId) {
+            userContentFolderId = folderId;
+            loadContentUserBrowser();
+        }
+
+        function youtubeEmbedUrl(url) {
+            let id = '';
+            const m1 = url.match(/(?:youtube\.com\/watch\?v=|youtube\.com\/embed\/|youtu\.be\/)([a-zA-Z0-9_-]{6,})/);
+            if (m1) id = m1[1];
+            return id ? `https://www.youtube.com/embed/${id}` : '';
+        }
+
+        function openMaterialViewer(m) {
+            document.getElementById('material-viewer-title').innerText = m.name;
+            document.getElementById('material-viewer-desc').innerText = m.description || '';
+            const body = document.getElementById('material-viewer-body');
+
+            if (m.content_type === 'video') {
+                const embed = youtubeEmbedUrl(m.video_url || '');
+                body.innerHTML = embed
+                    ? `<iframe class="w-full aspect-video rounded-xl" src="${embed}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`
+                    : `<p class="text-sm text-rose-500">تعذّر تشغيل رابط الفيديو.</p>`;
+            } else if (m.content_type === 'audio') {
+                body.innerHTML = `<audio controls class="w-full" src="${m.file_url}"></audio>`;
+            } else if (m.content_type === 'pdf') {
+                body.innerHTML = `
+                    <div class="w-full h-[70vh] flex flex-col gap-2">
+                        <iframe src="${m.file_url}" class="flex-1 w-full rounded-xl border border-slate-200"></iframe>
+                        <a href="${m.file_url}" target="_blank" class="text-xs text-center text-indigo-600 hover:underline font-bold">فتح الملف في نافذة جديدة ⬈</a>
+                    </div>`;
+            }
+            document.getElementById('material-viewer-modal').classList.remove('hidden');
+        }
+
+        function closeMaterialViewer() {
+            document.getElementById('material-viewer-modal').classList.add('hidden');
+            document.getElementById('material-viewer-body').innerHTML = '';
         }
 
         async function openTeamOrgChartModal() {
