@@ -4,6 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>منصة التقييم والامتحانات وإدارة الكفاءات الفنية</title>
+
+    <!-- PWA: تثبيت المنصة كتطبيق على الشاشة الرئيسية -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#4f46e5">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="فوم بنها TPM">
+    <link rel="apple-touch-icon" href="/api/public/site-image/site-icon-192">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1323,6 +1333,18 @@
                 <button onclick="closeMaterialViewer()" class="text-slate-400 hover:text-slate-600 font-bold shrink-0">✕</button>
             </div>
             <div id="material-viewer-body" class="flex-1 overflow-auto flex items-center justify-center"></div>
+            <div id="material-viewer-complete-box" class="pt-2 border-t"></div>
+        </div>
+    </div>
+
+    <!-- نافذة قائمة من شاهد/أنهى مادة تدريبية (أدمن) -->
+    <div id="material-progress-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 space-y-3 max-h-[80vh] flex flex-col shadow-2xl">
+            <div class="flex justify-between items-center border-b pb-2">
+                <h3 id="material-progress-title" class="font-bold text-slate-800 text-base">👁️ تتبع المشاهدة</h3>
+                <button onclick="closeMaterialProgressModal()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+            </div>
+            <div id="material-progress-list" class="space-y-1.5 overflow-y-auto flex-1"></div>
         </div>
     </div>
 
@@ -2329,7 +2351,8 @@
                 html += `
                 <div class="relative group border border-slate-200 rounded-2xl p-3 hover:shadow-md transition-all bg-white">
                     <button onclick="deleteContentMaterial(${m.id}, '${m.name.replace(/'/g, "\\'")}')" class="absolute top-1.5 left-1.5 w-6 h-6 rounded-full bg-white shadow text-rose-500 hover:text-rose-700 text-xs opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
-                    <div class="text-3xl text-center mb-1">${typeIcon[m.content_type] || '📄'}</div>
+                    <button onclick="openMaterialProgressModal(${m.id}, '${m.name.replace(/'/g, "\\'")}')" class="absolute top-1.5 right-1.5 text-[10px] font-bold bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded-full">👁️ ${m.completed_count || 0}</button>
+                    <div class="text-3xl text-center mb-1 mt-3">${typeIcon[m.content_type] || '📄'}</div>
                     <p class="text-xs font-bold text-slate-700 text-center truncate">${m.name}</p>
                 </div>`;
             });
@@ -2423,6 +2446,31 @@
             loadContentAdminBrowser();
         }
 
+        async function openMaterialProgressModal(materialId, materialName) {
+            document.getElementById('material-progress-title').innerText = `👁️ تتبع المشاهدة: ${materialName}`;
+            const cont = document.getElementById('material-progress-list');
+            cont.innerHTML = '<p class="text-xs text-slate-400">جارِ التحميل...</p>';
+            document.getElementById('material-progress-modal').classList.remove('hidden');
+
+            const res = await apiFetch(`/api/admin/content/materials/${materialId}/progress`);
+            if (!res.ok) { cont.innerHTML = '<p class="text-xs text-rose-500">تعذّر تحميل البيانات.</p>'; return; }
+            const list = await res.json();
+            if (list.length === 0) { cont.innerHTML = '<p class="text-xs text-slate-400">لسه محدش فتح المادة دي.</p>'; return; }
+            cont.innerHTML = list.map(p => `
+                <div class="flex items-center justify-between bg-slate-50/80 border border-slate-200/70 rounded-xl px-3 py-2 text-xs">
+                    <div>
+                        <span class="font-bold text-slate-700">${p.name}</span>
+                        <span class="text-slate-400 font-mono"> (${p.sap_id})</span>
+                    </div>
+                    ${p.completed ? '<span class="text-emerald-600 font-bold">✅ أنهى</span>' : '<span class="text-amber-600 font-bold">👁️ فتح فقط</span>'}
+                </div>
+            `).join('');
+        }
+
+        function closeMaterialProgressModal() {
+            document.getElementById('material-progress-modal').classList.add('hidden');
+        }
+
         async function loadFeatureFlagsAdmin() {
             const res = await apiFetch('/api/admin/feature-flags/list');
             if (!res.ok) return;
@@ -2494,6 +2542,13 @@
             }
         }
         loadAndApplyFeatureFlags();
+
+        // --- PWA: تسجيل الـ Service Worker (شرط أساسي للتثبيت التلقائي على أندرويد) ---
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').catch(() => {});
+            });
+        }
 
         async function uploadTpmResults() {
             const fileInput = document.getElementById('tpm-upload-file');
@@ -3913,7 +3968,8 @@
             const typeIcon = { video: '🎬', audio: '🎧', pdf: '📄' };
             data.materials.forEach(m => {
                 html += `
-                <div class="border border-slate-200 rounded-2xl p-3 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer bg-white" onclick='openMaterialViewer(${JSON.stringify(m).replace(/'/g, "&apos;")})'>
+                <div class="relative border border-slate-200 rounded-2xl p-3 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer bg-white" onclick='openMaterialViewer(${JSON.stringify(m).replace(/'/g, "&apos;")})'>
+                    ${m.completed ? '<span class="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-emerald-500 text-white text-[10px] flex items-center justify-center shadow">✓</span>' : ''}
                     <div class="text-3xl text-center mb-1">${typeIcon[m.content_type] || '📄'}</div>
                     <p class="text-xs font-bold text-slate-700 text-center truncate">${m.name}</p>
                 </div>`;
@@ -3934,7 +3990,10 @@
             return id ? `https://www.youtube.com/embed/${id}` : '';
         }
 
+        let currentViewerMaterialId = null;
+
         function openMaterialViewer(m) {
+            currentViewerMaterialId = m.id;
             document.getElementById('material-viewer-title').innerText = m.name;
             document.getElementById('material-viewer-desc').innerText = m.description || '';
             const body = document.getElementById('material-viewer-body');
@@ -3953,12 +4012,32 @@
                         <a href="${m.file_url}" target="_blank" class="text-xs text-center text-indigo-600 hover:underline font-bold">فتح الملف في نافذة جديدة ⬈</a>
                     </div>`;
             }
+
+            // زرار تسجيل الإنهاء أسفل النافذة
+            const completeBtnBox = document.getElementById('material-viewer-complete-box');
+            if (m.completed) {
+                completeBtnBox.innerHTML = `<span class="text-xs font-bold text-emerald-600 flex items-center justify-center gap-1.5">✅ تم تسجيل إنهائك لهذه المادة</span>`;
+            } else {
+                completeBtnBox.innerHTML = `<button onclick="markMaterialComplete(${m.id})" class="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold py-2.5 rounded-xl text-sm transition-all shadow-md shadow-emerald-200">✓ أنهيت مشاهدة/قراءة هذه المادة</button>`;
+            }
+
             document.getElementById('material-viewer-modal').classList.remove('hidden');
+
+            // تسجيل فتح المادة (تتبع المشاهدة) — بدون انتظار الاستجابة
+            apiFetch(`/api/user/content/materials/${m.id}/view`, { method: 'POST' }).catch(() => {});
+        }
+
+        async function markMaterialComplete(materialId) {
+            const res = await apiFetch(`/api/user/content/materials/${materialId}/complete`, { method: 'POST' });
+            if (!res.ok) { alert('تعذّر تسجيل الإنهاء.'); return; }
+            document.getElementById('material-viewer-complete-box').innerHTML = `<span class="text-xs font-bold text-emerald-600 flex items-center justify-center gap-1.5">✅ تم تسجيل إنهائك لهذه المادة</span>`;
+            loadContentUserBrowser(); // لتحديث علامة ✓ في شبكة المواد
         }
 
         function closeMaterialViewer() {
             document.getElementById('material-viewer-modal').classList.add('hidden');
             document.getElementById('material-viewer-body').innerHTML = '';
+            currentViewerMaterialId = null;
         }
 
         async function openTeamOrgChartModal() {
