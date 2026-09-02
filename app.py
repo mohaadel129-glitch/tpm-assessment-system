@@ -39,7 +39,7 @@ app = FastAPI(title="Enterprise Skill Matrix & Assessment System")
 # الأدمن المركزي (admin_settings) يملك كل الصلاحيات دائمًا تلقائيًا
 ADMIN_PERMISSION_KEYS = [
     "resets", "gallery", "create", "manage", "users", "teams", "analytics", "skills",
-    "suggestions", "appreciation", "backup", "full_access",
+    "suggestions", "appreciation", "backup", "content", "full_access",
 ]
 
 # مهام أعضاء الفريق المتاحة (تُستخدم عند تعيين الأفراد في الفرق)
@@ -567,6 +567,58 @@ def init_db_tables():
             except Exception:
                 pass
 
+        # 19. مفاتيح تحكم الأدمن المركزي في ظهور الأجزاء/الفيتشرز، ووضع الصيانة (تعليق الدخول بالكامل)
+        c.execute(f"""CREATE TABLE IF NOT EXISTS feature_flags (
+            flag_key TEXT PRIMARY KEY,
+            enabled INTEGER DEFAULT 1,
+            label TEXT
+        )""")
+        default_flags = [
+            ("maintenance_mode", 0, "وضع الصيانة (تعليق الدخول بالكامل عن الأفراد والمديرين)"),
+            ("leaderboard", 1, "لوحة الشرف"),
+            ("skill_matrix", 1, "مصفوفة المهارات"),
+            ("teams_view", 1, "عرض الفرق للأفراد"),
+            ("suggestions_button", 1, "زر الاقتراحات في الصفحة الرئيسية"),
+            ("certificates_download", 1, "تحميل شهادات الاجتياز"),
+            ("answer_review", 1, "مراجعة الإجابات بعد الامتحان"),
+            ("public_gallery", 1, "معرض الصور في الصفحة الرئيسية"),
+            ("tpm_charts", 1, "شارتات نتائج TPM في الصفحة الرئيسية"),
+            ("training_tab", 1, "تبويب التدريب (فيديو/صوت/PDF)"),
+            ("instructions_tab", 1, "تبويب التعليمات والخرائط"),
+        ]
+        for key, enabled, label in default_flags:
+            q_seed = (
+                "INSERT INTO feature_flags (flag_key, enabled, label) VALUES (%s, %s, %s) ON CONFLICT(flag_key) DO NOTHING"
+                if is_pg
+                else "INSERT OR IGNORE INTO feature_flags (flag_key, enabled, label) VALUES (?, ?, ?)"
+            )
+            try:
+                c.execute(q_seed, (key, enabled, label))
+            except Exception:
+                pass
+
+        # 20. المحتوى التدريبي: فولدرات هرمية (تدريب / تعليمات وخرائط) وموادها (فيديو يوتيوب / صوت / PDF)
+        c.execute(f"""CREATE TABLE IF NOT EXISTS content_folders (
+            id {id_type},
+            tab TEXT NOT NULL,
+            parent_id INTEGER,
+            name TEXT NOT NULL,
+            description TEXT,
+            created_at TIMESTAMP DEFAULT {ts_default}
+        )""")
+        c.execute(f"""CREATE TABLE IF NOT EXISTS content_materials (
+            id {id_type},
+            tab TEXT NOT NULL,
+            folder_id INTEGER,
+            name TEXT NOT NULL,
+            description TEXT,
+            content_type TEXT NOT NULL,
+            video_url TEXT,
+            file_url TEXT,
+            file_public_id TEXT,
+            created_at TIMESTAMP DEFAULT {ts_default}
+        )""")
+
         # ملاحظة: تم حذف الإدراج التلقائي لمستخدم تجريبي هنا نهائيًا لمنع رجوعه بعد الحذف
 
         conn.commit()
@@ -1069,7 +1121,67 @@ def get_public_platform_stats():
     }
 
 
-# ==================== نسخ احتياطي لقاعدة البيانات (يدوي) ====================
+# ==================== تحكم الأدمن المركزي في ظهور الأجزاء ووضع الصيانة ====================
+def is_maintenance_mode() -> bool:
+    """يفحص هل وضع الصيانة مفعّل حاليًا (يُستخدم في نقاط تسجيل الدخول لمنع دخول
+    الأفراد والمديرين العاديين، مع إبقاء الأدمن المركزي قادرًا على الدخول دائمًا لإيقافه)."""
+    try:
+        conn, is_pg = get_db()
+        c = conn.cursor()
+        q = (
+            "SELECT enabled FROM feature_flags WHERE flag_key = %s" if is_pg
+            else "SELECT enabled FROM feature_flags WHERE flag_key = ?"
+        )
+        c.execute(q, ("maintenance_mode",))
+        row = c.fetchone()
+        conn.close()
+        return bool(row and row[0])
+    except Exception:
+        return False
+
+
+@app.get("/api/public/feature-flags")
+def get_public_feature_flags():
+    """يرجّع كل مفاتيح التحكم (ظاهر/مخفي) — عام ومتاح حتى قبل تسجيل الدخول،
+    عشان الواجهة تعرف تخفي/تظهر الأجزاء المناسبة فورًا."""
+    conn, _ = get_db()
+    c = conn.cursor()
+    c.execute("SELECT flag_key, enabled FROM feature_flags")
+    rows = c.fetchall()
+    conn.close()
+    return {r[0]: bool(r[1]) for r in rows}
+
+
+@app.get("/api/admin/feature-flags/list")
+async def list_feature_flags_admin(_admin: Dict[str, object] = Depends(get_current_super_admin)):
+    conn, _ = get_db()
+    c = conn.cursor()
+    c.execute("SELECT flag_key, enabled, label FROM feature_flags ORDER BY (flag_key = 'maintenance_mode') DESC, label ASC")
+    rows = c.fetchall()
+    conn.close()
+    return [{"key": r[0], "enabled": bool(r[1]), "label": r[2]} for r in rows]
+
+
+@app.post("/api/admin/feature-flags/{flag_key}/toggle")
+async def toggle_feature_flag(
+    flag_key: str,
+    enabled: bool = Form(...),
+    _admin: Dict[str, object] = Depends(get_current_super_admin),
+):
+    """تفعيل/تعطيل أي فيتشر أو جزء من المنصة — مقصور على الأدمن المركزي فقط
+    (بما في ذلك وضع الصيانة نفسه، عشان محدش تاني يقدر يعلّق الدخول كله غيره)."""
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q = (
+        "UPDATE feature_flags SET enabled = %s WHERE flag_key = %s" if is_pg
+        else "UPDATE feature_flags SET enabled = ? WHERE flag_key = ?"
+    )
+    c.execute(q, (1 if enabled else 0, flag_key))
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
+
+
 BACKUP_TABLES = [
     "users", "admins", "admin_settings", "exams", "questions", "submissions",
     "teams", "user_teams", "retake_permissions", "retake_requests",
@@ -1902,6 +2014,12 @@ async def admin_login(
         }
 
     # 2) تجربة الدخول كأدمن عادي (مدير) بصلاحيات محددة
+    if is_maintenance_mode():
+        conn.close()
+        raise HTTPException(
+            status_code=503,
+            detail="النظام تحت الصيانة حاليًا لتحديث البرنامج، برجاء المحاولة لاحقًا.",
+        )
     q_sub = (
         "SELECT sap_id, name, email, permissions, password FROM admins WHERE sap_id = %s AND LOWER(email) = %s"
         if is_pg
@@ -2144,6 +2262,11 @@ async def update_admin_profile(
 
 @app.post("/api/auth/user-login")
 async def user_login(sap_id: str = Form(...), password: str = Form(...)):
+    if is_maintenance_mode():
+        raise HTTPException(
+            status_code=503,
+            detail="النظام تحت الصيانة حاليًا لتحديث البرنامج، برجاء المحاولة لاحقًا.",
+        )
     sap_id_clean, pass_clean = sap_id.strip(), password.strip()
     conn, is_pg = get_db()
     c = conn.cursor()
@@ -2334,6 +2457,238 @@ async def get_gallery(_admin: Dict[str, object] = Depends(require_permission("ga
         {"id": r[0], "filename": r[1], "url": r[2], "date": str(r[3])}
         for r in rows
     ]
+
+
+# ==================== المحتوى التدريبي (تدريب / تعليمات وخرائط) ====================
+CONTENT_TABS = ("training", "instructions")
+CONTENT_TYPES = ("video", "audio", "pdf")
+
+
+def _browse_content(tab: str, folder_id: Optional[int]) -> Dict[str, object]:
+    """يرجّع الفولدرات الفرعية والمواد الموجودة داخل مستوى معيّن، مع مسار التنقل (breadcrumb)."""
+    conn, is_pg = get_db()
+    c = conn.cursor()
+
+    if folder_id:
+        q_cur = "SELECT id, name FROM content_folders WHERE id = %s" if is_pg else "SELECT id, name FROM content_folders WHERE id = ?"
+        c.execute(q_cur, (folder_id,))
+        cur = c.fetchone()
+        if not cur:
+            conn.close()
+            raise HTTPException(status_code=404, detail="الفولدر غير موجود.")
+
+    # بناء مسار التنقل (breadcrumb) بالصعود لأعلى حتى الجذر
+    breadcrumb = []
+    walk_id = folder_id
+    while walk_id:
+        q_walk = "SELECT id, name, parent_id FROM content_folders WHERE id = %s" if is_pg else "SELECT id, name, parent_id FROM content_folders WHERE id = ?"
+        c.execute(q_walk, (walk_id,))
+        wr = c.fetchone()
+        if not wr:
+            break
+        breadcrumb.insert(0, {"id": wr[0], "name": wr[1]})
+        walk_id = wr[2]
+
+    if folder_id:
+        q_folders = "SELECT id, name, description FROM content_folders WHERE tab = %s AND parent_id = %s ORDER BY name ASC" if is_pg else "SELECT id, name, description FROM content_folders WHERE tab = ? AND parent_id = ? ORDER BY name ASC"
+        c.execute(q_folders, (tab, folder_id))
+    else:
+        q_folders = "SELECT id, name, description FROM content_folders WHERE tab = %s AND parent_id IS NULL ORDER BY name ASC" if is_pg else "SELECT id, name, description FROM content_folders WHERE tab = ? AND parent_id IS NULL ORDER BY name ASC"
+        c.execute(q_folders, (tab,))
+    folders = [{"id": r[0], "name": r[1], "description": r[2]} for r in c.fetchall()]
+
+    if folder_id:
+        q_mat = "SELECT id, name, description, content_type, video_url, file_url FROM content_materials WHERE tab = %s AND folder_id = %s ORDER BY name ASC" if is_pg else "SELECT id, name, description, content_type, video_url, file_url FROM content_materials WHERE tab = ? AND folder_id = ? ORDER BY name ASC"
+        c.execute(q_mat, (tab, folder_id))
+    else:
+        q_mat = "SELECT id, name, description, content_type, video_url, file_url FROM content_materials WHERE tab = %s AND folder_id IS NULL ORDER BY name ASC" if is_pg else "SELECT id, name, description, content_type, video_url, file_url FROM content_materials WHERE tab = ? AND folder_id IS NULL ORDER BY name ASC"
+        c.execute(q_mat, (tab,))
+    materials = [
+        {"id": r[0], "name": r[1], "description": r[2], "content_type": r[3], "video_url": r[4], "file_url": r[5]}
+        for r in c.fetchall()
+    ]
+    conn.close()
+    return {"breadcrumb": breadcrumb, "folders": folders, "materials": materials}
+
+
+@app.get("/api/admin/content/browse")
+async def admin_browse_content(
+    tab: str, folder_id: Optional[int] = None,
+    _admin: Dict[str, object] = Depends(require_permission("content")),
+):
+    if tab not in CONTENT_TABS:
+        raise HTTPException(status_code=400, detail="تبويب غير صحيح.")
+    return _browse_content(tab, folder_id)
+
+
+@app.post("/api/admin/content/folders")
+async def create_content_folder(
+    tab: str = Form(...), parent_id: Optional[int] = Form(None),
+    name: str = Form(...), description: str = Form(""),
+    _admin: Dict[str, object] = Depends(require_permission("content")),
+):
+    if tab not in CONTENT_TABS:
+        raise HTTPException(status_code=400, detail="تبويب غير صحيح.")
+    if not name.strip():
+        raise HTTPException(status_code=400, detail="اسم الفولدر مطلوب.")
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q = (
+        "INSERT INTO content_folders (tab, parent_id, name, description) VALUES (%s, %s, %s, %s)"
+        if is_pg
+        else "INSERT INTO content_folders (tab, parent_id, name, description) VALUES (?, ?, ?, ?)"
+    )
+    c.execute(q, (tab, parent_id, name.strip(), description.strip() or None))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": f"تم إنشاء فولدر \"{name.strip()}\"."}
+
+
+@app.post("/api/admin/content/folders/{folder_id}/rename")
+async def rename_content_folder(
+    folder_id: int, name: str = Form(...), description: str = Form(""),
+    _admin: Dict[str, object] = Depends(require_permission("content")),
+):
+    if not name.strip():
+        raise HTTPException(status_code=400, detail="اسم الفولدر مطلوب.")
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q = (
+        "UPDATE content_folders SET name = %s, description = %s WHERE id = %s" if is_pg
+        else "UPDATE content_folders SET name = ?, description = ? WHERE id = ?"
+    )
+    c.execute(q, (name.strip(), description.strip() or None, folder_id))
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
+
+
+def _delete_folder_recursive(c, is_pg: bool, folder_id: int):
+    """يمسح الفولدر وكل محتوياته (فولدرات فرعية ومواد) بشكل تكراري، بما فيها ملفات Cloudinary."""
+    q_sub = "SELECT id FROM content_folders WHERE parent_id = %s" if is_pg else "SELECT id FROM content_folders WHERE parent_id = ?"
+    c.execute(q_sub, (folder_id,))
+    for (sub_id,) in c.fetchall():
+        _delete_folder_recursive(c, is_pg, sub_id)
+
+    q_mat = "SELECT id, file_public_id FROM content_materials WHERE folder_id = %s" if is_pg else "SELECT id, file_public_id FROM content_materials WHERE folder_id = ?"
+    c.execute(q_mat, (folder_id,))
+    for mat_id, public_id in c.fetchall():
+        if public_id and CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY:
+            try:
+                cloudinary.uploader.destroy(public_id, resource_type="raw")
+            except Exception:
+                try:
+                    cloudinary.uploader.destroy(public_id, resource_type="video")
+                except Exception:
+                    pass
+    q_del_mat = "DELETE FROM content_materials WHERE folder_id = %s" if is_pg else "DELETE FROM content_materials WHERE folder_id = ?"
+    c.execute(q_del_mat, (folder_id,))
+    q_del_folder = "DELETE FROM content_folders WHERE id = %s" if is_pg else "DELETE FROM content_folders WHERE id = ?"
+    c.execute(q_del_folder, (folder_id,))
+
+
+@app.delete("/api/admin/content/folders/{folder_id}")
+async def delete_content_folder(
+    folder_id: int, _admin: Dict[str, object] = Depends(require_permission("content"))
+):
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    _delete_folder_recursive(c, is_pg, folder_id)
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": "تم حذف الفولدر وكل محتوياته."}
+
+
+@app.post("/api/admin/content/materials")
+async def create_content_material(
+    tab: str = Form(...), folder_id: Optional[int] = Form(None),
+    name: str = Form(...), description: str = Form(""),
+    content_type: str = Form(...), video_url: str = Form(""),
+    file: Optional[UploadFile] = File(None),
+    _admin: Dict[str, object] = Depends(require_permission("content")),
+):
+    if tab not in CONTENT_TABS:
+        raise HTTPException(status_code=400, detail="تبويب غير صحيح.")
+    if content_type not in CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail="نوع المحتوى غير صحيح.")
+    if not name.strip():
+        raise HTTPException(status_code=400, detail="اسم المادة مطلوب.")
+
+    final_video_url = None
+    file_url = None
+    file_public_id = None
+
+    if content_type == "video":
+        if not video_url.strip():
+            raise HTTPException(status_code=400, detail="من فضلك أدخل رابط فيديو اليوتيوب.")
+        final_video_url = video_url.strip()
+    else:
+        if not file:
+            raise HTTPException(status_code=400, detail="من فضلك ارفع الملف.")
+        if not (CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY):
+            raise HTTPException(status_code=500, detail="خدمة تخزين الملفات (Cloudinary) غير مُفعّلة على السيرفر.")
+        contents = await file.read()
+        resource_type = "video" if content_type == "audio" else "raw"  # كلاوديناري بيتعامل مع الصوت كـ video
+        try:
+            upload_res = cloudinary.uploader.upload(
+                contents, folder="tpm_training_content", resource_type=resource_type,
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"فشل رفع الملف: {e}")
+        file_url = upload_res.get("secure_url")
+        file_public_id = upload_res.get("public_id")
+
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q = (
+        """INSERT INTO content_materials (tab, folder_id, name, description, content_type, video_url, file_url, file_public_id)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"""
+        if is_pg
+        else """INSERT INTO content_materials (tab, folder_id, name, description, content_type, video_url, file_url, file_public_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)"""
+    )
+    c.execute(q, (tab, folder_id, name.strip(), description.strip() or None, content_type, final_video_url, file_url, file_public_id))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": f"تم إضافة \"{name.strip()}\"."}
+
+
+@app.delete("/api/admin/content/materials/{material_id}")
+async def delete_content_material(
+    material_id: int, _admin: Dict[str, object] = Depends(require_permission("content"))
+):
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q_sel = "SELECT file_public_id, content_type FROM content_materials WHERE id = %s" if is_pg else "SELECT file_public_id, content_type FROM content_materials WHERE id = ?"
+    c.execute(q_sel, (material_id,))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="المادة غير موجودة.")
+    public_id, content_type = row
+    if public_id and CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY:
+        try:
+            resource_type = "video" if content_type == "audio" else "raw"
+            cloudinary.uploader.destroy(public_id, resource_type=resource_type)
+        except Exception:
+            pass
+    q_del = "DELETE FROM content_materials WHERE id = %s" if is_pg else "DELETE FROM content_materials WHERE id = ?"
+    c.execute(q_del, (material_id,))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": "تم حذف المادة."}
+
+
+@app.get("/api/user/content/browse")
+async def user_browse_content(
+    tab: str, folder_id: Optional[int] = None,
+    _user: Dict[str, object] = Depends(get_current_user),
+):
+    """تصفح المحتوى التدريبي المتاح للفرد (بعد تسجيل الدخول) — نفس منطق تصفح الأدمن،
+    من غير أي أدوات إدارة (إضافة/حذف)."""
+    if tab not in CONTENT_TABS:
+        raise HTTPException(status_code=400, detail="تبويب غير صحيح.")
+    return _browse_content(tab, folder_id)
 
 
 # --- إدارة المستخدمين ---
