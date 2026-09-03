@@ -2732,23 +2732,48 @@
                     cont.innerHTML = '<p class="text-slate-500 text-xs">لا توجد فرق متاحة للعرض حاليًا.</p>';
                     return;
                 }
-                cont.innerHTML = teams.map(t => `
+                cont.innerHTML = teams.map(t => {
+                    const myEntry = t.members.find(m => m.is_me);
+                    return `
                     <div class="border border-slate-200/70 rounded-2xl p-3.5 bg-slate-50/50">
-                        <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
                             <span class="font-bold text-slate-700 text-xs">🧩 ${t.name}</span>
-                            <span class="text-[10px] text-slate-400">${t.members.length} عضو</span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-[10px] text-slate-400">${t.members.length} عضو</span>
+                                <button onclick="openUserTeamOrgChart(${t.id}, '${t.name.replace(/'/g, "\\'")}')" class="text-[10px] font-bold bg-violet-50 hover:bg-violet-100 text-violet-700 px-2 py-1 rounded-full transition-all">🗂️ الهيكل الهرمي</button>
+                            </div>
                         </div>
+                        ${myEntry ? `
+                        <div class="mb-2 p-2.5 rounded-xl bg-indigo-50 border border-indigo-200">
+                            <p class="text-[11px] font-bold text-indigo-700">مهمتك في هذا الفريق: ${myEntry.role_in_team || 'غير محددة'}</p>
+                            ${myEntry.task_description ? `<p class="text-[11px] text-indigo-600 mt-1">${myEntry.task_description}</p>` : ''}
+                        </div>` : ''}
                         ${t.members.length === 0
                             ? '<p class="text-[11px] text-slate-400">لا يوجد أعضاء بعد.</p>'
                             : `<div class="grid sm:grid-cols-2 gap-1.5">${t.members.map(m => `
-                                <div class="flex items-center justify-between bg-white border border-slate-100 rounded-lg px-2.5 py-1.5 text-[11px]">
-                                    <span class="font-semibold text-slate-700">${m.name}</span>
+                                <div class="flex items-center justify-between bg-white border border-slate-100 rounded-lg px-2.5 py-1.5 text-[11px] ${m.is_me ? 'ring-1 ring-indigo-300' : ''}">
+                                    <span class="font-semibold text-slate-700">${m.name}${m.is_me ? ' <span class="text-indigo-500">(أنت)</span>' : ''}</span>
                                     <span class="text-indigo-600 font-bold">${m.role_in_team || '—'}</span>
                                 </div>`).join('')}</div>`
                         }
                     </div>
-                `).join('');
+                `; }).join('');
             }
+        }
+
+        async function openUserTeamOrgChart(teamId, teamName) {
+            document.getElementById('team-org-chart-modal').classList.remove('hidden');
+            document.getElementById('org-chart-team-select').classList.add('hidden'); // مفيش داعي لاختيار فريق تاني هنا
+            document.querySelector('#team-org-chart-modal h3').innerText = `🗂️ هيكل فريق: ${teamName}`;
+            const cont = document.getElementById('org-chart-container');
+            cont.innerHTML = '<p class="text-center text-slate-400 text-sm">جارِ التحميل...</p>';
+            orgChartPhotoBase = '/api/user/person-photo';
+            const res = await apiFetch(`/api/user/teams/${teamId}/org-chart`);
+            if (!res.ok) { cont.innerHTML = '<p class="text-center text-rose-500 text-sm">تعذّر تحميل هيكل الفريق.</p>'; return; }
+            const data = await res.json();
+            lastOrgChartData = data;
+            cont.innerHTML = buildOrgChartHtml(data);
+            loadPersonPhotosInto(cont, orgChartPhotoBase);
         }
 
         async function openMyAnswerReview(examId) {
@@ -3871,12 +3896,12 @@
 
         // يجيب صور الأفراد بشكل آمن (عبر التوكن) بعد رسم الهيكل، لأن وسم <img> العادي
         // مابيبعتش هيدر تسجيل الدخول، والـ endpoint محمي بصلاحية
-        async function loadPersonPhotosInto(container) {
+        async function loadPersonPhotosInto(container, photoEndpointBase = '/api/admin/person-photo') {
             const slots = container.querySelectorAll('.photo-slot[data-sap-id]');
             await Promise.all(Array.from(slots).map(async (slot) => {
                 const sapId = slot.dataset.sapId;
                 try {
-                    const res = await apiFetch(`/api/admin/person-photo/${sapId}`);
+                    const res = await apiFetch(`${photoEndpointBase}/${sapId}`);
                     if (!res.ok) return;
                     const blob = await res.blob();
                     const url = URL.createObjectURL(blob);
@@ -4059,6 +4084,9 @@
 
         async function openTeamOrgChartModal() {
             const sel = document.getElementById('org-chart-team-select');
+            sel.classList.remove('hidden');
+            document.querySelector('#team-org-chart-modal h3').innerText = '🗂️ هيكل الفريق';
+            orgChartPhotoBase = '/api/admin/person-photo';
             if (allTeamsCache.length === 0) {
                 const res = await apiFetch('/api/admin/teams');
                 allTeamsCache = await res.json();
@@ -4070,21 +4098,25 @@
 
         function closeTeamOrgChartModal() {
             document.getElementById('team-org-chart-modal').classList.add('hidden');
+            document.getElementById('org-chart-team-select').classList.remove('hidden');
+            document.querySelector('#team-org-chart-modal h3').innerText = '🗂️ هيكل الفريق';
         }
 
         let lastOrgChartData = null;
+        let orgChartPhotoBase = '/api/admin/person-photo';
 
         async function loadTeamOrgChart() {
             const teamId = document.getElementById('org-chart-team-select').value;
             const cont = document.getElementById('org-chart-container');
             if (!teamId) { cont.innerHTML = '<p class="text-center text-slate-400 text-sm">اختر فريقًا من القائمة أعلاه لعرض هيكله.</p>'; return; }
             cont.innerHTML = '<p class="text-center text-slate-400 text-sm">جارِ التحميل...</p>';
+            orgChartPhotoBase = '/api/admin/person-photo';
             const res = await apiFetch(`/api/admin/teams/${teamId}/org-chart`);
             if (!res.ok) { cont.innerHTML = '<p class="text-center text-rose-500 text-sm">تعذّر تحميل هيكل الفريق.</p>'; return; }
             const data = await res.json();
             lastOrgChartData = data;
             cont.innerHTML = buildOrgChartHtml(data);
-            loadPersonPhotosInto(cont);
+            loadPersonPhotosInto(cont, orgChartPhotoBase);
         }
 
         async function printTeamOrgChart() {
@@ -4096,7 +4128,7 @@
                 </div>
                 <div style="direction:rtl;">${buildOrgChartHtml(lastOrgChartData)}</div>
             `;
-            await loadPersonPhotosInto(pArea);
+            await loadPersonPhotosInto(pArea, orgChartPhotoBase);
             pArea.classList.remove('hidden');
             window.print();
             pArea.classList.add('hidden');
