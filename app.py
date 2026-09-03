@@ -2965,10 +2965,7 @@ async def get_teams_roster(_admin: Dict[str, object] = Depends(require_permissio
     return {"teams": teams, "users_without_team": users_without_team}
 
 
-@app.get("/api/admin/teams/{team_id}/org-chart")
-async def get_team_org_chart(
-    team_id: int, _admin: Dict[str, object] = Depends(require_permission("teams"))
-):
+def _build_team_org_chart(team_id: int) -> Dict[str, object]:
     """يبني هيكل الفريق الهرمي: قائد الفريق أعلى الهرم، وتحته الميسر والإداري،
     وفي نفس المستوى الأعضاء وقادة الحلقات، وتحت كل قائد حلقة أعضاء حلقته."""
     conn, is_pg = get_db()
@@ -3019,12 +3016,91 @@ async def get_team_org_chart(
     }
 
 
+def _team_visible_to_user(team_id: int, sap_id: str) -> bool:
+    """يتحقق هل الفريق مسموح للفرد ده يشوفه: إما فريق عام (public)، أو هو نفسه عضو فيه."""
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q_t = "SELECT visibility FROM teams WHERE id = %s" if is_pg else "SELECT visibility FROM teams WHERE id = ?"
+    c.execute(q_t, (team_id,))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return False
+    if (row[0] or "public") == "public":
+        conn.close()
+        return True
+    q_m = (
+        "SELECT 1 FROM user_teams WHERE team_id = %s AND sap_id = %s" if is_pg
+        else "SELECT 1 FROM user_teams WHERE team_id = ? AND sap_id = ?"
+    )
+    c.execute(q_m, (team_id, sap_id))
+    is_member = c.fetchone() is not None
+    conn.close()
+    return is_member
+
+
+@app.get("/api/admin/teams/{team_id}/org-chart")
+async def get_team_org_chart(
+    team_id: int, _admin: Dict[str, object] = Depends(require_permission("teams"))
+):
+    return _build_team_org_chart(team_id)
+
+
+@app.get("/api/user/teams/{team_id}/org-chart")
+async def get_user_team_org_chart(
+    team_id: int, current_user: Dict[str, object] = Depends(get_current_user)
+):
+    """نفس هيكل الفريق الهرمي، لكن للفرد نفسه — بشرط إن الفريق يكون مسموح له يشوفه
+    (عام، أو هو عضو فيه)."""
+    sap_id = current_user.get("sap_id")
+    if not _team_visible_to_user(team_id, sap_id):
+        raise HTTPException(status_code=403, detail="لا يمكنك عرض هيكل هذا الفريق.")
+    return _build_team_org_chart(team_id)
+
+
 @app.get("/api/admin/person-photo/{sap_id}")
 async def get_admin_person_photo(
     sap_id: str, _admin: Dict[str, object] = Depends(require_permission("teams"))
 ):
     """يعرض صورة فرد لعرضها في هيكل الفريق للأدمن فقط (وليست عامة، حفاظًا على خصوصية الأفراد)."""
     path = _find_asset_image(sap_id.strip())
+    if not path:
+        raise HTTPException(status_code=404, detail="لا توجد صورة لهذا الفرد.")
+    return FileResponse(str(path))
+
+
+@app.get("/api/user/person-photo/{sap_id}")
+async def get_user_person_photo(
+    sap_id: str, current_user: Dict[str, object] = Depends(get_current_user)
+):
+    """يعرض صورة فرد للمستخدم العادي — بشرط إنه يشترك معاه في فريق مسموح له يشوفه
+    (فريق عام، أو فريق هو نفسه عضو فيه)، أو تكون صورته هو شخصيًا."""
+    target_sap = sap_id.strip()
+    requester_sap = current_user.get("sap_id")
+    if target_sap != requester_sap:
+        conn, is_pg = get_db()
+        c = conn.cursor()
+        # صورة الفرد متاحة لو فيه فريق التارجت عضو فيه، وده الفريق إما عام (public)
+        # أو الطالب نفسه عضو فيه برضو (حتى لو team_only)
+        q = (
+            """SELECT 1 FROM user_teams ut JOIN teams t ON ut.team_id = t.id
+               WHERE ut.sap_id = %s AND (
+                   COALESCE(t.visibility, 'public') = 'public'
+                   OR EXISTS (SELECT 1 FROM user_teams ut2 WHERE ut2.team_id = t.id AND ut2.sap_id = %s)
+               ) LIMIT 1"""
+            if is_pg
+            else """SELECT 1 FROM user_teams ut JOIN teams t ON ut.team_id = t.id
+               WHERE ut.sap_id = ? AND (
+                   COALESCE(t.visibility, 'public') = 'public'
+                   OR EXISTS (SELECT 1 FROM user_teams ut2 WHERE ut2.team_id = t.id AND ut2.sap_id = ?)
+               ) LIMIT 1"""
+        )
+        c.execute(q, (target_sap, requester_sap))
+        shared = c.fetchone()
+        conn.close()
+        if not shared:
+            raise HTTPException(status_code=403, detail="لا يمكنك عرض صورة هذا الفرد.")
+    path = _find_asset_image(target_sap)
     if not path:
         raise HTTPException(status_code=404, detail="لا توجد صورة لهذا الفرد.")
     return FileResponse(str(path))
@@ -3156,14 +3232,23 @@ async def get_visible_teams_for_user(current_user: Dict[str, object] = Depends(g
     for tid, name, visibility in all_teams:
         if tid not in visible_team_ids:
             continue
-        c.execute("""SELECT u.sap_id, u.name, u.department, ut.role_in_team
+        c.execute("""SELECT u.sap_id, u.name, u.department, ut.role_in_team, ut.task_description
                      FROM user_teams ut JOIN users u ON ut.sap_id = u.sap_id
                      WHERE ut.team_id = %s""" if is_pg else
-                   """SELECT u.sap_id, u.name, u.department, ut.role_in_team
+                   """SELECT u.sap_id, u.name, u.department, ut.role_in_team, ut.task_description
                      FROM user_teams ut JOIN users u ON ut.sap_id = u.sap_id
                      WHERE ut.team_id = ?""", (tid,))
-        members = [{"sap_id": r[0], "name": r[1], "department": r[2], "role_in_team": r[3]} for r in c.fetchall()]
-        result.append({"id": tid, "name": name, "visibility": visibility or "public", "members": members})
+        members = [
+            {
+                "sap_id": r[0], "name": r[1], "department": r[2], "role_in_team": r[3],
+                "task_description": r[4], "is_me": (r[0] == sap_id),
+            }
+            for r in c.fetchall()
+        ]
+        result.append({
+            "id": tid, "name": name, "visibility": visibility or "public",
+            "is_member": tid in my_team_ids, "members": members,
+        })
 
     conn.close()
     return result
