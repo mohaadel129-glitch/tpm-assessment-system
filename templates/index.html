@@ -25,8 +25,7 @@
         }
         * { -webkit-tap-highlight-color: transparent; }
         html { scroll-behavior: smooth; }
-        body { font-family: 'Cairo', sans-serif; background-color:#f4f5fb; }
-
+        body { font-family: 'Cairo', sans-serif; }
         h1, h2, h3, .font-display { font-family: 'Tajawal', 'Cairo', sans-serif; }
 
         .app-bg{
@@ -51,19 +50,12 @@
         /* admin sidebar tabs */
         .no-scrollbar::-webkit-scrollbar{ display:none; }
         .no-scrollbar{ -ms-overflow-style:none; scrollbar-width:none; }
-        .admin-tab-btn{
-            color:#475569;
-            transition: all 0.2s ease;
-            border-radius: 12px;
-        }
-        .admin-tab-btn:hover{
-            background: #f1f5f9;
-            color: #1e293b;
-        }
+        .admin-tab-btn{ color:#475569; }
+        .admin-tab-btn:hover{ background:#f1f5f9; color:#1e293b; }
         .admin-tab-btn.admin-tab-active{
-            background: linear-gradient(135deg, #4f46e5, #7c3aed);
-            color: #fff;
-            box-shadow: 0 8px 16px -8px rgba(79,70,229,.45);
+            background-image: linear-gradient(135deg,#4f46e5,#7c3aed);
+            color:#fff;
+            box-shadow: 0 10px 20px -8px rgba(79,70,229,.55);
         }
         .admin-tab-panel:not(.hidden){ animation: viewIn .35s cubic-bezier(.16,1,.3,1); }
 
@@ -90,90 +82,6 @@
 
         .login-tab-active{ background:#fff; color:#4338ca; box-shadow:0 4px 12px -4px rgba(79,70,229,.35); }
         .login-tab-inactive{ color:#64748b; }
-
-        /* تحسينات إضافية للواجهة الداخلية */
-        .glass-card {
-            background: rgba(255, 255, 255, 0.85);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.5);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.06);
-        }
-
-        .dashboard-stat {
-            transition: all 0.2s ease;
-        }
-        .dashboard-stat:hover {
-            transform: translateY(-2px);
-        }
-
-        .admin-tabs-scroll {
-            scrollbar-width: thin;
-            scrollbar-color: rgba(99,102,241,0.3) transparent;
-        }
-        .admin-tabs-scroll::-webkit-scrollbar {
-            height: 4px;
-        }
-        .admin-tabs-scroll::-webkit-scrollbar-thumb {
-            background: rgba(99,102,241,0.4);
-            border-radius: 10px;
-        }
-
-        .user-card-avatar {
-            background: linear-gradient(135deg, #4f46e5, #7c3aed);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 1.2rem;
-        }
-
-        .exam-card {
-            transition: all 0.2s ease;
-            border: 1px solid #e2e8f0;
-        }
-        .exam-card:hover {
-            border-color: #818cf8;
-            box-shadow: 0 8px 25px -8px rgba(79,70,229,.15);
-        }
-
-        .submission-table th {
-            background: #f8fafc;
-            font-weight: 700;
-            color: #475569;
-            font-size: 0.7rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-        .submission-table td {
-            padding: 12px 10px;
-            font-size: 0.8rem;
-            border-bottom: 1px solid #f1f5f9;
-        }
-        .submission-table tr:hover td {
-            background: #f8fafc;
-        }
-
-        .badge-level {
-            font-size: 0.65rem;
-            padding: 2px 10px;
-            border-radius: 999px;
-            font-weight: 700;
-        }
-
-        @media (max-width: 640px) {
-            .admin-tab-btn {
-                font-size: 0.7rem;
-                padding: 8px 12px;
-            }
-            .dashboard-stat {
-                padding: 12px;
-            }
-            .dashboard-stat .stat-value {
-                font-size: 1.2rem;
-            }
-        }
     </style>
 </head>
 <body class="app-bg text-slate-800 min-h-screen">
@@ -544,35 +452,29 @@
 
         <!-- 3. لوحة تحكم المستخدم (الامتحانات + سجل النتائج) -->
         <div id="view-user-dashboard" class="view-panel hidden space-y-6">
-            <!-- البطاقة العلوية للمستخدم -->
-            <div class="glass-card rounded-3xl p-5 md:p-6 shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div class="flex items-center gap-4 w-full md:w-auto">
-                    <div class="w-14 h-14 rounded-full user-card-avatar shadow-lg shadow-indigo-200/50 text-xl flex-shrink-0">
-                        <span id="dash-user-initial" class="text-white text-2xl font-bold">م</span>
-                    </div>
-                    <div>
-                        <h3 class="text-xl font-bold text-slate-800" id="dash-user-name"></h3>
-                        <div class="flex items-center gap-2 mt-1 flex-wrap">
-                            <span class="text-xs bg-slate-100 text-slate-600 px-3 py-1 rounded-full font-mono border border-slate-200" id="dash-user-sap"></span>
-                            <span class="text-xs bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full font-bold border border-indigo-100" id="dash-user-role"></span>
-                            <span class="text-xs bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full font-bold border border-emerald-100" id="dash-user-dept"></span>
-                            <span id="dash-user-teams" class="flex flex-wrap gap-1"></span>
-                        </div>
+            <div class="bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h3 class="text-xl font-bold text-slate-800" id="dash-user-name"></h3>
+                    <div class="flex items-center gap-2 mt-1 flex-wrap">
+                        <span class="text-xs bg-slate-100 text-slate-600 px-3 py-1 rounded-full font-mono border border-slate-200" id="dash-user-sap"></span>
+                        <span class="text-xs bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full font-bold border border-indigo-100" id="dash-user-role"></span>
+                        <span class="text-xs bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full font-bold border border-emerald-100" id="dash-user-dept"></span>
+                        <span id="dash-user-teams" class="flex flex-wrap gap-1"></span>
                     </div>
                 </div>
-                <div class="flex gap-2 flex-wrap w-full md:w-auto">
-                    <button onclick="switchView('view-leaderboards')" class="feature-leaderboard text-xs bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white px-3 py-2 rounded-xl font-bold transition shadow-md shadow-amber-200/40">🏆 لوحة الشرف</button>
+                <div class="flex gap-2 flex-wrap">
+                    <button onclick="switchView('view-leaderboards')" class="feature-leaderboard text-xs bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white px-3 py-2 rounded-xl font-bold transition">🏆 لوحة الشرف</button>
                     <button onclick="openContentView('training')" class="feature-training-tab text-xs bg-sky-50 hover:bg-sky-100 text-sky-700 px-3 py-2 rounded-xl font-bold transition">📚 التدريب</button>
                     <button onclick="openContentView('instructions')" class="feature-instructions-tab text-xs bg-teal-50 hover:bg-teal-100 text-teal-700 px-3 py-2 rounded-xl font-bold transition">🗺️ التعليمات والخرائط</button>
                     <button onclick="openMySkillMatrix()" class="feature-skill-matrix text-xs bg-violet-50 hover:bg-violet-100 text-violet-700 px-3 py-2 rounded-xl font-bold transition">🎯 مصفوفة مهاراتي</button>
                     <button onclick="toggleUserTeamsView()" class="feature-teams-view text-xs bg-amber-50 hover:bg-amber-100 text-amber-700 px-3 py-2 rounded-xl font-bold transition">👥 الفرق</button>
-                    <button onclick="toggleUserHistory()" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-xl font-bold transition">📊 سجل نتائجي</button>
+                    <button onclick="toggleUserHistory()" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-xl font-bold transition">📊 سجل نتائجي السابقة</button>
                     <button onclick="togglePasswordModal()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl font-bold transition">🔒 تغيير كلمة المرور</button>
                 </div>
             </div>
 
             <!-- عرض الفرق المتاحة للمستخدم -->
-            <div id="user-teams-card" class="hidden glass-card rounded-3xl p-5 shadow-xl space-y-4">
+            <div id="user-teams-card" class="hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-amber-100 shadow-xl shadow-amber-100/50 space-y-4">
                 <div class="flex justify-between items-center border-b pb-2">
                     <h4 class="font-bold text-slate-800 text-base">👥 الفرق</h4>
                     <button onclick="toggleUserTeamsView()" class="text-xs text-rose-600 font-bold">إغلاق ✕</button>
@@ -581,15 +483,15 @@
             </div>
 
             <!-- سجل نتائج المتدرب السابقة -->
-            <div id="user-history-card" class="hidden glass-card rounded-3xl p-5 shadow-xl space-y-4">
+            <div id="user-history-card" class="hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-indigo-100 shadow-xl shadow-indigo-100/50 space-y-4">
                 <div class="flex justify-between items-center border-b pb-2">
                     <h4 class="font-bold text-slate-800 text-base">سجل اختباراتك ونتائجك السابقة</h4>
                     <button onclick="toggleUserHistory()" class="text-xs text-rose-600 font-bold">إغلاق ✕</button>
                 </div>
-                <div id="user-history-list" class="space-y-3 max-h-96 overflow-y-auto"></div>
+                <div id="user-history-list" class="space-y-3"></div>
             </div>
 
-            <div id="change-pass-card" class="hidden glass-card rounded-3xl p-5 space-y-3">
+            <div id="change-pass-card" class="hidden bg-slate-50/80 p-5 rounded-2xl border border-slate-200/70 space-y-3">
                 <h4 class="text-sm font-bold text-slate-800">تحديث كلمة المرور</h4>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <input type="password" id="chg-old-pass" placeholder="كلمة المرور الحالية" class="px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
@@ -602,21 +504,20 @@
                 <p id="chg-pass-msg" class="text-xs font-semibold"></p>
             </div>
 
-            <!-- الامتحانات المتاحة -->
-            <div class="glass-card rounded-3xl p-5 shadow-xl">
-                <h4 class="font-bold text-slate-700 text-sm mb-4">📝 الامتحانات المتاحة لإدارتك</h4>
+            <div class="bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
+                <h4 class="font-bold text-slate-700">الامتحانات المتاحة لإدارتك:</h4>
                 <div id="user-exams-cards-container" class="space-y-3"></div>
             </div>
         </div>
 
         <!-- 3ب. شاشة المحتوى التدريبي (التدريب / التعليمات والخرائط) -->
         <div id="view-content-browser" class="view-panel hidden space-y-4">
-            <div class="glass-card rounded-3xl p-5 md:p-6 shadow-xl">
-                <div class="flex justify-between items-center flex-wrap gap-3 mb-4">
+            <div class="bg-white/95 backdrop-blur-sm p-5 sm:p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
+                <div class="flex justify-between items-center flex-wrap gap-3">
                     <h3 id="content-view-title" class="text-lg sm:text-xl font-bold text-slate-800"></h3>
-                    <button onclick="switchView('view-user-dashboard')" class="flex items-center gap-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded-xl transition-all">⬅️ رجوع للرئيسية</button>
+                    <button onclick="switchView('view-user-dashboard')" class="shrink-0 flex items-center gap-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded-xl transition-all">⬅️ رجوع للرئيسية</button>
                 </div>
-                <div id="content-view-breadcrumb" class="flex items-center gap-1.5 flex-wrap text-xs font-bold text-indigo-600 mb-4"></div>
+                <div id="content-view-breadcrumb" class="flex items-center gap-1.5 flex-wrap text-xs font-bold text-indigo-600"></div>
                 <div id="content-view-browser" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 min-h-[120px]"></div>
             </div>
         </div>
@@ -624,7 +525,7 @@
         <!-- 4. شاشة خوض الامتحان -->
         <div id="view-exam-active" class="view-panel hidden space-y-6">
             <div class="bg-gradient-to-l from-indigo-900 to-violet-900 text-white p-4 sm:p-5 rounded-3xl flex justify-between items-center shadow-xl shadow-indigo-900/30">
-                <div>
+                <div class="pl-2">
                     <span id="active-exam-title" class="font-bold text-base sm:text-lg block"></span>
                     <span id="active-user-title" class="text-xs text-indigo-200"></span>
                 </div>
@@ -674,70 +575,70 @@
 
         <!-- 6. لوحة تحكم الإدارة الكاملة -->
         <div id="view-admin-dashboard" class="view-panel hidden">
-            <div class="flex flex-col lg:flex-row gap-6 items-start">
+            <div class="flex flex-col lg:flex-row gap-5 lg:gap-6 items-start">
 
                 <!-- قائمة التبويبات الجانبية -->
                 <aside class="w-full lg:w-64 flex-shrink-0 lg:sticky lg:top-20">
-                    <div class="glass-card rounded-3xl shadow-xl p-2.5">
-                        <div class="flex lg:flex-col gap-1.5 overflow-x-auto lg:overflow-visible no-scrollbar admin-tabs-scroll" id="admin-tabs">
-                            <button type="button" data-super-only="1" onclick="switchAdminTab('admin-tab-settings')" data-tab="admin-tab-settings" class="admin-tab-btn admin-tab-active shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                    <div class="bg-white/95 backdrop-blur-sm rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 p-2.5">
+                        <div class="flex lg:flex-col gap-1.5 overflow-x-auto lg:overflow-visible no-scrollbar" id="admin-tabs">
+                            <button type="button" data-super-only="1" onclick="switchAdminTab('admin-tab-settings')" data-tab="admin-tab-settings" class="admin-tab-btn admin-tab-active shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>⚙</span><span>إعدادات حساب الأدمن</span>
                             </button>
-                            <button type="button" data-perm="resets" onclick="switchAdminTab('admin-tab-resets')" data-tab="admin-tab-resets" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                            <button type="button" data-perm="resets" onclick="switchAdminTab('admin-tab-resets')" data-tab="admin-tab-resets" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>🔔</span><span>طلبات استعادة كلمة المرور</span>
                             </button>
-                            <button type="button" data-perm="gallery" onclick="switchAdminTab('admin-tab-gallery')" data-tab="admin-tab-gallery" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                            <button type="button" data-perm="gallery" onclick="switchAdminTab('admin-tab-gallery')" data-tab="admin-tab-gallery" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>🖼</span><span>معرض الصور والوسائط</span>
                             </button>
-                            <button type="button" data-perm="create" onclick="switchAdminTab('admin-tab-create')" data-tab="admin-tab-create" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                            <button type="button" data-perm="create" onclick="switchAdminTab('admin-tab-create')" data-tab="admin-tab-create" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>📝</span><span>إنشاء دورة جديدة</span>
                             </button>
-                            <button type="button" data-perm="manage" onclick="switchAdminTab('admin-tab-manage')" data-tab="admin-tab-manage" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                            <button type="button" data-perm="manage" onclick="switchAdminTab('admin-tab-manage')" data-tab="admin-tab-manage" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>🔍</span><span>إدارة وطباعة الامتحانات</span>
                             </button>
-                            <button type="button" data-perm="users" onclick="switchAdminTab('admin-tab-users')" data-tab="admin-tab-users" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                            <button type="button" data-perm="users" onclick="switchAdminTab('admin-tab-users')" data-tab="admin-tab-users" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>👥</span><span>إدارة المشتركين</span>
                             </button>
-                            <button type="button" data-perm="teams" onclick="switchAdminTab('admin-tab-teams')" data-tab="admin-tab-teams" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                            <button type="button" data-perm="teams" onclick="switchAdminTab('admin-tab-teams')" data-tab="admin-tab-teams" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>🧩</span><span>إدارة الفرق</span>
                             </button>
-                            <button type="button" data-perm="analytics" onclick="switchAdminTab('admin-tab-analytics')" data-tab="admin-tab-analytics" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                            <button type="button" data-perm="analytics" onclick="switchAdminTab('admin-tab-analytics')" data-tab="admin-tab-analytics" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>📊</span><span>لوحة التحليلات</span>
                             </button>
-                            <button type="button" data-perm="skills" onclick="switchAdminTab('admin-tab-skills')" data-tab="admin-tab-skills" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                            <button type="button" data-perm="skills" onclick="switchAdminTab('admin-tab-skills')" data-tab="admin-tab-skills" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>🎯</span><span>مصفوفة المهارات</span>
                             </button>
-                            <button type="button" data-perm="skills" onclick="switchAdminTab('admin-tab-skill-assess')" data-tab="admin-tab-skill-assess" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                            <button type="button" data-perm="skills" onclick="switchAdminTab('admin-tab-skill-assess')" data-tab="admin-tab-skill-assess" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>🧑‍🔧</span><span>تقييم مهارات فرد</span>
                             </button>
-                            <button type="button" data-perm="manage" onclick="switchAdminTab('admin-tab-pending')" data-tab="admin-tab-pending" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                            <button type="button" data-perm="manage" onclick="switchAdminTab('admin-tab-pending')" data-tab="admin-tab-pending" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>⏳</span><span>المحاولات المعلّقة</span>
                             </button>
-                            <button type="button" data-super-only="1" onclick="switchAdminTab('admin-tab-admins')" data-tab="admin-tab-admins" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                            <button type="button" data-super-only="1" onclick="switchAdminTab('admin-tab-admins')" data-tab="admin-tab-admins" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>👔</span><span>إدارة حسابات المديرين</span>
                             </button>
-                            <button type="button" data-perm="suggestions" onclick="switchAdminTab('admin-tab-suggestions')" data-tab="admin-tab-suggestions" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                            <button type="button" data-perm="suggestions" onclick="switchAdminTab('admin-tab-suggestions')" data-tab="admin-tab-suggestions" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>💡</span><span>المقترحات</span>
                                 <span id="suggestions-unread-badge" class="hidden bg-rose-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full"></span>
                             </button>
-                            <button type="button" data-perm="appreciation" onclick="switchAdminTab('admin-tab-appreciation')" data-tab="admin-tab-appreciation" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                            <button type="button" data-perm="appreciation" onclick="switchAdminTab('admin-tab-appreciation')" data-tab="admin-tab-appreciation" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>🏵️</span><span>شهادات التقدير</span>
                             </button>
-                            <button type="button" data-perm="backup" onclick="switchAdminTab('admin-tab-backup')" data-tab="admin-tab-backup" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                            <button type="button" data-perm="backup" onclick="switchAdminTab('admin-tab-backup')" data-tab="admin-tab-backup" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>💾</span><span>نسخة احتياطية</span>
                             </button>
-                            <button type="button" data-perm="content" onclick="switchAdminTab('admin-tab-content')" data-tab="admin-tab-content" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                            <button type="button" data-perm="content" onclick="switchAdminTab('admin-tab-content')" data-tab="admin-tab-content" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>📚</span><span>المحتوى التدريبي</span>
                             </button>
-                            <button type="button" data-super-only="1" onclick="switchAdminTab('admin-tab-controls')" data-tab="admin-tab-controls" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                            <button type="button" data-super-only="1" onclick="switchAdminTab('admin-tab-controls')" data-tab="admin-tab-controls" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>🛠️</span><span>التحكم بالمنصة</span>
                             </button>
                         </div>
                     </div>
-                    <button type="button" onclick="switchView('view-leaderboards')" class="feature-leaderboard w-full mt-2.5 flex items-center justify-center gap-2 text-xs font-bold px-4 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white transition-all shadow-md shadow-amber-200/40">
+                    <button type="button" onclick="switchView('view-leaderboards')" class="feature-leaderboard w-full mt-2.5 flex items-center justify-center gap-2 text-xs font-bold px-4 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white transition-all">
                         🏆 لوحة الشرف
                     </button>
-                    <button type="button" id="sub-admin-change-pass-btn" onclick="subAdminChangePassword()" class="hidden w-full mt-2.5 flex items-center justify-center gap-2 text-xs font-bold px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all">
+                    <button type="button" id="sub-admin-change-pass-btn" onclick="subAdminChangePassword()" class="hidden w-full mt-2.5 flex items-center justify-center gap-2 text-xs font-bold px-4 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all">
                         🔑 تغيير كلمة مروري
                     </button>
                 </aside>
@@ -746,7 +647,7 @@
                 <div class="flex-1 min-w-0 w-full space-y-6">
 
             <!-- أ. إعدادات وتعديل بيانات الأدمن -->
-            <div id="admin-tab-settings" class="admin-tab-panel glass-card rounded-3xl p-5 shadow-xl space-y-4">
+            <div id="admin-tab-settings" class="admin-tab-panel bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
                 <h3 class="text-lg font-bold text-slate-800 border-b pb-2">⚙ تعديل بيانات حساب الأدمن المركزي</h3>
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
                     <input type="text" id="adm-set-sap" placeholder="رقم SAP" class="px-3 py-2.5 border border-slate-200 bg-slate-50/60 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white transition-all">
@@ -772,7 +673,7 @@
             </div>
 
             <!-- ب. طلبات استعادة كلمة المرور -->
-            <div id="admin-tab-resets" class="admin-tab-panel hidden glass-card rounded-3xl p-5 shadow-xl space-y-3">
+            <div id="admin-tab-resets" class="admin-tab-panel hidden bg-gradient-to-br from-amber-50 to-orange-50 p-6 rounded-3xl border border-amber-200/70 shadow-xl shadow-amber-100/50 space-y-3">
                 <div class="flex justify-between items-center">
                     <h3 class="text-sm font-bold text-amber-900">🔔 إشعارات طلبات استعادة كلمة المرور</h3>
                     <button onclick="loadResetRequests()" class="text-xs bg-amber-200 text-amber-900 px-2 py-1 rounded-lg font-bold">تحديث الإشعارات</button>
@@ -781,7 +682,7 @@
             </div>
 
             <!-- ج. معرض الصور ورفع صور متعددة -->
-            <div id="admin-tab-gallery" class="admin-tab-panel hidden glass-card rounded-3xl p-5 shadow-xl space-y-4">
+            <div id="admin-tab-gallery" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
                 <div class="flex justify-between items-center border-b pb-2">
                     <h3 class="text-lg font-bold text-slate-800">🖼 معرض الصور والوسائط</h3>
                     <span class="text-xs text-slate-500">يمكنك رفع عدة صور معاً واستخدام أي منها للأسئلة</span>
@@ -794,7 +695,7 @@
             </div>
 
             <!-- د. إنشاء ورفع دورة وتحديد الصلاحية -->
-            <div id="admin-tab-create" class="admin-tab-panel hidden glass-card rounded-3xl p-5 shadow-xl space-y-4">
+            <div id="admin-tab-create" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
                 <h3 class="text-lg font-bold text-slate-800 border-b pb-2">📝 إنشاء دورة وتحديد الصلاحية والإدارات</h3>
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
                     <div>
@@ -834,7 +735,7 @@
             </div>
 
             <!-- هـ. إدارة وتجديد الصلاحية وتعديل الأسئلة والطباعة A4 -->
-            <div id="admin-tab-manage" class="admin-tab-panel hidden glass-card rounded-3xl p-5 shadow-xl space-y-4">
+            <div id="admin-tab-manage" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
                 <div class="flex flex-col md:flex-row justify-between md:items-center gap-4">
                     <h3 class="text-lg font-bold text-slate-800">🔍 معاينة وتعديل وتجديد صلاحية الامتحانات</h3>
                     <div class="flex items-center gap-2 flex-wrap">
@@ -894,8 +795,8 @@
                     <h4 class="text-sm font-bold text-slate-800">📋 إدارة نتائج المتدربين لهذا الامتحان</h4>
                     <p class="text-[11px] text-slate-500">تقدر تعلّق ظهور نتيجة فرد معين في لوحة الشرف بدون حذفها، أو تحذفها نهائيًا. حدد أفراداً من عمود ✔ للسماح لهم بإعادة الامتحان دفعة واحدة من الشريط أعلاه.</p>
                     <div class="overflow-x-auto max-h-80">
-                        <table class="w-full text-right border-collapse text-xs submission-table">
-                            <thead>
+                        <table class="w-full text-right border-collapse text-xs">
+                            <thead class="bg-slate-50/95 backdrop-blur text-slate-500 text-[11px] uppercase tracking-wider sticky top-0 border-b-2 border-slate-200">
                                 <tr>
                                     <th class="p-2.5 text-center">✔</th>
                                     <th class="p-2.5">SAP ID</th>
@@ -915,7 +816,7 @@
             </div>
 
             <!-- و. إدارة المستخدمين وأذونات الإعادة -->
-            <div id="admin-tab-users" class="admin-tab-panel hidden glass-card rounded-3xl p-5 shadow-xl space-y-5">
+            <div id="admin-tab-users" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-5">
                 <div class="flex justify-between items-center border-b pb-3">
                     <h3 class="text-lg font-bold text-slate-800">👥 إدارة المشتركين وأذونات إعادة الامتحان</h3>
                     <button onclick="downloadUsersTemplate()" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-xl font-bold">📥 تنزيل قالب شيت المستخدمين</button>
@@ -946,8 +847,8 @@
                     <input type="text" id="adm-users-search" oninput="filterAdminUsersTable()" placeholder="🔍 بحث برقم SAP أو الاسم..." class="w-full px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
                 </div>
                 <div class="overflow-x-auto max-h-64">
-                    <table class="w-full text-right border-collapse text-xs submission-table">
-                        <thead>
+                    <table class="w-full text-right border-collapse text-xs">
+                        <thead class="bg-slate-50/95 backdrop-blur text-slate-500 text-[11px] uppercase tracking-wider sticky top-0 border-b-2 border-slate-200">
                             <tr>
                                 <th class="p-2.5">SAP ID</th>
                                 <th class="p-2.5">الاسم</th>
@@ -965,7 +866,7 @@
             </div>
 
             <!-- ز. إدارة الفرق -->
-            <div id="admin-tab-teams" class="admin-tab-panel hidden glass-card rounded-3xl p-5 shadow-xl space-y-4">
+            <div id="admin-tab-teams" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
                 <div class="flex justify-between items-center border-b pb-2 flex-wrap gap-2">
                     <h3 class="text-lg font-bold text-slate-800">🧩 إدارة الفرق</h3>
                     <button onclick="openTeamOrgChartModal()" class="text-xs font-bold bg-violet-50 hover:bg-violet-100 text-violet-700 px-3 py-1.5 rounded-full transition-all">🗂️ هيكل الفريق</button>
@@ -981,11 +882,11 @@
                     <h4 class="text-sm font-bold text-slate-700">👥 عرض كل الفرق وأعضائها</h4>
                     <button onclick="loadTeamsRoster()" class="text-xs font-bold text-indigo-600 hover:underline">🔄 تحديث العرض</button>
                 </div>
-                <div id="adm-teams-roster" class="space-y-3 max-h-96 overflow-y-auto"></div>
+                <div id="adm-teams-roster" class="space-y-3"></div>
             </div>
 
             <!-- ط. لوحة التحليلات -->
-            <div id="admin-tab-analytics" class="admin-tab-panel hidden glass-card rounded-3xl p-5 shadow-xl space-y-5">
+            <div id="admin-tab-analytics" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-5">
                 <div class="flex justify-between items-center border-b pb-2">
                     <h3 class="text-lg font-bold text-slate-800">📊 لوحة التحليلات العامة</h3>
                     <button onclick="loadAnalytics()" class="text-xs font-bold text-indigo-600 hover:underline">🔄 تحديث</button>
@@ -1057,7 +958,7 @@
             </div>
 
             <!-- ي. مصفوفة المهارات -->
-            <div id="admin-tab-skills" class="admin-tab-panel hidden glass-card rounded-3xl p-5 shadow-xl space-y-4">
+            <div id="admin-tab-skills" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
                 <h3 class="text-lg font-bold text-slate-800 border-b pb-2">🎯 مصفوفة المهارات - المتطلبات حسب المسمى الوظيفي</h3>
                 <p class="text-[11px] text-slate-500">حدد المهارات المطلوبة لكل مسمى وظيفي (فني صيانة، فني إنتاج، مهندس، مشرف...)، مقسّمة على مجموعات (مثال: "السلامة المهنية"، "الصيانة الميكانيكية"). يمكن ربط كل مهارة بامتحان موجود بحيث يظهر للفرد تلقائياً هل تحقق المستوى المطلوب أم لا في صفحته الشخصية.</p>
 
@@ -1104,11 +1005,11 @@
                     <div id="skills-expiring-list" class="space-y-1.5"></div>
                 </div>
 
-                <div id="skills-list-container" class="space-y-4 max-h-96 overflow-y-auto"></div>
+                <div id="skills-list-container" class="space-y-4"></div>
             </div>
 
             <!-- ك-ب. تقييم مهارات فرد يدويًا -->
-            <div id="admin-tab-skill-assess" class="admin-tab-panel hidden glass-card rounded-3xl p-5 shadow-xl space-y-4">
+            <div id="admin-tab-skill-assess" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
                 <h3 class="text-lg font-bold text-slate-800 border-b pb-2">🧑‍🔧 تقييم مهارات فرد يدويًا</h3>
                 <p class="text-[11px] text-slate-500">ابحث عن الفرد بالاسم أو رقم SAP، ثم حدّد مستوى تحقيقه لأي مهارة يدويًا (حتى لو غير مرتبطة بامتحان)، أو اترك مهارات أخرى تعتمد تلقائيًا على نتيجة الامتحان المرتبط بها.</p>
                 <div class="relative">
@@ -1120,7 +1021,7 @@
 
 
             <!-- ك. المحاولات المعلّقة عبر جميع الامتحانات (لم تُكمل + طلبات إعادة) -->
-            <div id="admin-tab-pending" class="admin-tab-panel hidden glass-card rounded-3xl p-5 shadow-xl space-y-5">
+            <div id="admin-tab-pending" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-5">
                 <div class="flex justify-between items-center border-b pb-2">
                     <h3 class="text-lg font-bold text-slate-800">⏳ إدارة المحاولات المعلّقة (كل الامتحانات)</h3>
                     <button onclick="loadPendingAttempts()" class="text-xs font-bold text-indigo-600 hover:underline">🔄 تحديث</button>
@@ -1129,18 +1030,18 @@
                 <div class="space-y-2">
                     <h4 class="text-sm font-bold text-amber-800">🙋 طلبات إعادة الامتحان المقدَّمة من الأفراد</h4>
                     <p class="text-[11px] text-slate-500">هؤلاء طلبوا صراحةً إعادة امتحان محظورين منه.</p>
-                    <div id="pending-retake-requests-list" class="space-y-1.5 max-h-48 overflow-y-auto"></div>
+                    <div id="pending-retake-requests-list" class="space-y-1.5"></div>
                 </div>
 
                 <div class="space-y-2 pt-4 border-t">
                     <h4 class="text-sm font-bold text-rose-800">⏸ محاولات دخلوا فيها الامتحان ولم يُكملوا (كل الامتحانات)</h4>
                     <p class="text-[11px] text-slate-500">استهلكوا محاولتهم بمجرد الدخول ولن يستطيعوا إعادة المحاولة إلا بالسماح لهم صراحة.</p>
-                    <div id="pending-in-progress-list" class="space-y-1.5 max-h-48 overflow-y-auto"></div>
+                    <div id="pending-in-progress-list" class="space-y-1.5"></div>
                 </div>
             </div>
 
             <!-- ح. إدارة حسابات المديرين (أدمن مركزي فقط) -->
-            <div id="admin-tab-admins" class="admin-tab-panel hidden glass-card rounded-3xl p-5 shadow-xl space-y-4">
+            <div id="admin-tab-admins" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
                 <h3 class="text-lg font-bold text-slate-800 border-b pb-2">👔 إدارة حسابات المديرين (أدمن عادي)</h3>
                 <p class="text-[11px] text-slate-500">أنشئ حساب مدير بصلاحيات محددة. سيدخل المدير من نفس بوابة "دخول الإدارة" ببياناته الخاصة، وسيرى فقط التبويبات المسموح له بها.</p>
                 <div class="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/70 space-y-3">
@@ -1176,11 +1077,11 @@
                     </div>
                     <button onclick="addSubAdmin()" class="bg-gradient-to-r from-slate-700 to-slate-900 hover:from-slate-800 hover:to-black text-white px-4 py-2 rounded-xl text-xs font-bold">حفظ حساب المدير</button>
                 </div>
-                <div id="adm-sub-admins-list" class="space-y-2 max-h-64 overflow-y-auto"></div>
+                <div id="adm-sub-admins-list" class="space-y-2"></div>
             </div>
 
             <!-- المقترحات -->
-            <div id="admin-tab-suggestions" class="admin-tab-panel hidden glass-card rounded-3xl p-5 shadow-xl space-y-4">
+            <div id="admin-tab-suggestions" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
                 <div class="flex justify-between items-center border-b pb-2">
                     <h3 class="text-lg font-bold text-slate-800">💡 المقترحات والملاحظات</h3>
                     <div class="flex items-center gap-2">
@@ -1203,11 +1104,11 @@
                     </select>
                 </div>
 
-                <div id="adm-suggestions-list" class="space-y-2.5 max-h-96 overflow-y-auto"></div>
+                <div id="adm-suggestions-list" class="space-y-2.5"></div>
             </div>
 
             <!-- شهادات التقدير -->
-            <div id="admin-tab-appreciation" class="admin-tab-panel hidden glass-card rounded-3xl p-5 shadow-xl space-y-4">
+            <div id="admin-tab-appreciation" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
                 <h3 class="text-lg font-bold text-slate-800 border-b pb-2">🏵️ شهادات التقدير</h3>
                 <p class="text-[11px] text-slate-500">امنح شهادة تقدير لأي فرد بنص حر، مع إمكانية إظهار ترتيبه في دورة معينة أو ترتيبه العام عبر كل الدورات، ونزّلها كملف PDF مباشرة من هنا.</p>
                 <div class="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/70 space-y-3">
@@ -1228,11 +1129,11 @@
                     </div>
                     <button onclick="grantAppreciation()" class="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md shadow-amber-200">🏵️ منح الشهادة</button>
                 </div>
-                <div id="adm-appreciation-list" class="space-y-2 max-h-64 overflow-y-auto"></div>
+                <div id="adm-appreciation-list" class="space-y-2"></div>
             </div>
 
             <!-- نسخة احتياطية -->
-            <div id="admin-tab-backup" class="admin-tab-panel hidden glass-card rounded-3xl p-5 shadow-xl space-y-4">
+            <div id="admin-tab-backup" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
                 <h3 class="text-lg font-bold text-slate-800 border-b pb-2">💾 نسخة احتياطية لقاعدة البيانات</h3>
                 <p class="text-[11px] text-slate-500">تحميل فوري لملف إكسل يحتوي كل جداول النظام (المستخدمين، الامتحانات، النتائج، الفرق، نتائج TPM، المقترحات... إلخ)، كل جدول في ورقة مستقلة.</p>
                 <button onclick="downloadBackup()" class="bg-gradient-to-r from-slate-700 to-slate-900 hover:from-slate-800 hover:to-black text-white px-4 py-2 rounded-xl text-xs font-bold transition-all">⬇️ تحميل نسخة احتياطية الآن</button>
@@ -1240,7 +1141,7 @@
             </div>
 
             <!-- إدارة المحتوى التدريبي (فيديو/صوت/PDF) -->
-            <div id="admin-tab-content" class="admin-tab-panel hidden glass-card rounded-3xl p-5 shadow-xl space-y-4">
+            <div id="admin-tab-content" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
                 <div class="flex justify-between items-center border-b pb-2 flex-wrap gap-2">
                     <h3 class="text-lg font-bold text-slate-800">📚 إدارة المحتوى التدريبي</h3>
                     <div class="flex bg-slate-100 rounded-2xl p-1 text-xs font-bold">
@@ -1257,11 +1158,11 @@
                     <button onclick="openCreateMaterialModal()" class="text-xs font-bold bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white px-3 py-2 rounded-xl transition-all shadow-md shadow-indigo-200">➕ إضافة مادة (فيديو/صوت/PDF)</button>
                 </div>
 
-                <div id="content-admin-browser" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 min-h-[100px] max-h-96 overflow-y-auto"></div>
+                <div id="content-admin-browser" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 min-h-[100px]"></div>
             </div>
 
             <!-- التحكم بالمنصة: وضع الصيانة + إظهار/إخفاء الفيتشرز (أدمن مركزي فقط) -->
-            <div id="admin-tab-controls" class="admin-tab-panel hidden glass-card rounded-3xl p-5 shadow-xl space-y-4">
+            <div id="admin-tab-controls" class="admin-tab-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
                 <h3 class="text-lg font-bold text-slate-800 border-b pb-2">🛠️ التحكم بالمنصة</h3>
 
                 <div id="maintenance-mode-card" class="p-4 rounded-2xl border-2 border-rose-200 bg-rose-50/60 flex items-center justify-between gap-3">
@@ -1289,7 +1190,7 @@
 
         <!-- 7. لوحات الشرف والترتيب -->
         <div id="view-leaderboards" class="view-panel hidden space-y-6">
-            <div class="glass-card rounded-3xl p-5 md:p-6 shadow-xl space-y-4">
+            <div class="bg-white/95 backdrop-blur-sm p-4 sm:p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
                 <div class="flex flex-col md:flex-row justify-between md:items-center gap-3 border-b pb-4">
                     <div class="flex items-center gap-2">
                         <button id="leaderboard-back-btn" onclick="goBackFromLeaderboard()" class="hidden shrink-0 w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold items-center justify-center transition-all" title="رجوع">⬅️</button>
@@ -1305,8 +1206,8 @@
                 </div>
                 <div class="rounded-2xl border border-slate-200/70 overflow-hidden">
                     <div class="overflow-x-auto">
-                        <table class="w-full text-right border-collapse min-w-[560px] submission-table">
-                            <thead id="lb-head"></thead>
+                        <table class="w-full text-right border-collapse min-w-[560px]">
+                            <thead id="lb-head" class="bg-slate-50/95 backdrop-blur text-slate-500 text-[11px] uppercase tracking-wider border-b-2 border-slate-200"></thead>
                             <tbody id="lb-body" class="text-sm divide-y"></tbody>
                         </table>
                     </div>
@@ -1923,6 +1824,7 @@
         let previousViewBeforeLeaderboard = null;
 
         function switchView(viewId) {
+            // نتذكر آخر شاشة كان الشخص فيها قبل ما يروح لوحة الشرف، عشان زرار "رجوع"
             const current = document.querySelector('.view-panel:not(.hidden)');
             if (current && current.id !== 'view-leaderboards' && viewId === 'view-leaderboards') {
                 previousViewBeforeLeaderboard = current.id;
@@ -1935,12 +1837,15 @@
             const introLanding = document.getElementById('site-intro-landing');
             if (introLanding) introLanding.classList.toggle('hidden', viewId !== 'view-login-user' && viewId !== 'view-login-admin');
 
+            // نافذة تسجيل الدخول المنبثقة: تتفتح تلقائيًا لو الشاشة المطلوبة هي شاشة دخول،
+            // وتتقفل لوحدها لو الشخص روّح لأي شاشة تانية (بعد نجاح الدخول مثلاً)
             const loginModal = document.getElementById('login-modal');
             if (loginModal) {
                 const isLoginView = (viewId === 'view-login-user' || viewId === 'view-login-admin');
                 loginModal.classList.toggle('hidden', !isLoginView);
             }
 
+            // إخفاء الأزرار العائمة (شريط الجلسة) أثناء الامتحان عشان ميحجبش زرار التسليم أو عنوان الامتحان
             const inExam = (viewId === 'view-exam-active');
             const sessionPill = document.getElementById('floating-session-pill');
             if (sessionPill) {
@@ -1992,7 +1897,7 @@
         }
 
         function setSession(user, role) {
-            user.accountType = role;
+            user.accountType = role; // نستخدمها للتفرقة بين حساب فرد وأدمن (role نفسه قد يكون مسمى وظيفي)
             currentUser = user;
             const badge = document.getElementById('session-badge');
             const logoutBtn = document.getElementById('logout-btn');
@@ -2008,6 +1913,7 @@
             }
             badge.innerText = label;
 
+            // إخفاء الشريط العلوي الكامل بعد تسجيل الدخول، وإظهار شريط الجلسة العائم الصغير بدلًا منه
             document.getElementById('top-nav').classList.add('hidden');
             const pill = document.getElementById('floating-session-pill');
             pill.classList.remove('hidden');
@@ -2032,6 +1938,7 @@
         // --- Auth Handlers ---
         async function handleUserLogin(e) {
             e.preventDefault();
+            // مسح أي توكن قديم متبقٍ من جلسة سابقة قبل محاولة دخول جديدة، لتفادي تعارضه مع الطلب الحالي
             authToken = null;
             localStorage.removeItem('authToken');
             const sap = document.getElementById('user-login-sap').value;
@@ -2051,7 +1958,6 @@
                     document.getElementById('dash-user-sap').innerText = `SAP: ${data.sap_id}`;
                     document.getElementById('dash-user-role').innerText = data.role;
                     document.getElementById('dash-user-dept').innerText = `الإدارة: ${data.department}`;
-                    document.getElementById('dash-user-initial').innerText = data.name.trim().charAt(0) || 'م';
                     document.getElementById('dash-user-teams').innerHTML = (data.teams || []).map(t => `<span class="text-xs bg-violet-50 text-violet-700 px-3 py-1 rounded-full font-bold border border-violet-100">🧩 ${t}</span>`).join('');
                     loadUserExamsList();
                     switchView('view-user-dashboard');
@@ -2075,6 +1981,7 @@
 
         async function handleAdminLogin(e) {
             e.preventDefault();
+            // مسح أي توكن قديم متبقٍ من جلسة سابقة قبل محاولة دخول جديدة، لتفادي تعارضه مع الطلب الحالي
             authToken = null;
             localStorage.removeItem('authToken');
             try {
@@ -2119,19 +2026,23 @@
             const hasFullAccess = perms.includes('full_access');
             const isSuper = role === 'super_admin' || hasFullAccess;
 
+            // تبويبات مقصورة على الأدمن المركزي فقط (أو من مُنح صلاحية "كل الصلاحيات")
             document.querySelectorAll('[data-super-only="1"]').forEach(el => {
                 el.classList.toggle('hidden', !isSuper);
             });
 
+            // تبويبات قابلة للتخصيص بالصلاحيات (لغير الأدمن المركزي)
             document.querySelectorAll('[data-perm]').forEach(el => {
                 const key = el.dataset.perm;
                 const allowed = isSuper || perms.includes(key);
                 el.classList.toggle('hidden', !allowed);
             });
 
+            // زر تغيير كلمة المرور الخاص بالمدير العادي (غير متاح للأدمن المركزي الذي له تبويب إعدادات مستقل)
             const selfPassBtn = document.getElementById('sub-admin-change-pass-btn');
             if (selfPassBtn) selfPassBtn.classList.toggle('hidden', role !== 'admin');
 
+            // اختيار أول تبويب ظاهر تلقائيًا
             const firstVisibleBtn = document.querySelector('#admin-tabs .admin-tab-btn:not(.hidden)');
             if (firstVisibleBtn) {
                 switchAdminTab(firstVisibleBtn.dataset.tab);
@@ -2733,14 +2644,14 @@
             const res = await apiFetch(`/api/exams?department=${encodeURIComponent(currentUser.department)}&sap_id=${encodeURIComponent(currentUser.sap_id)}`);
             const exams = await res.json();
             const cont = document.getElementById('user-exams-cards-container');
-
+            
             if (exams.length === 0) {
-                cont.innerHTML = '<div class="p-6 text-center text-slate-400 text-sm bg-slate-50 rounded-2xl border border-dashed border-slate-300">لا توجد اختبارات مخصصة لإدارتك حالياً.</div>';
+                cont.innerHTML = '<p class="text-slate-500 text-sm">لا توجد اختبارات مخصصة لإدارتك حالياً.</p>';
                 return;
             }
 
             cont.innerHTML = exams.map(e => `
-                <div class="exam-card p-4 bg-slate-50/80 border rounded-2xl flex flex-col md:flex-row justify-between md:items-center gap-3 hover:shadow-lg transition-all">
+                <div class="p-4 bg-slate-50/80 border border-slate-200/70 rounded-2xl flex flex-col md:flex-row justify-between md:items-center gap-3 card-hover">
                     <div>
                         <h5 class="font-bold text-slate-800 text-base">${e.name}</h5>
                         <div class="flex items-center gap-2 text-xs text-slate-500 mt-1">
@@ -2783,23 +2694,23 @@
                 const list = await res.json();
                 const cont = document.getElementById('user-history-list');
                 if (list.length === 0) {
-                    cont.innerHTML = '<p class="text-slate-500 text-xs text-center py-6">لم تقم بخوض أي اختبارات حتى الآن.</p>';
+                    cont.innerHTML = '<p class="text-slate-500 text-xs">لم تقم بخوض أي اختبارات حتى الآن.</p>';
                     return;
                 }
                 cont.innerHTML = list.map(h => {
                     const certEligible = h.overall_level === 'المستوى 3 (متقدم)' || h.overall_level === 'المستوى 4 (خبير)';
                     return `
-                    <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs hover:shadow-sm transition-all">
+                    <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
                         <div class="flex justify-between items-center">
                             <span class="font-bold text-slate-800 text-sm">${h.exam_name}</span>
                             <span class="text-slate-400">${h.date}</span>
                         </div>
-                        <div class="flex items-center gap-4 flex-wrap">
+                        <div class="flex items-center gap-4">
                             <span>الدرجة: <strong>${h.score}</strong></span>
                             <span>النسبة: <strong class="text-indigo-600">${h.percentage}</strong></span>
                             <span>المستوى: <strong class="text-emerald-700">${h.overall_level}</strong></span>
                         </div>
-                        <div class="flex items-center gap-3 flex-wrap">
+                        <div class="flex items-center gap-3">
                             ${(h.allow_answer_review && FEATURE_FLAGS.answer_review !== false) ? `<button onclick="openMyAnswerReview(${h.exam_id})" class="text-[11px] text-indigo-600 hover:underline font-bold">📋 مراجعة إجاباتي التفصيلية</button>` : ''}
                             ${(certEligible && FEATURE_FLAGS.certificates_download !== false) ? `<button onclick="downloadMyCertificate(${h.exam_id}, this)" class="text-[11px] text-amber-700 hover:underline font-bold">🎓 تنزيل شهادة الاجتياز</button>` : ''}
                         </div>
@@ -2818,13 +2729,13 @@
                 const res = await apiFetch('/api/user/teams');
                 const teams = await res.json();
                 if (!res.ok || teams.length === 0) {
-                    cont.innerHTML = '<p class="text-slate-500 text-xs text-center py-6">لا توجد فرق متاحة للعرض حاليًا.</p>';
+                    cont.innerHTML = '<p class="text-slate-500 text-xs">لا توجد فرق متاحة للعرض حاليًا.</p>';
                     return;
                 }
                 cont.innerHTML = teams.map(t => {
                     const myEntry = t.members.find(m => m.is_me);
                     return `
-                    <div class="border border-slate-200/70 rounded-2xl p-3.5 bg-slate-50/50 hover:shadow-sm transition-all">
+                    <div class="border border-slate-200/70 rounded-2xl p-3.5 bg-slate-50/50">
                         <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
                             <span class="font-bold text-slate-700 text-xs">🧩 ${t.name}</span>
                             <div class="flex items-center gap-2">
@@ -2852,7 +2763,7 @@
 
         async function openUserTeamOrgChart(teamId, teamName) {
             document.getElementById('team-org-chart-modal').classList.remove('hidden');
-            document.getElementById('org-chart-team-select').classList.add('hidden');
+            document.getElementById('org-chart-team-select').classList.add('hidden'); // مفيش داعي لاختيار فريق تاني هنا
             document.querySelector('#team-org-chart-modal h3').innerText = `🗂️ هيكل فريق: ${teamName}`;
             const cont = document.getElementById('org-chart-container');
             cont.innerHTML = '<p class="text-center text-slate-400 text-sm">جارِ التحميل...</p>';
@@ -3420,6 +3331,7 @@
             const currentDepts = currentPreviewedExamData.departments || ['الكل'];
             const currentTeams = currentPreviewedExamData.teams || ['الكل'];
 
+            // الإدارات
             const deptRes = await apiFetch('/api/admin/departments');
             const deptData = deptRes.ok ? await deptRes.json() : { departments: [] };
             const deptCont = document.getElementById('edit-exam-dept-container');
@@ -3429,6 +3341,7 @@
             });
             deptCont.innerHTML = deptHtml;
 
+            // الفرق
             const teamRes = await apiFetch('/api/admin/teams');
             const teams = teamRes.ok ? await teamRes.json() : [];
             const teamCont = document.getElementById('edit-exam-team-container');
@@ -4142,6 +4055,7 @@
                     </div>`;
             }
 
+            // زرار تسجيل الإنهاء أسفل النافذة
             const completeBtnBox = document.getElementById('material-viewer-complete-box');
             if (m.completed) {
                 completeBtnBox.innerHTML = `<span class="text-xs font-bold text-emerald-600 flex items-center justify-center gap-1.5">✅ تم تسجيل إنهائك لهذه المادة</span>`;
@@ -4151,6 +4065,7 @@
 
             document.getElementById('material-viewer-modal').classList.remove('hidden');
 
+            // تسجيل فتح المادة (تتبع المشاهدة) — بدون انتظار الاستجابة
             apiFetch(`/api/user/content/materials/${m.id}/view`, { method: 'POST' }).catch(() => {});
         }
 
@@ -4158,7 +4073,7 @@
             const res = await apiFetch(`/api/user/content/materials/${materialId}/complete`, { method: 'POST' });
             if (!res.ok) { alert('تعذّر تسجيل الإنهاء.'); return; }
             document.getElementById('material-viewer-complete-box').innerHTML = `<span class="text-xs font-bold text-emerald-600 flex items-center justify-center gap-1.5">✅ تم تسجيل إنهائك لهذه المادة</span>`;
-            loadContentUserBrowser();
+            loadContentUserBrowser(); // لتحديث علامة ✓ في شبكة المواد
         }
 
         function closeMaterialViewer() {
@@ -4257,6 +4172,7 @@
             if (!res.ok) return;
             const data = await res.json();
 
+            // تعبئة قوائم السلايسر مرة واحدة فقط (أول تحميل) حتى لا تُعاد كتابتها فوق اختيار المستخدم
             if (deptSel && deptSel.options.length <= 1) {
                 deptSel.innerHTML = '<option value="">🏢 كل الإدارات</option>' +
                     (data.filters?.departments || []).map(d => `<option value="${d}">${d}</option>`).join('');
@@ -4279,35 +4195,35 @@
 
         function renderAnalyticsData(data, dept) {
             document.getElementById('analytics-overview-cards').innerHTML = `
-                <div class="dashboard-stat p-4 bg-gradient-to-br from-indigo-50 to-violet-50 rounded-2xl border border-indigo-100 text-center">
+                <div class="p-4 bg-gradient-to-br from-indigo-50 to-violet-50 rounded-2xl border border-indigo-100 text-center">
                     <div class="text-2xl font-black text-indigo-700">${data.total_exams}</div>
                     <div class="text-[11px] text-slate-500 font-bold mt-1">عدد الدورات</div>
                 </div>
-                <div class="dashboard-stat p-4 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border border-emerald-100 text-center">
+                <div class="p-4 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border border-emerald-100 text-center">
                     <div class="text-2xl font-black text-emerald-700">${data.total_participants}<span class="text-xs text-slate-400"> / ${data.total_users}</span></div>
                     <div class="text-[11px] text-slate-500 font-bold mt-1">أفراد أدوا امتحانات (${data.participation_rate}%)</div>
                 </div>
-                <div class="dashboard-stat p-4 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border border-amber-100 text-center">
+                <div class="p-4 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border border-amber-100 text-center">
                     <div class="text-2xl font-black text-amber-700">${data.total_submissions}</div>
                     <div class="text-[11px] text-slate-500 font-bold mt-1">إجمالي المحاولات المسلّمة</div>
                 </div>
-                <div class="dashboard-stat p-4 bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl border border-slate-200 text-center">
+                <div class="p-4 bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl border border-slate-200 text-center">
                     <div class="text-2xl font-black text-slate-700">${data.overall_avg_pct}%</div>
                     <div class="text-[11px] text-slate-500 font-bold mt-1">متوسط النسبة العام</div>
                 </div>
-                <div class="dashboard-stat p-4 bg-gradient-to-br from-teal-50 to-emerald-50 rounded-2xl border border-teal-100 text-center">
+                <div class="p-4 bg-gradient-to-br from-teal-50 to-emerald-50 rounded-2xl border border-teal-100 text-center">
                     <div class="text-2xl font-black text-teal-700">${data.overall_pass_rate}%</div>
                     <div class="text-[11px] text-slate-500 font-bold mt-1">نسبة النجاح العامة (≥60%)</div>
                 </div>
-                <div class="dashboard-stat p-4 bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl border border-sky-100 text-center">
+                <div class="p-4 bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl border border-sky-100 text-center">
                     <div class="text-2xl font-black text-sky-700">${data.submissions_last_7d}</div>
                     <div class="text-[11px] text-slate-500 font-bold mt-1">محاولات آخر 7 أيام</div>
                 </div>
-                <div class="dashboard-stat p-4 bg-gradient-to-br from-violet-50 to-purple-50 rounded-2xl border border-violet-100 text-center">
+                <div class="p-4 bg-gradient-to-br from-violet-50 to-purple-50 rounded-2xl border border-violet-100 text-center">
                     <div class="text-2xl font-black text-violet-700">${data.submissions_last_30d}</div>
                     <div class="text-[11px] text-slate-500 font-bold mt-1">محاولات آخر 30 يوم</div>
                 </div>
-                <div class="dashboard-stat p-4 bg-gradient-to-br from-rose-50 to-pink-50 rounded-2xl border border-rose-100 text-center">
+                <div class="p-4 bg-gradient-to-br from-rose-50 to-pink-50 rounded-2xl border border-rose-100 text-center">
                     <div class="text-2xl font-black text-rose-700">${data.total_users - data.total_participants}</div>
                     <div class="text-[11px] text-slate-500 font-bold mt-1">أفراد لم يؤدوا أي امتحان بعد</div>
                 </div>
@@ -4613,6 +4529,7 @@
         }
 
         async function loadSkillLinkedExamOptions() {
+            // نعتمد على قائمة الامتحانات المُحمّلة أصلاً في شاشة "إدارة الامتحانات"
             const select = document.getElementById('skill-linked-exam');
             const sourceSelect = document.getElementById('adm-preview-select');
             if (sourceSelect && sourceSelect.options.length > 1) {
@@ -4941,6 +4858,7 @@
                         <textarea name="team_task_${t.id}" rows="2" placeholder="وصف المهمة أو المهام المطلوبة (اختياري)" class="mt-1.5 w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white outline-none focus:ring-2 focus:ring-indigo-300 ${checked ? '' : 'hidden'}">${cur.task}</textarea>
                     </div>
                 `; }).join('');
+                // إظهار/إخفاء قائمة المهمة ووصفها حسب تحديد الفريق
                 cont.querySelectorAll('input[name="team_assign_cb"]').forEach(cb => {
                     cb.addEventListener('change', () => {
                         const sel = cont.querySelector(`select[name="team_role_${cb.value}"]`);
@@ -5259,7 +5177,7 @@
                     <td class="p-3 text-slate-600 hidden sm:table-cell">${r.department}</td>
                     <td class="p-3 text-slate-600 hidden sm:table-cell">${r.role}</td>
                     <td class="p-3 font-bold text-indigo-600">${r.avg_pct}</td>
-                    <td class="p-3"><span class="badge-level bg-slate-100 text-slate-700">${r.overall_level}</span></td>
+                    <td class="p-3"><span class="text-xs bg-slate-100 px-2.5 py-1 rounded-full font-semibold whitespace-nowrap">${r.overall_level}</span></td>
                     <td class="p-3 font-bold hidden sm:table-cell">${r.exams_count}</td>
                 </tr>
             `).join('');
@@ -5296,7 +5214,7 @@
                     <td class="p-3 text-slate-600 hidden sm:table-cell">${r.role}</td>
                     <td class="p-3">${r.score}</td>
                     <td class="p-3 font-bold text-indigo-600">${r.pct}</td>
-                    <td class="p-3"><span class="badge-level bg-slate-100 text-slate-700">${r.level}</span></td>
+                    <td class="p-3"><span class="text-xs bg-slate-100 px-2.5 py-1 rounded-full font-semibold whitespace-nowrap">${r.level}</span></td>
                     <td class="p-3 text-xs text-slate-400 hidden sm:table-cell">${r.date}</td>
                 </tr>
             `).join('');
