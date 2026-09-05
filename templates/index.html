@@ -59,6 +59,16 @@
         }
         .admin-tab-panel:not(.hidden){ animation: viewIn .35s cubic-bezier(.16,1,.3,1); }
 
+        /* user dashboard tabs */
+        .user-dash-tab-btn{ color:#475569; }
+        .user-dash-tab-btn:hover{ background:#f1f5f9; color:#1e293b; }
+        .user-dash-tab-btn.user-dash-tab-active{
+            background-image: linear-gradient(135deg,#4f46e5,#7c3aed);
+            color:#fff;
+            box-shadow: 0 8px 16px -6px rgba(79,70,229,.5);
+        }
+        .user-dash-panel:not(.hidden){ animation: viewIn .35s cubic-bezier(.16,1,.3,1); }
+
         /* slim, modern scrollbars */
         ::-webkit-scrollbar{ width:8px; height:8px; }
         ::-webkit-scrollbar-track{ background:transparent; }
@@ -155,11 +165,6 @@
         </div>
     </div>
 
-    <!-- شريط جلسة عائم صغير (بيظهر بس بعد تسجيل الدخول بدل الشريط العلوي الكامل) -->
-    <div id="floating-session-pill" class="hidden no-print fixed top-4 right-4 z-50 items-center gap-2 bg-slate-900/90 backdrop-blur-xl text-white pl-2 pr-4 py-2 rounded-full shadow-lg border border-white/10">
-        <span id="floating-session-name" class="text-xs font-bold text-indigo-200"></span>
-        <button onclick="logout()" class="flex items-center justify-center w-7 h-7 rounded-full bg-rose-600/90 hover:bg-rose-500 text-xs transition-all" title="تسجيل الخروج">⏻</button>
-    </div>
 
     <div class="max-w-6xl mx-auto p-4 md:p-8">
 
@@ -451,62 +456,75 @@
         </div>
 
         <!-- 3. لوحة تحكم المستخدم (الامتحانات + سجل النتائج) -->
-        <div id="view-user-dashboard" class="view-panel hidden space-y-6">
-            <div class="bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div id="view-user-dashboard" class="view-panel hidden space-y-5">
+            <!-- بطاقة الترحيب: صورة + اسم فقط (باقي البيانات انتقلت لتبويب الصفحة الشخصية) -->
+            <div class="bg-white/95 backdrop-blur-sm p-5 sm:p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 flex items-center gap-4">
+                <div id="dash-user-avatar" class="w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden bg-gradient-to-br from-indigo-100 to-violet-100 border-2 border-white shadow-md flex items-center justify-center text-xl font-bold text-indigo-400 shrink-0"></div>
                 <div>
-                    <h3 class="text-xl font-bold text-slate-800" id="dash-user-name"></h3>
-                    <div class="flex items-center gap-2 mt-1 flex-wrap">
-                        <span class="text-xs bg-slate-100 text-slate-600 px-3 py-1 rounded-full font-mono border border-slate-200" id="dash-user-sap"></span>
-                        <span class="text-xs bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full font-bold border border-indigo-100" id="dash-user-role"></span>
-                        <span class="text-xs bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full font-bold border border-emerald-100" id="dash-user-dept"></span>
-                        <span id="dash-user-teams" class="flex flex-wrap gap-1"></span>
-                    </div>
-                </div>
-                <div class="flex gap-2 flex-wrap">
-                    <button onclick="switchView('view-leaderboards')" class="feature-leaderboard text-xs bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white px-3 py-2 rounded-xl font-bold transition">🏆 لوحة الشرف</button>
-                    <button onclick="openContentView('training')" class="feature-training-tab text-xs bg-sky-50 hover:bg-sky-100 text-sky-700 px-3 py-2 rounded-xl font-bold transition">📚 التدريب</button>
-                    <button onclick="openContentView('instructions')" class="feature-instructions-tab text-xs bg-teal-50 hover:bg-teal-100 text-teal-700 px-3 py-2 rounded-xl font-bold transition">🗺️ التعليمات والخرائط</button>
-                    <button onclick="openMySkillMatrix()" class="feature-skill-matrix text-xs bg-violet-50 hover:bg-violet-100 text-violet-700 px-3 py-2 rounded-xl font-bold transition">🎯 مصفوفة مهاراتي</button>
-                    <button onclick="toggleUserTeamsView()" class="feature-teams-view text-xs bg-amber-50 hover:bg-amber-100 text-amber-700 px-3 py-2 rounded-xl font-bold transition">👥 الفرق</button>
-                    <button onclick="toggleUserHistory()" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-xl font-bold transition">📊 سجل نتائجي السابقة</button>
-                    <button onclick="togglePasswordModal()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl font-bold transition">🔒 تغيير كلمة المرور</button>
+                    <p class="text-[11px] text-slate-400 font-semibold">أهلاً بيك،</p>
+                    <h3 class="text-lg sm:text-xl font-bold text-slate-800" id="dash-user-name"></h3>
                 </div>
             </div>
 
-            <!-- عرض الفرق المتاحة للمستخدم -->
-            <div id="user-teams-card" class="hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-amber-100 shadow-xl shadow-amber-100/50 space-y-4">
-                <div class="flex justify-between items-center border-b pb-2">
-                    <h4 class="font-bold text-slate-800 text-base">👥 الفرق</h4>
-                    <button onclick="toggleUserTeamsView()" class="text-xs text-rose-600 font-bold">إغلاق ✕</button>
-                </div>
-                <div id="user-teams-list" class="space-y-3"></div>
+            <!-- شريط تبويبات احترافي -->
+            <div class="bg-white/95 backdrop-blur-sm p-2 rounded-2xl border border-slate-200/70 shadow-md shadow-slate-200/40 flex gap-1.5 overflow-x-auto no-scrollbar">
+                <button onclick="switchUserDashTab('exams')" data-user-tab="exams" class="user-dash-tab-btn user-dash-tab-active shrink-0 flex items-center gap-1.5 text-xs font-bold px-3.5 py-2.5 rounded-xl whitespace-nowrap transition-all">📝 الامتحانات</button>
+                <button onclick="openUserProfileView()" class="shrink-0 flex items-center gap-1.5 text-xs font-bold px-3.5 py-2.5 rounded-xl whitespace-nowrap transition-all text-slate-600 hover:bg-slate-100">🪪 الصفحة الشخصية</button>
+                <button onclick="switchView('view-leaderboards')" class="feature-leaderboard shrink-0 flex items-center gap-1.5 text-xs font-bold px-3.5 py-2.5 rounded-xl whitespace-nowrap transition-all text-slate-600 hover:bg-slate-100">🏆 لوحة الشرف</button>
+                <button onclick="openContentView('training')" class="feature-training-tab shrink-0 flex items-center gap-1.5 text-xs font-bold px-3.5 py-2.5 rounded-xl whitespace-nowrap transition-all text-slate-600 hover:bg-slate-100">📚 التدريب</button>
+                <button onclick="openContentView('instructions')" class="feature-instructions-tab shrink-0 flex items-center gap-1.5 text-xs font-bold px-3.5 py-2.5 rounded-xl whitespace-nowrap transition-all text-slate-600 hover:bg-slate-100">🗺️ التعليمات والخرائط</button>
+                <button onclick="openMySkillMatrix()" class="feature-skill-matrix shrink-0 flex items-center gap-1.5 text-xs font-bold px-3.5 py-2.5 rounded-xl whitespace-nowrap transition-all text-slate-600 hover:bg-slate-100">🎯 مصفوفة مهاراتي</button>
+                <button onclick="switchUserDashTab('history')" data-user-tab="history" class="user-dash-tab-btn shrink-0 flex items-center gap-1.5 text-xs font-bold px-3.5 py-2.5 rounded-xl whitespace-nowrap transition-all">📊 سجل نتائجي</button>
+                <button onclick="switchUserDashTab('password')" data-user-tab="password" class="user-dash-tab-btn shrink-0 flex items-center gap-1.5 text-xs font-bold px-3.5 py-2.5 rounded-xl whitespace-nowrap transition-all">🔒 كلمة المرور</button>
+                <button onclick="logout()" class="shrink-0 flex items-center gap-1.5 text-xs font-bold px-3.5 py-2.5 rounded-xl whitespace-nowrap transition-all text-rose-600 hover:bg-rose-50 mr-auto">🚪 خروج</button>
             </div>
 
-            <!-- سجل نتائج المتدرب السابقة -->
-            <div id="user-history-card" class="hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-indigo-100 shadow-xl shadow-indigo-100/50 space-y-4">
-                <div class="flex justify-between items-center border-b pb-2">
-                    <h4 class="font-bold text-slate-800 text-base">سجل اختباراتك ونتائجك السابقة</h4>
-                    <button onclick="toggleUserHistory()" class="text-xs text-rose-600 font-bold">إغلاق ✕</button>
-                </div>
+            <!-- تبويب: الامتحانات المتاحة -->
+            <div id="user-dash-panel-exams" class="user-dash-panel bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
+                <h4 class="font-bold text-slate-700">الامتحانات المتاحة لإدارتك:</h4>
+                <div id="user-exams-cards-container" class="space-y-3"></div>
+            </div>
+
+            <!-- تبويب: سجل النتائج -->
+            <div id="user-dash-panel-history" class="user-dash-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
+                <h4 class="font-bold text-slate-800 text-base">سجل اختباراتك ونتائجك السابقة</h4>
                 <div id="user-history-list" class="space-y-3"></div>
             </div>
 
-            <div id="change-pass-card" class="hidden bg-slate-50/80 p-5 rounded-2xl border border-slate-200/70 space-y-3">
+            <!-- تبويب: تغيير كلمة المرور -->
+            <div id="user-dash-panel-password" class="user-dash-panel hidden bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-3 max-w-md">
                 <h4 class="text-sm font-bold text-slate-800">تحديث كلمة المرور</h4>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div class="grid grid-cols-1 gap-3">
                     <input type="password" id="chg-old-pass" placeholder="كلمة المرور الحالية" class="px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
                     <input type="password" id="chg-new-pass" placeholder="كلمة المرور الجديدة" class="px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
                 </div>
-                <div class="flex gap-2">
-                    <button onclick="submitChangePassword()" class="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white px-4 py-1.5 rounded-xl text-xs font-bold">تحديث</button>
-                    <button onclick="togglePasswordModal()" class="bg-slate-300 text-slate-700 px-3 py-1.5 rounded-xl text-xs font-bold">إلغاء</button>
-                </div>
+                <button onclick="submitChangePassword()" class="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white px-4 py-2 rounded-xl text-xs font-bold">تحديث كلمة المرور</button>
                 <p id="chg-pass-msg" class="text-xs font-semibold"></p>
             </div>
+        </div>
 
-            <div class="bg-white/95 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50 space-y-4">
-                <h4 class="font-bold text-slate-700">الامتحانات المتاحة لإدارتك:</h4>
-                <div id="user-exams-cards-container" class="space-y-3"></div>
+        <!-- 3ج. الصفحة الشخصية للفرد -->
+        <div id="view-user-profile" class="view-panel hidden space-y-5">
+            <div class="bg-white/95 backdrop-blur-sm p-5 sm:p-6 rounded-3xl border border-slate-200/70 shadow-xl shadow-slate-200/50">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg sm:text-xl font-bold text-slate-800 flex items-center gap-2">🪪 الصفحة الشخصية</h3>
+                    <button onclick="switchView('view-user-dashboard')" class="shrink-0 flex items-center gap-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded-xl transition-all">⬅️ رجوع</button>
+                </div>
+                <div class="flex flex-col sm:flex-row items-center sm:items-start gap-5 pb-5 border-b border-slate-100">
+                    <div id="profile-user-avatar" class="w-24 h-24 rounded-full overflow-hidden bg-gradient-to-br from-indigo-100 to-violet-100 border-4 border-white shadow-lg shrink-0 flex items-center justify-center text-3xl font-bold text-indigo-400"></div>
+                    <div class="text-center sm:text-right space-y-1.5">
+                        <h4 id="profile-user-name" class="text-xl font-bold text-slate-800"></h4>
+                        <div class="flex flex-wrap justify-center sm:justify-start gap-1.5">
+                            <span id="profile-user-sap" class="text-xs bg-slate-100 text-slate-600 px-3 py-1 rounded-full font-mono border border-slate-200"></span>
+                            <span id="profile-user-role" class="text-xs bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full font-bold border border-indigo-100"></span>
+                            <span id="profile-user-dept" class="text-xs bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full font-bold border border-emerald-100"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="pt-5">
+                    <h5 class="text-sm font-bold text-slate-700 mb-3">🧩 فرقي ومهامي</h5>
+                    <div id="profile-user-teams" class="space-y-2.5"></div>
+                </div>
             </div>
         </div>
 
@@ -584,26 +602,16 @@
                             <button type="button" data-super-only="1" onclick="switchAdminTab('admin-tab-settings')" data-tab="admin-tab-settings" class="admin-tab-btn admin-tab-active shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>⚙</span><span>إعدادات حساب الأدمن</span>
                             </button>
-                            <button type="button" data-perm="resets" onclick="switchAdminTab('admin-tab-resets')" data-tab="admin-tab-resets" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
-                                <span>🔔</span><span>طلبات استعادة كلمة المرور</span>
-                            </button>
-                            <button type="button" data-perm="gallery" onclick="switchAdminTab('admin-tab-gallery')" data-tab="admin-tab-gallery" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
-                                <span>🖼</span><span>معرض الصور والوسائط</span>
-                            </button>
+
+                            <p class="hidden lg:block text-[10px] font-extrabold text-slate-400 px-3 pt-3 pb-1 tracking-wide">📖 التقييم والمحتوى</p>
                             <button type="button" data-perm="create" onclick="switchAdminTab('admin-tab-create')" data-tab="admin-tab-create" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>📝</span><span>إنشاء دورة جديدة</span>
                             </button>
                             <button type="button" data-perm="manage" onclick="switchAdminTab('admin-tab-manage')" data-tab="admin-tab-manage" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>🔍</span><span>إدارة وطباعة الامتحانات</span>
                             </button>
-                            <button type="button" data-perm="users" onclick="switchAdminTab('admin-tab-users')" data-tab="admin-tab-users" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
-                                <span>👥</span><span>إدارة المشتركين</span>
-                            </button>
-                            <button type="button" data-perm="teams" onclick="switchAdminTab('admin-tab-teams')" data-tab="admin-tab-teams" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
-                                <span>🧩</span><span>إدارة الفرق</span>
-                            </button>
-                            <button type="button" data-perm="analytics" onclick="switchAdminTab('admin-tab-analytics')" data-tab="admin-tab-analytics" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
-                                <span>📊</span><span>لوحة التحليلات</span>
+                            <button type="button" data-perm="manage" onclick="switchAdminTab('admin-tab-pending')" data-tab="admin-tab-pending" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                                <span>⏳</span><span>المحاولات المعلّقة</span>
                             </button>
                             <button type="button" data-perm="skills" onclick="switchAdminTab('admin-tab-skills')" data-tab="admin-tab-skills" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>🎯</span><span>مصفوفة المهارات</span>
@@ -611,24 +619,42 @@
                             <button type="button" data-perm="skills" onclick="switchAdminTab('admin-tab-skill-assess')" data-tab="admin-tab-skill-assess" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>🧑‍🔧</span><span>تقييم مهارات فرد</span>
                             </button>
-                            <button type="button" data-perm="manage" onclick="switchAdminTab('admin-tab-pending')" data-tab="admin-tab-pending" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
-                                <span>⏳</span><span>المحاولات المعلّقة</span>
+                            <button type="button" data-perm="content" onclick="switchAdminTab('admin-tab-content')" data-tab="admin-tab-content" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                                <span>📚</span><span>المحتوى التدريبي</span>
                             </button>
-                            <button type="button" data-super-only="1" onclick="switchAdminTab('admin-tab-admins')" data-tab="admin-tab-admins" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
-                                <span>👔</span><span>إدارة حسابات المديرين</span>
+
+                            <p class="hidden lg:block text-[10px] font-extrabold text-slate-400 px-3 pt-3 pb-1 tracking-wide">👥 الأفراد والفرق</p>
+                            <button type="button" data-perm="users" onclick="switchAdminTab('admin-tab-users')" data-tab="admin-tab-users" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                                <span>👥</span><span>إدارة المشتركين</span>
+                            </button>
+                            <button type="button" data-perm="teams" onclick="switchAdminTab('admin-tab-teams')" data-tab="admin-tab-teams" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                                <span>🧩</span><span>إدارة الفرق</span>
+                            </button>
+                            <button type="button" data-perm="appreciation" onclick="switchAdminTab('admin-tab-appreciation')" data-tab="admin-tab-appreciation" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                                <span>🏵️</span><span>شهادات التقدير</span>
+                            </button>
+
+                            <p class="hidden lg:block text-[10px] font-extrabold text-slate-400 px-3 pt-3 pb-1 tracking-wide">📣 التحليلات والتواصل</p>
+                            <button type="button" data-perm="analytics" onclick="switchAdminTab('admin-tab-analytics')" data-tab="admin-tab-analytics" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                                <span>📊</span><span>لوحة التحليلات</span>
                             </button>
                             <button type="button" data-perm="suggestions" onclick="switchAdminTab('admin-tab-suggestions')" data-tab="admin-tab-suggestions" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>💡</span><span>المقترحات</span>
                                 <span id="suggestions-unread-badge" class="hidden bg-rose-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full"></span>
                             </button>
-                            <button type="button" data-perm="appreciation" onclick="switchAdminTab('admin-tab-appreciation')" data-tab="admin-tab-appreciation" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
-                                <span>🏵️</span><span>شهادات التقدير</span>
+                            <button type="button" data-perm="resets" onclick="switchAdminTab('admin-tab-resets')" data-tab="admin-tab-resets" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                                <span>🔔</span><span>طلبات استعادة كلمة المرور</span>
+                            </button>
+                            <button type="button" data-perm="gallery" onclick="switchAdminTab('admin-tab-gallery')" data-tab="admin-tab-gallery" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                                <span>🖼</span><span>معرض الصور والوسائط</span>
+                            </button>
+
+                            <p class="hidden lg:block text-[10px] font-extrabold text-slate-400 px-3 pt-3 pb-1 tracking-wide">🛠️ إدارة النظام</p>
+                            <button type="button" data-super-only="1" onclick="switchAdminTab('admin-tab-admins')" data-tab="admin-tab-admins" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
+                                <span>👔</span><span>إدارة حسابات المديرين</span>
                             </button>
                             <button type="button" data-perm="backup" onclick="switchAdminTab('admin-tab-backup')" data-tab="admin-tab-backup" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>💾</span><span>نسخة احتياطية</span>
-                            </button>
-                            <button type="button" data-perm="content" onclick="switchAdminTab('admin-tab-content')" data-tab="admin-tab-content" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
-                                <span>📚</span><span>المحتوى التدريبي</span>
                             </button>
                             <button type="button" data-super-only="1" onclick="switchAdminTab('admin-tab-controls')" data-tab="admin-tab-controls" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>🛠️</span><span>التحكم بالمنصة</span>
@@ -640,6 +666,9 @@
                     </button>
                     <button type="button" id="sub-admin-change-pass-btn" onclick="subAdminChangePassword()" class="hidden w-full mt-2.5 flex items-center justify-center gap-2 text-xs font-bold px-4 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all">
                         🔑 تغيير كلمة مروري
+                    </button>
+                    <button type="button" onclick="logout()" class="w-full mt-2.5 flex items-center justify-center gap-2 text-xs font-bold px-4 py-3 rounded-2xl bg-rose-50 hover:bg-rose-100 text-rose-600 transition-all">
+                        🚪 تسجيل الخروج
                     </button>
                 </aside>
 
@@ -1337,6 +1366,35 @@
         </div>
     </div>
 
+    <!-- نافذة تحديد خصوصية فولدر/مادة (إدارات أو أفراد بعينهم) -->
+    <div id="content-access-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 max-h-[85vh] flex flex-col shadow-2xl">
+            <div class="flex justify-between items-center border-b pb-2">
+                <div>
+                    <h3 class="font-bold text-slate-800 text-base">🔒 خصوصية العرض</h3>
+                    <p id="content-access-target-label" class="text-xs text-slate-500 mt-0.5"></p>
+                </div>
+                <button onclick="closeContentAccessModal()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+            </div>
+            <p class="text-[11px] text-slate-500">سيب الاتنين فاضيين عشان يبقى العنصر متاح للجميع. لو حددت إدارة أو فرد، هيظهر بس للمطابقين.</p>
+            <div class="overflow-y-auto flex-1 space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">إتاحة لإدارات معيّنة</label>
+                    <div id="content-access-departments" class="flex flex-wrap gap-1.5"></div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">إتاحة لأفراد بعينهم (رقم الساب)</label>
+                    <div class="flex gap-2 mb-2">
+                        <input type="text" id="content-access-user-input" placeholder="رقم الساب" class="flex-1 px-3 py-2 border border-slate-200 bg-slate-50/60 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white transition-all">
+                        <button onclick="addContentAccessUser()" class="text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-xl transition-all">➕ إضافة</button>
+                    </div>
+                    <div id="content-access-users-list" class="flex flex-wrap gap-1.5"></div>
+                </div>
+            </div>
+            <button onclick="saveContentAccess()" class="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold py-2.5 rounded-xl transition-all shadow-md shadow-indigo-200">حفظ الخصوصية</button>
+        </div>
+    </div>
+
     <!-- نافذة قائمة من شاهد/أنهى مادة تدريبية (أدمن) -->
     <div id="material-progress-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl max-w-md w-full p-6 space-y-3 max-h-[80vh] flex flex-col shadow-2xl">
@@ -1816,9 +1874,6 @@
             document.getElementById('session-badge').classList.add('hidden');
             document.getElementById('logout-btn').classList.add('hidden');
             document.getElementById('top-nav').classList.remove('hidden');
-            const pill = document.getElementById('floating-session-pill');
-            pill.classList.add('hidden');
-            pill.classList.remove('flex');
         }
 
         let previousViewBeforeLeaderboard = null;
@@ -1843,19 +1898,6 @@
             if (loginModal) {
                 const isLoginView = (viewId === 'view-login-user' || viewId === 'view-login-admin');
                 loginModal.classList.toggle('hidden', !isLoginView);
-            }
-
-            // إخفاء الأزرار العائمة (شريط الجلسة) أثناء الامتحان عشان ميحجبش زرار التسليم أو عنوان الامتحان
-            const inExam = (viewId === 'view-exam-active');
-            const sessionPill = document.getElementById('floating-session-pill');
-            if (sessionPill) {
-                if (inExam) {
-                    sessionPill.classList.add('hidden');
-                    sessionPill.classList.remove('flex');
-                } else if (currentUser) {
-                    sessionPill.classList.remove('hidden');
-                    sessionPill.classList.add('flex');
-                }
             }
 
             if (viewId === 'view-leaderboards') {
@@ -1913,12 +1955,8 @@
             }
             badge.innerText = label;
 
-            // إخفاء الشريط العلوي الكامل بعد تسجيل الدخول، وإظهار شريط الجلسة العائم الصغير بدلًا منه
+            // إخفاء الشريط العلوي الكامل بعد تسجيل الدخول (زرار الخروج بقى جزء من التبويبات في كل شاشة)
             document.getElementById('top-nav').classList.add('hidden');
-            const pill = document.getElementById('floating-session-pill');
-            pill.classList.remove('hidden');
-            pill.classList.add('flex');
-            document.getElementById('floating-session-name').innerText = label;
         }
 
         function logout() {
@@ -1929,9 +1967,6 @@
             document.getElementById('session-badge').classList.add('hidden');
             document.getElementById('logout-btn').classList.add('hidden');
             document.getElementById('top-nav').classList.remove('hidden');
-            const pill = document.getElementById('floating-session-pill');
-            pill.classList.add('hidden');
-            pill.classList.remove('flex');
             switchView('view-login-user');
         }
 
@@ -1955,11 +1990,9 @@
                     localStorage.setItem('authToken', authToken);
                     setSession(data, 'user');
                     document.getElementById('dash-user-name').innerText = data.name;
-                    document.getElementById('dash-user-sap').innerText = `SAP: ${data.sap_id}`;
-                    document.getElementById('dash-user-role').innerText = data.role;
-                    document.getElementById('dash-user-dept').innerText = `الإدارة: ${data.department}`;
-                    document.getElementById('dash-user-teams').innerHTML = (data.teams || []).map(t => `<span class="text-xs bg-violet-50 text-violet-700 px-3 py-1 rounded-full font-bold border border-violet-100">🧩 ${t}</span>`).join('');
+                    populateDashUserAvatar(data);
                     loadUserExamsList();
+                    switchUserDashTab('exams');
                     switchView('view-user-dashboard');
                 } else {
                     alert(data.detail);
@@ -2342,6 +2375,7 @@
                 html += `
                 <div class="relative group border border-slate-200 rounded-2xl p-3 hover:shadow-md transition-all cursor-pointer bg-amber-50/40" onclick="navigateContentAdmin(${f.id})">
                     <button onclick="event.stopPropagation(); deleteContentFolder(${f.id}, '${f.name.replace(/'/g, "\\'")}')" class="absolute top-1.5 left-1.5 w-6 h-6 rounded-full bg-white shadow text-rose-500 hover:text-rose-700 text-xs opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
+                    <button onclick="event.stopPropagation(); openContentAccessModal('folder', ${f.id}, '${f.name.replace(/'/g, "\\'")}')" class="absolute top-1.5 right-1.5 text-[11px] ${f.restricted ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity" title="${f.restricted ? 'مقيّد — اضغط لتعديل الخصوصية' : 'متاح للجميع — اضغط لتقييده'}">${f.restricted ? '🔒' : '🔓'}</button>
                     <div class="text-3xl text-center mb-1">📁</div>
                     <p class="text-xs font-bold text-slate-700 text-center truncate">${f.name}</p>
                 </div>`;
@@ -2351,9 +2385,10 @@
                 html += `
                 <div class="relative group border border-slate-200 rounded-2xl p-3 hover:shadow-md transition-all bg-white">
                     <button onclick="deleteContentMaterial(${m.id}, '${m.name.replace(/'/g, "\\'")}')" class="absolute top-1.5 left-1.5 w-6 h-6 rounded-full bg-white shadow text-rose-500 hover:text-rose-700 text-xs opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
-                    <button onclick="openMaterialProgressModal(${m.id}, '${m.name.replace(/'/g, "\\'")}')" class="absolute top-1.5 right-1.5 text-[10px] font-bold bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded-full">👁️ ${m.completed_count || 0}</button>
+                    <button onclick="openContentAccessModal('material', ${m.id}, '${m.name.replace(/'/g, "\\'")}')" class="absolute top-1.5 right-1.5 text-[11px] ${m.restricted ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity" title="${m.restricted ? 'مقيّد — اضغط لتعديل الخصوصية' : 'متاح للجميع — اضغط لتقييده'}">${m.restricted ? '🔒' : '🔓'}</button>
                     <div class="text-3xl text-center mb-1 mt-3">${typeIcon[m.content_type] || '📄'}</div>
                     <p class="text-xs font-bold text-slate-700 text-center truncate">${m.name}</p>
+                    <button onclick="openMaterialProgressModal(${m.id}, '${m.name.replace(/'/g, "\\'")}')" class="w-full text-[10px] font-bold text-emerald-700 hover:underline mt-1">👁️ ${m.completed_count || 0} أنهوا المشاهدة</button>
                 </div>`;
             });
 
@@ -2410,39 +2445,160 @@
         }
         function closeCreateMaterialModal() { document.getElementById('create-material-modal').classList.add('hidden'); }
 
+        // يرفع الملف مباشرة من المتصفح على Cloudinary (من غير ما يعدي بسيرفرنا)،
+        // عشان نتجاوز الحد الأقصى لحجم الطلب على السيرفر اللي كان بيمنع رفع ملفات الصوت الكبيرة.
+        async function uploadFileDirectToCloudinary(file, contentType, onProgress) {
+            const sigRes = await apiFetch('/api/admin/content/cloudinary-signature', { method: 'POST', body: new FormData() });
+            if (!sigRes.ok) throw new Error('تعذّر تجهيز الرفع.');
+            const sig = await sigRes.json();
+
+            const resourceType = contentType === 'audio' ? 'video' : 'image'; // نفس منطق السيرفر
+            const cfd = new FormData();
+            cfd.append('file', file);
+            cfd.append('api_key', sig.api_key);
+            cfd.append('timestamp', sig.timestamp);
+            cfd.append('signature', sig.signature);
+            cfd.append('folder', sig.folder);
+
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', `https://api.cloudinary.com/v1_1/${sig.cloud_name}/${resourceType}/upload`);
+                xhr.upload.onprogress = (e) => {
+                    if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
+                };
+                xhr.onload = () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        const r = JSON.parse(xhr.responseText);
+                        resolve({ file_url: r.secure_url, file_public_id: r.public_id });
+                    } else {
+                        reject(new Error('فشل رفع الملف على التخزين السحابي.'));
+                    }
+                };
+                xhr.onerror = () => reject(new Error('تعذّر الاتصال بخدمة التخزين السحابي.'));
+                xhr.send(cfd);
+            });
+        }
+
         async function submitCreateMaterial(submitBtn) {
             const name = document.getElementById('new-material-name').value.trim();
             const type = document.getElementById('new-material-type').value;
             if (!name) return alert('اكتب اسم المادة.');
+
             const fd = new FormData();
             fd.append('tab', contentAdminTab);
             if (contentAdminFolderId) fd.append('folder_id', contentAdminFolderId);
             fd.append('name', name);
             fd.append('description', document.getElementById('new-material-description').value.trim());
             fd.append('content_type', type);
-            if (type === 'video') {
-                const url = document.getElementById('new-material-video-url').value.trim();
-                if (!url) return alert('اكتب رابط فيديو اليوتيوب.');
-                fd.append('video_url', url);
-            } else {
-                const fileInput = document.getElementById('new-material-file');
-                if (!fileInput.files.length) return alert('اختر الملف المطلوب رفعه.');
-                fd.append('file', fileInput.files[0]);
-            }
+
             submitBtn.disabled = true;
-            submitBtn.innerText = 'جارِ الرفع...';
-            const res = await apiFetch('/api/admin/content/materials', { method: 'POST', body: fd });
-            submitBtn.disabled = false;
-            submitBtn.innerText = 'إضافة';
-            const data = await res.json();
-            if (!res.ok) return alert(data.detail || 'فشل إضافة المادة.');
-            closeCreateMaterialModal();
-            loadContentAdminBrowser();
+            try {
+                if (type === 'video') {
+                    const url = document.getElementById('new-material-video-url').value.trim();
+                    if (!url) { alert('اكتب رابط فيديو اليوتيوب.'); return; }
+                    fd.append('video_url', url);
+                } else {
+                    const fileInput = document.getElementById('new-material-file');
+                    if (!fileInput.files.length) { alert('اختر الملف المطلوب رفعه.'); return; }
+                    submitBtn.innerText = 'جارِ الرفع... 0%';
+                    const uploaded = await uploadFileDirectToCloudinary(fileInput.files[0], type, (pct) => {
+                        submitBtn.innerText = `جارِ الرفع... ${pct}%`;
+                    });
+                    fd.append('file_url', uploaded.file_url);
+                    fd.append('file_public_id', uploaded.file_public_id);
+                }
+
+                submitBtn.innerText = 'جارِ الحفظ...';
+                const res = await apiFetch('/api/admin/content/materials', { method: 'POST', body: fd });
+                const data = await res.json();
+                if (!res.ok) { alert(data.detail || 'فشل إضافة المادة.'); return; }
+                closeCreateMaterialModal();
+                loadContentAdminBrowser();
+            } catch (e) {
+                alert(e.message || 'حدث خطأ أثناء الرفع.');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerText = 'إضافة';
+            }
         }
 
         async function deleteContentMaterial(id, name) {
             if (!confirm(`حذف "${name}"؟`)) return;
             await apiFetch(`/api/admin/content/materials/${id}`, { method: 'DELETE' });
+            loadContentAdminBrowser();
+        }
+
+        // --- خصوصية المحتوى التدريبي (إدارات / أفراد بعينهم) ---
+        let contentAccessTarget = { type: null, id: null };
+        let contentAccessSelectedUsers = [];
+        let contentAccessDepartmentsCache = [];
+
+        async function openContentAccessModal(targetType, targetId, targetName) {
+            contentAccessTarget = { type: targetType, id: targetId };
+            contentAccessSelectedUsers = [];
+            document.getElementById('content-access-target-label').innerText = `${targetType === 'folder' ? '📁' : '📄'} ${targetName}`;
+            document.getElementById('content-access-user-input').value = '';
+
+            if (contentAccessDepartmentsCache.length === 0) {
+                const dres = await apiFetch('/api/admin/departments');
+                if (dres.ok) contentAccessDepartmentsCache = await dres.json();
+            }
+
+            const res = await apiFetch(`/api/admin/content/access?target_type=${targetType}&target_id=${targetId}`);
+            const current = res.ok ? await res.json() : { departments: [], users: [] };
+
+            const deptBox = document.getElementById('content-access-departments');
+            deptBox.innerHTML = contentAccessDepartmentsCache.map(d => `
+                <label class="flex items-center gap-1.5 text-[11px] bg-slate-50 border border-slate-200 rounded-full px-2.5 py-1.5 cursor-pointer">
+                    <input type="checkbox" name="access_dept_cb" value="${d}" ${current.departments.includes(d) ? 'checked' : ''}>
+                    <span>${d}</span>
+                </label>
+            `).join('') || '<p class="text-[11px] text-slate-400">لا توجد إدارات مسجّلة بعد.</p>';
+
+            contentAccessSelectedUsers = [...current.users];
+            renderContentAccessUsersList();
+
+            document.getElementById('content-access-modal').classList.remove('hidden');
+        }
+
+        function renderContentAccessUsersList() {
+            const box = document.getElementById('content-access-users-list');
+            box.innerHTML = contentAccessSelectedUsers.map(sap => `
+                <span class="flex items-center gap-1.5 text-[11px] bg-indigo-50 text-indigo-700 rounded-full px-2.5 py-1.5">
+                    ${sap} <button onclick="removeContentAccessUser('${sap}')" class="font-bold text-indigo-400 hover:text-rose-600">✕</button>
+                </span>
+            `).join('') || '<p class="text-[11px] text-slate-400">لا يوجد أفراد مضافين.</p>';
+        }
+
+        function addContentAccessUser() {
+            const input = document.getElementById('content-access-user-input');
+            const sap = input.value.trim();
+            if (!sap) return;
+            if (!contentAccessSelectedUsers.includes(sap)) contentAccessSelectedUsers.push(sap);
+            input.value = '';
+            renderContentAccessUsersList();
+        }
+
+        function removeContentAccessUser(sap) {
+            contentAccessSelectedUsers = contentAccessSelectedUsers.filter(s => s !== sap);
+            renderContentAccessUsersList();
+        }
+
+        function closeContentAccessModal() {
+            document.getElementById('content-access-modal').classList.add('hidden');
+        }
+
+        async function saveContentAccess() {
+            const depts = Array.from(document.querySelectorAll('input[name="access_dept_cb"]:checked')).map(cb => cb.value);
+            const fd = new FormData();
+            fd.append('target_type', contentAccessTarget.type);
+            fd.append('target_id', contentAccessTarget.id);
+            fd.append('departments', JSON.stringify(depts));
+            fd.append('sap_ids', JSON.stringify(contentAccessSelectedUsers));
+            const res = await apiFetch('/api/admin/content/access', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (!res.ok) return alert(data.detail || 'فشل حفظ الخصوصية.');
+            closeContentAccessModal();
             loadContentAdminBrowser();
         }
 
@@ -2611,11 +2767,15 @@
             if (p) resolveReset(reqId, sapId, p);
         }
 
-        // --- User Dashboard & History ---
-        function togglePasswordModal() {
-            const el = document.getElementById('change-pass-card');
-            el.classList.toggle('hidden');
-            document.getElementById('chg-pass-msg').innerText = '';
+        // --- User Dashboard tabs ---
+        function switchUserDashTab(tabKey) {
+            document.querySelectorAll('.user-dash-panel').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`user-dash-panel-${tabKey}`).classList.remove('hidden');
+            document.querySelectorAll('.user-dash-tab-btn').forEach(btn => {
+                btn.classList.toggle('user-dash-tab-active', btn.dataset.userTab === tabKey);
+            });
+            if (tabKey === 'history') loadUserHistory();
+            if (tabKey === 'password') document.getElementById('chg-pass-msg').innerText = '';
         }
 
         async function submitChangePassword() {
@@ -2633,7 +2793,8 @@
             if (res.ok) {
                 msg.className = "text-xs font-semibold text-emerald-600";
                 msg.innerText = data.message;
-                setTimeout(() => togglePasswordModal(), 1500);
+                document.getElementById('chg-old-pass').value = '';
+                document.getElementById('chg-new-pass').value = '';
             } else {
                 msg.className = "text-xs font-semibold text-rose-600";
                 msg.innerText = data.detail;
@@ -2686,79 +2847,88 @@
             }
         }
 
-        async function toggleUserHistory() {
-            const card = document.getElementById('user-history-card');
-            card.classList.toggle('hidden');
-            if (!card.classList.contains('hidden')) {
-                const res = await apiFetch(`/api/user/${currentUser.sap_id}/history`);
-                const list = await res.json();
-                const cont = document.getElementById('user-history-list');
-                if (list.length === 0) {
-                    cont.innerHTML = '<p class="text-slate-500 text-xs">لم تقم بخوض أي اختبارات حتى الآن.</p>';
-                    return;
-                }
-                cont.innerHTML = list.map(h => {
-                    const certEligible = h.overall_level === 'المستوى 3 (متقدم)' || h.overall_level === 'المستوى 4 (خبير)';
-                    return `
-                    <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
-                        <div class="flex justify-between items-center">
-                            <span class="font-bold text-slate-800 text-sm">${h.exam_name}</span>
-                            <span class="text-slate-400">${h.date}</span>
-                        </div>
-                        <div class="flex items-center gap-4">
-                            <span>الدرجة: <strong>${h.score}</strong></span>
-                            <span>النسبة: <strong class="text-indigo-600">${h.percentage}</strong></span>
-                            <span>المستوى: <strong class="text-emerald-700">${h.overall_level}</strong></span>
-                        </div>
-                        <div class="flex items-center gap-3">
-                            ${(h.allow_answer_review && FEATURE_FLAGS.answer_review !== false) ? `<button onclick="openMyAnswerReview(${h.exam_id})" class="text-[11px] text-indigo-600 hover:underline font-bold">📋 مراجعة إجاباتي التفصيلية</button>` : ''}
-                            ${(certEligible && FEATURE_FLAGS.certificates_download !== false) ? `<button onclick="downloadMyCertificate(${h.exam_id}, this)" class="text-[11px] text-amber-700 hover:underline font-bold">🎓 تنزيل شهادة الاجتياز</button>` : ''}
-                        </div>
-                    </div>
-                `;
-                }).join('');
+        async function loadUserHistory() {
+            const res = await apiFetch(`/api/user/${currentUser.sap_id}/history`);
+            const list = await res.json();
+            const cont = document.getElementById('user-history-list');
+            if (list.length === 0) {
+                cont.innerHTML = '<p class="text-slate-500 text-xs">لم تقم بخوض أي اختبارات حتى الآن.</p>';
+                return;
             }
+            cont.innerHTML = list.map(h => {
+                const certEligible = h.overall_level === 'المستوى 3 (متقدم)' || h.overall_level === 'المستوى 4 (خبير)';
+                return `
+                <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
+                    <div class="flex justify-between items-center">
+                        <span class="font-bold text-slate-800 text-sm">${h.exam_name}</span>
+                        <span class="text-slate-400">${h.date}</span>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <span>الدرجة: <strong>${h.score}</strong></span>
+                        <span>النسبة: <strong class="text-indigo-600">${h.percentage}</strong></span>
+                        <span>المستوى: <strong class="text-emerald-700">${h.overall_level}</strong></span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        ${(h.allow_answer_review && FEATURE_FLAGS.answer_review !== false) ? `<button onclick="openMyAnswerReview(${h.exam_id})" class="text-[11px] text-indigo-600 hover:underline font-bold">📋 مراجعة إجاباتي التفصيلية</button>` : ''}
+                        ${(certEligible && FEATURE_FLAGS.certificates_download !== false) ? `<button onclick="downloadMyCertificate(${h.exam_id}, this)" class="text-[11px] text-amber-700 hover:underline font-bold">🎓 تنزيل شهادة الاجتياز</button>` : ''}
+                    </div>
+                </div>
+            `;
+            }).join('');
         }
 
-        async function toggleUserTeamsView() {
-            const card = document.getElementById('user-teams-card');
-            card.classList.toggle('hidden');
-            if (!card.classList.contains('hidden')) {
-                const cont = document.getElementById('user-teams-list');
-                cont.innerHTML = '<p class="text-xs text-slate-400">جارِ التحميل...</p>';
-                const res = await apiFetch('/api/user/teams');
-                const teams = await res.json();
-                if (!res.ok || teams.length === 0) {
-                    cont.innerHTML = '<p class="text-slate-500 text-xs">لا توجد فرق متاحة للعرض حاليًا.</p>';
-                    return;
+        // --- الصفحة الشخصية ---
+        async function populateDashUserAvatar(data) {
+            const box = document.getElementById('dash-user-avatar');
+            box.innerText = (data.name || '؟').trim().charAt(0);
+            try {
+                const res = await apiFetch(`/api/user/person-photo/${data.sap_id}`);
+                if (res.ok) {
+                    const blob = await res.blob();
+                    box.innerHTML = `<img src="${URL.createObjectURL(blob)}" class="w-full h-full object-cover">`;
                 }
-                cont.innerHTML = teams.map(t => {
-                    const myEntry = t.members.find(m => m.is_me);
-                    return `
-                    <div class="border border-slate-200/70 rounded-2xl p-3.5 bg-slate-50/50">
-                        <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
-                            <span class="font-bold text-slate-700 text-xs">🧩 ${t.name}</span>
-                            <div class="flex items-center gap-2">
-                                <span class="text-[10px] text-slate-400">${t.members.length} عضو</span>
-                                <button onclick="openUserTeamOrgChart(${t.id}, '${t.name.replace(/'/g, "\\'")}')" class="text-[10px] font-bold bg-violet-50 hover:bg-violet-100 text-violet-700 px-2 py-1 rounded-full transition-all">🗂️ الهيكل الهرمي</button>
-                            </div>
-                        </div>
-                        ${myEntry ? `
-                        <div class="mb-2 p-2.5 rounded-xl bg-indigo-50 border border-indigo-200">
-                            <p class="text-[11px] font-bold text-indigo-700">مهمتك في هذا الفريق: ${myEntry.role_in_team || 'غير محددة'}</p>
-                            ${myEntry.task_description ? `<p class="text-[11px] text-indigo-600 mt-1">${myEntry.task_description}</p>` : ''}
-                        </div>` : ''}
-                        ${t.members.length === 0
-                            ? '<p class="text-[11px] text-slate-400">لا يوجد أعضاء بعد.</p>'
-                            : `<div class="grid sm:grid-cols-2 gap-1.5">${t.members.map(m => `
-                                <div class="flex items-center justify-between bg-white border border-slate-100 rounded-lg px-2.5 py-1.5 text-[11px] ${m.is_me ? 'ring-1 ring-indigo-300' : ''}">
-                                    <span class="font-semibold text-slate-700">${m.name}${m.is_me ? ' <span class="text-indigo-500">(أنت)</span>' : ''}</span>
-                                    <span class="text-indigo-600 font-bold">${m.role_in_team || '—'}</span>
-                                </div>`).join('')}</div>`
-                        }
-                    </div>
-                `; }).join('');
+            } catch (e) { /* يفضل الحرف الافتراضي */ }
+        }
+
+        async function openUserProfileView() {
+            switchView('view-user-profile');
+            document.getElementById('profile-user-name').innerText = currentUser.name || '';
+            document.getElementById('profile-user-sap').innerText = `SAP: ${currentUser.sap_id}`;
+            document.getElementById('profile-user-role').innerText = currentUser.role || '';
+            document.getElementById('profile-user-dept').innerText = `الإدارة: ${currentUser.department || ''}`;
+
+            const avatarBox = document.getElementById('profile-user-avatar');
+            avatarBox.innerHTML = (currentUser.name || '؟').trim().charAt(0);
+            try {
+                const pres = await apiFetch(`/api/user/person-photo/${currentUser.sap_id}`);
+                if (pres.ok) {
+                    const blob = await pres.blob();
+                    avatarBox.innerHTML = `<img src="${URL.createObjectURL(blob)}" class="w-full h-full object-cover">`;
+                }
+            } catch (e) { /* يفضل الحرف الافتراضي */ }
+
+            const teamsCont = document.getElementById('profile-user-teams');
+            teamsCont.innerHTML = '<p class="text-xs text-slate-400">جارِ التحميل...</p>';
+            const res = await apiFetch('/api/user/teams');
+            const allTeams = res.ok ? await res.json() : [];
+            const myTeams = allTeams.filter(t => t.members.some(m => m.is_me));
+
+            if (myTeams.length === 0) {
+                teamsCont.innerHTML = '<p class="text-xs text-slate-400">لسه مش مضاف لأي فريق.</p>';
+                return;
             }
+            teamsCont.innerHTML = myTeams.map(t => {
+                const myEntry = t.members.find(m => m.is_me);
+                return `
+                <div class="border border-slate-200/70 rounded-2xl p-3.5 bg-slate-50/50">
+                    <div class="flex items-center justify-between mb-1.5 flex-wrap gap-2">
+                        <span class="font-bold text-slate-700 text-xs">🧩 ${t.name}</span>
+                        <button onclick="openUserTeamOrgChart(${t.id}, '${t.name.replace(/'/g, "\\'")}')" class="text-[10px] font-bold bg-violet-50 hover:bg-violet-100 text-violet-700 px-2 py-1 rounded-full transition-all">🗂️ الهيكل الهرمي</button>
+                    </div>
+                    <p class="text-[11px] font-bold text-indigo-700">مهمتك: ${myEntry?.role_in_team || 'غير محددة'}</p>
+                    ${myEntry?.task_description ? `<p class="text-[11px] text-slate-500 mt-1">${myEntry.task_description}</p>` : ''}
+                </div>`;
+            }).join('');
         }
 
         async function openUserTeamOrgChart(teamId, teamName) {
