@@ -2449,7 +2449,11 @@
         // عشان نتجاوز الحد الأقصى لحجم الطلب على السيرفر اللي كان بيمنع رفع ملفات الصوت الكبيرة.
         async function uploadFileDirectToCloudinary(file, contentType, onProgress) {
             const sigRes = await apiFetch('/api/admin/content/cloudinary-signature', { method: 'POST', body: new FormData() });
-            if (!sigRes.ok) throw new Error('تعذّر تجهيز الرفع.');
+            if (!sigRes.ok) {
+                let detail = 'تعذّر تجهيز الرفع.';
+                try { const d = await sigRes.json(); if (d.detail) detail = d.detail; } catch (e) {}
+                throw new Error(detail);
+            }
             const sig = await sigRes.json();
 
             const resourceType = contentType === 'audio' ? 'video' : 'image'; // نفس منطق السيرفر
@@ -2541,7 +2545,10 @@
 
             if (contentAccessDepartmentsCache.length === 0) {
                 const dres = await apiFetch('/api/admin/departments');
-                if (dres.ok) contentAccessDepartmentsCache = await dres.json();
+                if (dres.ok) {
+                    const deptData = await dres.json();
+                    contentAccessDepartmentsCache = deptData.departments || [];
+                }
             }
 
             const res = await apiFetch(`/api/admin/content/access?target_type=${targetType}&target_id=${targetId}`);
