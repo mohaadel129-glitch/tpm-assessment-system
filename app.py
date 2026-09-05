@@ -630,6 +630,16 @@ def init_db_tables():
             UNIQUE(sap_id, material_id)
         )""")
 
+        # 22. قواعد خصوصية المحتوى التدريبي: تحديد فولدر أو مادة لإدارات/أفراد بعينهم
+        # (لو مفيش أي صف لفولدر/مادة معينة، يبقى متاح للجميع بشكل افتراضي)
+        c.execute(f"""CREATE TABLE IF NOT EXISTS content_access (
+            id {id_type},
+            target_type TEXT NOT NULL,
+            target_id INTEGER NOT NULL,
+            access_type TEXT NOT NULL,
+            value TEXT NOT NULL
+        )""")
+
         # ملاحظة: تم حذف الإدراج التلقائي لمستخدم تجريبي هنا نهائيًا لمنع رجوعه بعد الحذف
 
         conn.commit()
@@ -2517,10 +2527,64 @@ CONTENT_TABS = ("training", "instructions")
 CONTENT_TYPES = ("video", "audio", "pdf")
 
 
-def _browse_content(tab: str, folder_id: Optional[int], sap_id: Optional[str] = None) -> Dict[str, object]:
+def _get_content_access_rules(target_type: str, target_id: int) -> Dict[str, List[str]]:
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q = (
+        "SELECT access_type, value FROM content_access WHERE target_type = %s AND target_id = %s" if is_pg
+        else "SELECT access_type, value FROM content_access WHERE target_type = ? AND target_id = ?"
+    )
+    c.execute(q, (target_type, target_id))
+    rows = c.fetchall()
+    conn.close()
+    return {
+        "departments": [r[1] for r in rows if r[0] == "department"],
+        "users": [r[1] for r in rows if r[0] == "user"],
+    }
+
+
+def _check_content_access(target_type: str, target_id: int, sap_id: Optional[str], department: Optional[str]) -> bool:
+    """لو مفيش أي قاعدة خصوصية للعنصر ده، يبقى متاح للجميع. لو فيه قواعد، لازم يتطابق
+    قسم الفرد أو رقم الساب بتاعه مع واحدة منها."""
+    rules = _get_content_access_rules(target_type, target_id)
+    if not rules["departments"] and not rules["users"]:
+        return True
+    if sap_id and sap_id in rules["users"]:
+        return True
+    if department and department in rules["departments"]:
+        return True
+    return False
+
+
+def _user_can_reach_folder(folder_id: Optional[int], sap_id: Optional[str], department: Optional[str]) -> bool:
+    """يتأكد إن كل الفولدرات من الجذر لحد الفولدر ده (شاملاه) متاحة للفرد — عشان
+    خصوصية فولدر أعلى تفضل سارية على كل اللي جواه."""
+    walk_id = folder_id
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    while walk_id:
+        if not _check_content_access("folder", walk_id, sap_id, department):
+            conn.close()
+            return False
+        q = "SELECT parent_id FROM content_folders WHERE id = %s" if is_pg else "SELECT parent_id FROM content_folders WHERE id = ?"
+        c.execute(q, (walk_id,))
+        row = c.fetchone()
+        walk_id = row[0] if row else None
+    conn.close()
+    return True
+
+
+def _browse_content(
+    tab: str, folder_id: Optional[int], sap_id: Optional[str] = None,
+    department: Optional[str] = None, is_admin: bool = False,
+) -> Dict[str, object]:
     """يرجّع الفولدرات الفرعية والمواد الموجودة داخل مستوى معيّن، مع مسار التنقل (breadcrumb).
-    لو اتبعت sap_id (تصفح فرد)، بيضيف حالة المشاهدة/الإنهاء لكل مادة بالنسبة لهذا الفرد.
-    لو من غير sap_id (تصفح أدمن)، بيضيف عدد الأفراد اللي أنهوا كل مادة."""
+    لو اتبعت sap_id (تصفح فرد)، بيضيف حالة المشاهدة/الإنهاء لكل مادة، ويفلتر حسب خصوصية
+    الفولدرات/المواد (إدارات/أفراد بعينهم). لو is_admin=True، بيرجع كل حاجة من غير فلترة،
+    مع علامة استرداد "restricted" توضح إيه اللي عليه قيود خصوصية."""
+    if not is_admin and not _user_can_reach_folder(folder_id, sap_id, department):
+        raise HTTPException(status_code=403, detail="لا يمكنك عرض هذا الفولدر.")
+
     conn, is_pg = get_db()
     c = conn.cursor()
 
@@ -2562,10 +2626,23 @@ def _browse_content(tab: str, folder_id: Optional[int], sap_id: Optional[str] = 
         {"id": r[0], "name": r[1], "description": r[2], "content_type": r[3], "video_url": r[4], "file_url": r[5]}
         for r in c.fetchall()
     ]
+    conn.close()
+
+    if is_admin:
+        for f in folders:
+            f["restricted"] = bool(_get_content_access_rules("folder", f["id"])["departments"] or _get_content_access_rules("folder", f["id"])["users"])
+        for m in materials:
+            rules = _get_content_access_rules("material", m["id"])
+            m["restricted"] = bool(rules["departments"] or rules["users"])
+    else:
+        folders = [f for f in folders if _check_content_access("folder", f["id"], sap_id, department)]
+        materials = [m for m in materials if _check_content_access("material", m["id"], sap_id, department)]
 
     if materials:
+        conn, is_pg = get_db()
+        c = conn.cursor()
         mat_ids = [m["id"] for m in materials]
-        if sap_id:
+        if sap_id and not is_admin:
             placeholders = ",".join(["%s" if is_pg else "?"] * len(mat_ids))
             q_prog = f"SELECT material_id, completed FROM content_progress WHERE sap_id = {'%s' if is_pg else '?'} AND material_id IN ({placeholders})"
             c.execute(q_prog, (sap_id, *mat_ids))
@@ -2579,8 +2656,8 @@ def _browse_content(tab: str, folder_id: Optional[int], sap_id: Optional[str] = 
             counts_map = {r[0]: r[1] for r in c.fetchall()}
             for m in materials:
                 m["completed_count"] = counts_map.get(m["id"], 0)
+        conn.close()
 
-    conn.close()
     return {"breadcrumb": breadcrumb, "folders": folders, "materials": materials}
 
 
@@ -2591,7 +2668,7 @@ async def admin_browse_content(
 ):
     if tab not in CONTENT_TABS:
         raise HTTPException(status_code=400, detail="تبويب غير صحيح.")
-    return _browse_content(tab, folder_id)
+    return _browse_content(tab, folder_id, is_admin=True)
 
 
 @app.get("/api/admin/content/materials/{material_id}/progress")
@@ -2664,6 +2741,55 @@ async def rename_content_folder(
     return {"status": "success"}
 
 
+@app.get("/api/admin/content/access")
+async def get_content_access(
+    target_type: str, target_id: int,
+    _admin: Dict[str, object] = Depends(require_permission("content")),
+):
+    if target_type not in ("folder", "material"):
+        raise HTTPException(status_code=400, detail="نوع غير صحيح.")
+    return _get_content_access_rules(target_type, target_id)
+
+
+@app.post("/api/admin/content/access")
+async def set_content_access(
+    target_type: str = Form(...), target_id: int = Form(...),
+    departments: str = Form("[]"), sap_ids: str = Form("[]"),
+    _admin: Dict[str, object] = Depends(require_permission("content")),
+):
+    """يحدد خصوصية فولدر أو مادة: إدارات معيّنة و/أو أفراد بعينهم. إرسال قوائم فاضية
+    من الاتنين معناها إتاحة العنصر للجميع (إلغاء أي تقييد)."""
+    if target_type not in ("folder", "material"):
+        raise HTTPException(status_code=400, detail="نوع غير صحيح.")
+    try:
+        dept_list = [d.strip() for d in json.loads(departments) if d.strip()]
+        sap_list = [s.strip() for s in json.loads(sap_ids) if s.strip()]
+    except Exception:
+        raise HTTPException(status_code=400, detail="صيغة غير صحيحة.")
+
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q_del = (
+        "DELETE FROM content_access WHERE target_type = %s AND target_id = %s" if is_pg
+        else "DELETE FROM content_access WHERE target_type = ? AND target_id = ?"
+    )
+    c.execute(q_del, (target_type, target_id))
+
+    q_ins = (
+        "INSERT INTO content_access (target_type, target_id, access_type, value) VALUES (%s, %s, %s, %s)"
+        if is_pg
+        else "INSERT INTO content_access (target_type, target_id, access_type, value) VALUES (?, ?, ?, ?)"
+    )
+    for d in dept_list:
+        c.execute(q_ins, (target_type, target_id, "department", d))
+    for s in sap_list:
+        c.execute(q_ins, (target_type, target_id, "user", s))
+
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": "تم تحديث خصوصية العنصر."}
+
+
 def _delete_folder_recursive(c, is_pg: bool, folder_id: int):
     """يمسح الفولدر وكل محتوياته (فولدرات فرعية ومواد) بشكل تكراري، بما فيها ملفات Cloudinary."""
     q_sub = "SELECT id FROM content_folders WHERE parent_id = %s" if is_pg else "SELECT id FROM content_folders WHERE parent_id = ?"
@@ -2671,17 +2797,15 @@ def _delete_folder_recursive(c, is_pg: bool, folder_id: int):
     for (sub_id,) in c.fetchall():
         _delete_folder_recursive(c, is_pg, sub_id)
 
-    q_mat = "SELECT id, file_public_id FROM content_materials WHERE folder_id = %s" if is_pg else "SELECT id, file_public_id FROM content_materials WHERE folder_id = ?"
+    q_mat = "SELECT id, file_public_id, content_type FROM content_materials WHERE folder_id = %s" if is_pg else "SELECT id, file_public_id, content_type FROM content_materials WHERE folder_id = ?"
     c.execute(q_mat, (folder_id,))
-    for mat_id, public_id in c.fetchall():
+    for mat_id, public_id, mat_content_type in c.fetchall():
         if public_id and CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY:
             try:
-                cloudinary.uploader.destroy(public_id, resource_type="raw")
+                resource_type = "video" if mat_content_type == "audio" else "image"
+                cloudinary.uploader.destroy(public_id, resource_type=resource_type)
             except Exception:
-                try:
-                    cloudinary.uploader.destroy(public_id, resource_type="video")
-                except Exception:
-                    pass
+                pass
     q_del_mat = "DELETE FROM content_materials WHERE folder_id = %s" if is_pg else "DELETE FROM content_materials WHERE folder_id = ?"
     c.execute(q_del_mat, (folder_id,))
     q_del_folder = "DELETE FROM content_folders WHERE id = %s" if is_pg else "DELETE FROM content_folders WHERE id = ?"
@@ -2700,12 +2824,35 @@ async def delete_content_folder(
     return {"status": "success", "message": "تم حذف الفولدر وكل محتوياته."}
 
 
+@app.post("/api/admin/content/cloudinary-signature")
+async def get_cloudinary_upload_signature(
+    resource_type: str = Form("auto"),
+    _admin: Dict[str, object] = Depends(require_permission("content")),
+):
+    """يولّد توقيع رفع موقّت عشان يقدر المتصفح يرفع الملف مباشرة على Cloudinary
+    من غير ما يمر بسيرفرنا (اللي عنده حد أقصى لحجم الطلب) — وده اللي كان بيمنع
+    رفع ملفات الصوت الكبيرة تحديدًا."""
+    if not (CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET):
+        raise HTTPException(status_code=500, detail="خدمة تخزين الملفات (Cloudinary) غير مُفعّلة على السيرفر.")
+    timestamp = int(time.time())
+    params_to_sign = {"timestamp": timestamp, "folder": "tpm_training_content"}
+    signature = cloudinary.utils.api_sign_request(params_to_sign, CLOUDINARY_API_SECRET)
+    return {
+        "timestamp": timestamp,
+        "signature": signature,
+        "api_key": CLOUDINARY_API_KEY,
+        "cloud_name": CLOUDINARY_CLOUD_NAME,
+        "folder": "tpm_training_content",
+    }
+
+
 @app.post("/api/admin/content/materials")
 async def create_content_material(
     tab: str = Form(...), folder_id: Optional[int] = Form(None),
     name: str = Form(...), description: str = Form(""),
     content_type: str = Form(...), video_url: str = Form(""),
     file: Optional[UploadFile] = File(None),
+    file_url: Optional[str] = Form(None), file_public_id: Optional[str] = Form(None),
     _admin: Dict[str, object] = Depends(require_permission("content")),
 ):
     if tab not in CONTENT_TABS:
@@ -2716,20 +2863,24 @@ async def create_content_material(
         raise HTTPException(status_code=400, detail="اسم المادة مطلوب.")
 
     final_video_url = None
-    file_url = None
-    file_public_id = None
 
     if content_type == "video":
         if not video_url.strip():
             raise HTTPException(status_code=400, detail="من فضلك أدخل رابط فيديو اليوتيوب.")
         final_video_url = video_url.strip()
+    elif file_url:
+        # الملف اترفع مباشرة من المتصفح على Cloudinary (المسار الجديد الموصى به، بيدعم ملفات كبيرة)
+        pass
     else:
+        # مسار احتياطي قديم: رفع عبر سيرفرنا (يصلح بس للملفات الصغيرة نسبيًا)
         if not file:
             raise HTTPException(status_code=400, detail="من فضلك ارفع الملف.")
         if not (CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY):
             raise HTTPException(status_code=500, detail="خدمة تخزين الملفات (Cloudinary) غير مُفعّلة على السيرفر.")
         contents = await file.read()
-        resource_type = "video" if content_type == "audio" else "raw"  # كلاوديناري بيتعامل مع الصوت كـ video
+        # الصوت: video، PDF: image (لأن كلاوديناري بيمنع عرض ملفات raw/PDF افتراضيًا لأسباب أمنية،
+        # وطريقة العرض الموصى بها رسميًا لملفات PDF العامة هي رفعها كـ resource_type=image)
+        resource_type = "video" if content_type == "audio" else "image"
         try:
             upload_res = cloudinary.uploader.upload(
                 contents, folder="tpm_training_content", resource_type=resource_type,
@@ -2769,7 +2920,7 @@ async def delete_content_material(
     public_id, content_type = row
     if public_id and CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY:
         try:
-            resource_type = "video" if content_type == "audio" else "raw"
+            resource_type = "video" if content_type == "audio" else "image"
             cloudinary.uploader.destroy(public_id, resource_type=resource_type)
         except Exception:
             pass
@@ -2780,16 +2931,29 @@ async def delete_content_material(
     return {"status": "success", "message": "تم حذف المادة."}
 
 
+def _get_user_department(sap_id: str) -> Optional[str]:
+    conn, is_pg = get_db()
+    c = conn.cursor()
+    q = "SELECT department FROM users WHERE sap_id = %s" if is_pg else "SELECT department FROM users WHERE sap_id = ?"
+    c.execute(q, (sap_id,))
+    row = c.fetchone()
+    conn.close()
+    return row[0] if row else None
+
+
 @app.get("/api/user/content/browse")
 async def user_browse_content(
     tab: str, folder_id: Optional[int] = None,
     user: Dict[str, object] = Depends(get_current_user),
 ):
     """تصفح المحتوى التدريبي المتاح للفرد (بعد تسجيل الدخول) — نفس منطق تصفح الأدمن،
-    من غير أي أدوات إدارة (إضافة/حذف)، مع حالة المشاهدة/الإنهاء الخاصة بيه."""
+    من غير أي أدوات إدارة (إضافة/حذف)، مع حالة المشاهدة/الإنهاء الخاصة بيه، وبعد فلترة
+    أي فولدر/مادة مقيّدة بخصوصية لا تشمله."""
     if tab not in CONTENT_TABS:
         raise HTTPException(status_code=400, detail="تبويب غير صحيح.")
-    return _browse_content(tab, folder_id, sap_id=user.get("sap_id"))
+    sap_id = user.get("sap_id")
+    department = _get_user_department(sap_id)
+    return _browse_content(tab, folder_id, sap_id=sap_id, department=department)
 
 
 @app.post("/api/user/content/materials/{material_id}/view")
