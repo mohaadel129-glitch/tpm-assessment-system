@@ -4226,9 +4226,10 @@
                 body.innerHTML = `<audio controls class="w-full" src="${m.file_url}"></audio>`;
             } else if (m.content_type === 'pdf') {
                 body.innerHTML = `
-                    <div class="w-full h-[70vh] flex flex-col gap-2">
-                        <iframe src="${m.file_url}" class="flex-1 w-full rounded-xl border border-slate-200"></iframe>
-                        <a href="${m.file_url}" target="_blank" class="text-xs text-center text-indigo-600 hover:underline font-bold">فتح الملف في نافذة جديدة ⬈</a>
+                    <div class="w-full flex flex-col items-center justify-center gap-4 py-10">
+                        <span class="text-6xl">📄</span>
+                        <p class="text-sm text-slate-500 text-center max-w-xs">ملفات PDF بتتفتح في نافذة جديدة عن طريق متصفحك مباشرة (كلاوديناري بيمنع عرضها جوه نافذة مضمّنة لأسباب أمنية).</p>
+                        <a href="${m.file_url}" target="_blank" class="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold px-6 py-3 rounded-xl text-sm transition-all shadow-md shadow-indigo-200">📄 فتح الملف الآن ⬈</a>
                     </div>`;
             }
 
