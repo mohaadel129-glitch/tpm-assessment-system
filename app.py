@@ -2617,15 +2617,27 @@ def _browse_content(
     folders = [{"id": r[0], "name": r[1], "description": r[2]} for r in c.fetchall()]
 
     if folder_id:
-        q_mat = "SELECT id, name, description, content_type, video_url, file_url FROM content_materials WHERE tab = %s AND folder_id = %s ORDER BY name ASC" if is_pg else "SELECT id, name, description, content_type, video_url, file_url FROM content_materials WHERE tab = ? AND folder_id = ? ORDER BY name ASC"
+        q_mat = "SELECT id, name, description, content_type, video_url, file_url, file_public_id FROM content_materials WHERE tab = %s AND folder_id = %s ORDER BY name ASC" if is_pg else "SELECT id, name, description, content_type, video_url, file_url, file_public_id FROM content_materials WHERE tab = ? AND folder_id = ? ORDER BY name ASC"
         c.execute(q_mat, (tab, folder_id))
     else:
-        q_mat = "SELECT id, name, description, content_type, video_url, file_url FROM content_materials WHERE tab = %s AND folder_id IS NULL ORDER BY name ASC" if is_pg else "SELECT id, name, description, content_type, video_url, file_url FROM content_materials WHERE tab = ? AND folder_id IS NULL ORDER BY name ASC"
+        q_mat = "SELECT id, name, description, content_type, video_url, file_url, file_public_id FROM content_materials WHERE tab = %s AND folder_id IS NULL ORDER BY name ASC" if is_pg else "SELECT id, name, description, content_type, video_url, file_url, file_public_id FROM content_materials WHERE tab = ? AND folder_id IS NULL ORDER BY name ASC"
         c.execute(q_mat, (tab,))
-    materials = [
-        {"id": r[0], "name": r[1], "description": r[2], "content_type": r[3], "video_url": r[4], "file_url": r[5]}
-        for r in c.fetchall()
-    ]
+    materials = []
+    for r in c.fetchall():
+        mat_content_type, mat_file_url, mat_public_id = r[3], r[5], r[6]
+        # روابط PDF بتتولّد موقّعة (signed) وقت العرض دايمًا، عشان تتجاوز قيد كلاوديناري
+        # الأمني اللي بيمنع عرض ملفات PDF العامة افتراضيًا — وده بيصلّح حتى الملفات
+        # القديمة المرفوعة قبل التفعيل من غير ما تحتاج إعادة رفع.
+        if mat_content_type == "pdf" and mat_public_id:
+            try:
+                mat_file_url = cloudinary.utils.cloudinary_url(
+                    mat_public_id, resource_type="image", format="pdf", sign_url=True, type="upload",
+                )[0]
+            except Exception:
+                pass
+        materials.append(
+            {"id": r[0], "name": r[1], "description": r[2], "content_type": mat_content_type, "video_url": r[4], "file_url": mat_file_url}
+        )
     conn.close()
 
     if is_admin:
@@ -3797,6 +3809,15 @@ async def allow_retake(
             " ON CONFLICT(exam_id, sap_id) DO UPDATE SET allowed = 1"
         )
     c.execute(q, (exam_id, sap_id.strip()))
+
+    # نمسح جلسة الامتحان "الجارية" القديمة بتاعته في نفس الامتحان ده، عشان يختفي فورًا
+    # من قائمة "المحاولات المفتوحة" بدل ما يفضل ظاهر تاني رغم السماح له
+    q_clear = (
+        "DELETE FROM exam_sessions WHERE exam_id = %s AND sap_id = %s" if is_pg
+        else "DELETE FROM exam_sessions WHERE exam_id = ? AND sap_id = ?"
+    )
+    c.execute(q_clear, (exam_id, sap_id.strip()))
+
     conn.commit()
     conn.close()
     return {
@@ -3832,11 +3853,16 @@ async def allow_retake_bulk(
             " ON CONFLICT(exam_id, sap_id) DO UPDATE SET allowed = 1"
         )
     count = 0
+    q_clear = (
+        "DELETE FROM exam_sessions WHERE exam_id = %s AND sap_id = %s" if is_pg
+        else "DELETE FROM exam_sessions WHERE exam_id = ? AND sap_id = ?"
+    )
     for sap_id in ids:
         sap_id_clean = str(sap_id).strip()
         if not sap_id_clean:
             continue
         c.execute(q, (exam_id, sap_id_clean))
+        c.execute(q_clear, (exam_id, sap_id_clean))
         count += 1
     conn.commit()
     conn.close()
@@ -4916,6 +4942,13 @@ async def approve_retake_request(
             " ON CONFLICT(exam_id, sap_id) DO UPDATE SET allowed = 1"
         )
     c.execute(q_perm, (exam_id, sap_id))
+
+    # نمسح جلسة الامتحان الجارية القديمة بتاعته (لو موجودة) عشان تختفي من قائمة المحاولات المفتوحة
+    q_clear = (
+        "DELETE FROM exam_sessions WHERE exam_id = %s AND sap_id = %s" if is_pg
+        else "DELETE FROM exam_sessions WHERE exam_id = ? AND sap_id = ?"
+    )
+    c.execute(q_clear, (exam_id, sap_id))
 
     q_resolve = (
         "UPDATE retake_requests SET status = 'approved' WHERE id = %s"
