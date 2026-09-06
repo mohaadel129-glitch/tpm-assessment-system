@@ -2625,14 +2625,15 @@ def _browse_content(
     materials = []
     for r in c.fetchall():
         mat_content_type, mat_file_url, mat_public_id = r[3], r[5], r[6]
-        # روابط PDF بتتولّد موقّعة (signed) وقت العرض دايمًا، عشان تتجاوز قيد كلاوديناري
-        # الأمني اللي بيمنع عرض ملفات PDF العامة افتراضيًا — وده بيصلّح حتى الملفات
-        # القديمة المرفوعة قبل التفعيل من غير ما تحتاج إعادة رفع.
+        # روابط PDF بتتولّد عن طريق Admin API الموثّق بمفتاح السيرفر (private_download_url)
+        # وقت العرض دايمًا، بدل رابط CDN العادي اللي بيترفض (401) بسبب إعداد أمان في حساب
+        # كلاوديناري بيمنع عرض PDF بشكل عام. الطريقة دي بتشتغل بغض النظر عن أي إعداد كده،
+        # وبتصلّح حتى الملفات القديمة المرفوعة قبل كده من غير ما تحتاج إعادة رفع.
         if mat_content_type == "pdf" and mat_public_id:
             try:
-                mat_file_url = cloudinary.utils.cloudinary_url(
-                    mat_public_id, resource_type="image", format="pdf", sign_url=True, type="upload",
-                )[0]
+                mat_file_url = cloudinary.utils.private_download_url(
+                    mat_public_id, "pdf", resource_type="image",
+                )
             except Exception:
                 pass
         materials.append(
