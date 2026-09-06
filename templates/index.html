@@ -603,7 +603,10 @@
                                 <span>⚙</span><span>إعدادات حساب الأدمن</span>
                             </button>
 
-                            <p class="hidden lg:block text-[10px] font-extrabold text-slate-400 px-3 pt-3 pb-1 tracking-wide">📖 التقييم والمحتوى</p>
+                            <button type="button" onclick="toggleAdminTabGroup('content')" class="hidden lg:flex items-center justify-between w-full text-[10px] font-extrabold text-slate-400 hover:text-slate-600 px-3 pt-3 pb-1 tracking-wide transition-colors">
+                                <span>📖 التقييم والمحتوى</span><span id="group-toggle-icon-content" class="text-sm leading-none">−</span>
+                            </button>
+                            <div id="admin-tab-group-content" class="contents">
                             <button type="button" data-perm="create" onclick="switchAdminTab('admin-tab-create')" data-tab="admin-tab-create" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>📝</span><span>إنشاء دورة جديدة</span>
                             </button>
@@ -622,8 +625,12 @@
                             <button type="button" data-perm="content" onclick="switchAdminTab('admin-tab-content')" data-tab="admin-tab-content" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>📚</span><span>المحتوى التدريبي</span>
                             </button>
+                            </div>
 
-                            <p class="hidden lg:block text-[10px] font-extrabold text-slate-400 px-3 pt-3 pb-1 tracking-wide">👥 الأفراد والفرق</p>
+                            <button type="button" onclick="toggleAdminTabGroup('people')" class="hidden lg:flex items-center justify-between w-full text-[10px] font-extrabold text-slate-400 hover:text-slate-600 px-3 pt-3 pb-1 tracking-wide transition-colors">
+                                <span>👥 الأفراد والفرق</span><span id="group-toggle-icon-people" class="text-sm leading-none">−</span>
+                            </button>
+                            <div id="admin-tab-group-people" class="contents">
                             <button type="button" data-perm="users" onclick="switchAdminTab('admin-tab-users')" data-tab="admin-tab-users" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>👥</span><span>إدارة المشتركين</span>
                             </button>
@@ -633,8 +640,12 @@
                             <button type="button" data-perm="appreciation" onclick="switchAdminTab('admin-tab-appreciation')" data-tab="admin-tab-appreciation" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>🏵️</span><span>شهادات التقدير</span>
                             </button>
+                            </div>
 
-                            <p class="hidden lg:block text-[10px] font-extrabold text-slate-400 px-3 pt-3 pb-1 tracking-wide">📣 التحليلات والتواصل</p>
+                            <button type="button" onclick="toggleAdminTabGroup('comms')" class="hidden lg:flex items-center justify-between w-full text-[10px] font-extrabold text-slate-400 hover:text-slate-600 px-3 pt-3 pb-1 tracking-wide transition-colors">
+                                <span>📣 التحليلات والتواصل</span><span id="group-toggle-icon-comms" class="text-sm leading-none">−</span>
+                            </button>
+                            <div id="admin-tab-group-comms" class="contents">
                             <button type="button" data-perm="analytics" onclick="switchAdminTab('admin-tab-analytics')" data-tab="admin-tab-analytics" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>📊</span><span>لوحة التحليلات</span>
                             </button>
@@ -648,8 +659,12 @@
                             <button type="button" data-perm="gallery" onclick="switchAdminTab('admin-tab-gallery')" data-tab="admin-tab-gallery" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>🖼</span><span>معرض الصور والوسائط</span>
                             </button>
+                            </div>
 
-                            <p class="hidden lg:block text-[10px] font-extrabold text-slate-400 px-3 pt-3 pb-1 tracking-wide">🛠️ إدارة النظام</p>
+                            <button type="button" onclick="toggleAdminTabGroup('system')" class="hidden lg:flex items-center justify-between w-full text-[10px] font-extrabold text-slate-400 hover:text-slate-600 px-3 pt-3 pb-1 tracking-wide transition-colors">
+                                <span>🛠️ إدارة النظام</span><span id="group-toggle-icon-system" class="text-sm leading-none">−</span>
+                            </button>
+                            <div id="admin-tab-group-system" class="contents">
                             <button type="button" data-super-only="1" onclick="switchAdminTab('admin-tab-admins')" data-tab="admin-tab-admins" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>👔</span><span>إدارة حسابات المديرين</span>
                             </button>
@@ -659,6 +674,7 @@
                             <button type="button" data-super-only="1" onclick="switchAdminTab('admin-tab-controls')" data-tab="admin-tab-controls" class="admin-tab-btn shrink-0 lg:shrink flex items-center gap-2 text-right px-4 py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all">
                                 <span>🛠️</span><span>التحكم بالمنصة</span>
                             </button>
+                            </div>
                         </div>
                     </div>
                     <button type="button" onclick="switchView('view-leaderboards')" class="feature-leaderboard w-full mt-2.5 flex items-center justify-center gap-2 text-xs font-bold px-4 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white transition-all">
@@ -1395,6 +1411,24 @@
         </div>
     </div>
 
+    <!-- نافذة السماح بإعادة امتحان معيّن لفرد (من شاشة المشتركين) -->
+    <div id="user-retake-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
+            <div class="flex justify-between items-center border-b pb-2">
+                <div>
+                    <h3 class="font-bold text-slate-800 text-base">السماح بإعادة امتحان</h3>
+                    <p id="user-retake-target-label" class="text-xs text-slate-500 mt-0.5"></p>
+                </div>
+                <button onclick="closeUserRetakeModal()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+            </div>
+            <p class="text-[11px] text-slate-500">اختر الامتحان المطلوب السماح للفرد بإعادته فقط (مش كل الامتحانات).</p>
+            <select id="user-retake-exam-select" class="w-full px-3 py-2.5 border border-slate-200 bg-slate-50/60 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white transition-all">
+                <option value="">جارِ تحميل الامتحانات...</option>
+            </select>
+            <button onclick="confirmUserRetake()" class="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold py-2.5 rounded-xl transition-all shadow-md shadow-amber-200">✔ السماح بالإعادة في هذا الامتحان</button>
+        </div>
+    </div>
+
     <!-- نافذة قائمة من شاهد/أنهى مادة تدريبية (أدمن) -->
     <div id="material-progress-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl max-w-md w-full p-6 space-y-3 max-h-[80vh] flex flex-col shadow-2xl">
@@ -1921,6 +1955,14 @@
         }
 
         // --- تبويبات لوحة تحكم الإدارة ---
+        // --- طي/فتح مجموعات تبويبات الأدمن (شاشات الديسك توب فقط) ---
+        function toggleAdminTabGroup(groupKey) {
+            const box = document.getElementById(`admin-tab-group-${groupKey}`);
+            const icon = document.getElementById(`group-toggle-icon-${groupKey}`);
+            const collapsed = box.classList.toggle('lg:hidden');
+            icon.innerText = collapsed ? '+' : '−';
+        }
+
         function switchAdminTab(tabId) {
             document.querySelectorAll('.admin-tab-panel').forEach(el => el.classList.add('hidden'));
             const target = document.getElementById(tabId);
@@ -3824,6 +3866,53 @@
             alert(data.message);
         }
 
+        // --- السماح بإعادة امتحان معيّن لفرد، من شاشة إدارة المشتركين (باختيار الامتحان صراحةً) ---
+        let userRetakeTargetSap = null;
+        let allExamsCacheForRetake = [];
+
+        async function openAllowRetakeModalForUser(sapId, userName) {
+            userRetakeTargetSap = sapId;
+            document.getElementById('user-retake-target-label').innerText = `${userName} (SAP: ${sapId})`;
+            const sel = document.getElementById('user-retake-exam-select');
+            sel.innerHTML = '<option value="">جارِ تحميل الامتحانات...</option>';
+            document.getElementById('user-retake-modal').classList.remove('hidden');
+
+            if (allExamsCacheForRetake.length === 0) {
+                const res = await apiFetch('/api/admin/exams');
+                if (res.ok) {
+                    allExamsCacheForRetake = await res.json();
+                } else {
+                    sel.innerHTML = '<option value="">تعذّر تحميل الامتحانات (تأكد من صلاحية "إدارة الامتحانات")</option>';
+                    return;
+                }
+            }
+            if (allExamsCacheForRetake.length === 0) {
+                sel.innerHTML = '<option value="">لا توجد امتحانات متاحة</option>';
+                return;
+            }
+            sel.innerHTML = '<option value="">اختر الامتحان...</option>' +
+                allExamsCacheForRetake.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
+        }
+
+        function closeUserRetakeModal() {
+            document.getElementById('user-retake-modal').classList.add('hidden');
+            userRetakeTargetSap = null;
+        }
+
+        async function confirmUserRetake() {
+            const examId = document.getElementById('user-retake-exam-select').value;
+            if (!examId) return alert('من فضلك اختر الامتحان.');
+            if (!userRetakeTargetSap) return;
+
+            const fd = new FormData();
+            fd.append('sap_id', userRetakeTargetSap);
+            const res = await apiFetch(`/api/admin/exams/${examId}/allow-retake`, { method: 'POST', body: fd });
+            const data = await res.json();
+            if (!res.ok) return alert(data.detail || 'فشل السماح بالإعادة.');
+            alert(data.message);
+            closeUserRetakeModal();
+        }
+
         // --- Admin Users Load ---
         let lastLoadedUsers = [];
 
@@ -3855,7 +3944,7 @@
                     </td>
                     <td class="p-2.5 font-mono text-indigo-600 font-bold">${u.password}</td>
                     <td class="p-2.5 text-center">
-                        <button onclick="allowUserRetake('${u.sap_id}')" class="bg-amber-100 text-amber-900 px-2 py-1 rounded text-[11px] font-bold hover:bg-amber-200">السماح بالإعادة</button>
+                        <button onclick="openAllowRetakeModalForUser('${u.sap_id}', '${u.name.replace(/'/g, "\\'")}')" class="bg-amber-100 text-amber-900 px-2 py-1 rounded text-[11px] font-bold hover:bg-amber-200">السماح بالإعادة</button>
                     </td>
                     <td class="p-2.5 text-center">
                         <button onclick="openEditUserModal('${u.sap_id}')" class="text-indigo-600 hover:text-indigo-800 font-bold ml-2.5">تعديل</button>
