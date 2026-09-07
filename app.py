@@ -616,8 +616,21 @@ def init_db_tables():
             video_url TEXT,
             file_url TEXT,
             file_public_id TEXT,
+            resource_type TEXT,
             created_at TIMESTAMP DEFAULT {ts_default}
         )""")
+        # ترحيل: عمود نوع التخزين الفعلي عند Cloudinary لكل ملف (image/raw/video) — عشان نفرّق
+        # بين الملفات القديمة (raw) والجديدة (image) لما نولّد رابط العرض الموقّع لاحقًا
+        try:
+            if is_pg:
+                c.execute("ALTER TABLE content_materials ADD COLUMN IF NOT EXISTS resource_type TEXT")
+            else:
+                c.execute("PRAGMA table_info(content_materials)")
+                cols = [r[1] for r in c.fetchall()]
+                if "resource_type" not in cols:
+                    c.execute("ALTER TABLE content_materials ADD COLUMN resource_type TEXT")
+        except Exception:
+            pass
 
         # 21. تتبع مشاهدة المواد التدريبية لكل فرد (فتح + إنهاء)
         c.execute(f"""CREATE TABLE IF NOT EXISTS content_progress (
@@ -2617,23 +2630,26 @@ def _browse_content(
     folders = [{"id": r[0], "name": r[1], "description": r[2]} for r in c.fetchall()]
 
     if folder_id:
-        q_mat = "SELECT id, name, description, content_type, video_url, file_url, file_public_id FROM content_materials WHERE tab = %s AND folder_id = %s ORDER BY name ASC" if is_pg else "SELECT id, name, description, content_type, video_url, file_url, file_public_id FROM content_materials WHERE tab = ? AND folder_id = ? ORDER BY name ASC"
+        q_mat = "SELECT id, name, description, content_type, video_url, file_url, file_public_id, resource_type FROM content_materials WHERE tab = %s AND folder_id = %s ORDER BY name ASC" if is_pg else "SELECT id, name, description, content_type, video_url, file_url, file_public_id, resource_type FROM content_materials WHERE tab = ? AND folder_id = ? ORDER BY name ASC"
         c.execute(q_mat, (tab, folder_id))
     else:
-        q_mat = "SELECT id, name, description, content_type, video_url, file_url, file_public_id FROM content_materials WHERE tab = %s AND folder_id IS NULL ORDER BY name ASC" if is_pg else "SELECT id, name, description, content_type, video_url, file_url, file_public_id FROM content_materials WHERE tab = ? AND folder_id IS NULL ORDER BY name ASC"
+        q_mat = "SELECT id, name, description, content_type, video_url, file_url, file_public_id, resource_type FROM content_materials WHERE tab = %s AND folder_id IS NULL ORDER BY name ASC" if is_pg else "SELECT id, name, description, content_type, video_url, file_url, file_public_id, resource_type FROM content_materials WHERE tab = ? AND folder_id IS NULL ORDER BY name ASC"
         c.execute(q_mat, (tab,))
     materials = []
     for r in c.fetchall():
-        mat_content_type, mat_file_url, mat_public_id = r[3], r[5], r[6]
-        # روابط PDF بتتولّد عن طريق Admin API الموثّق بمفتاح السيرفر (private_download_url)
-        # وقت العرض دايمًا، بدل رابط CDN العادي اللي بيترفض (401) بسبب إعداد أمان في حساب
-        # كلاوديناري بيمنع عرض PDF بشكل عام. الطريقة دي بتشتغل بغض النظر عن أي إعداد كده،
-        # وبتصلّح حتى الملفات القديمة المرفوعة قبل كده من غير ما تحتاج إعادة رفع.
+        mat_content_type, mat_file_url, mat_public_id, mat_resource_type = r[3], r[5], r[6], r[7]
+        # روابط PDF بتتولّد موقّعة (signed) وقت العرض دايمًا، عشان تتجاوز قيد كلاوديناري
+        # الأمني اللي بيمنع عرض PDF افتراضيًا. لازم نستخدم نوع التخزين الفعلي للملف
+        # (raw للملفات القديمة المرفوعة قبل التعديل، image للملفات الجديدة)، وإلا التوقيع
+        # مايطابقش الملف الحقيقي ويترفض (401) أو "Resource not found".
         if mat_content_type == "pdf" and mat_public_id:
+            actual_resource_type = mat_resource_type or "raw"  # الافتراضي القديم قبل عمود resource_type
             try:
-                mat_file_url = cloudinary.utils.private_download_url(
-                    mat_public_id, "pdf", resource_type="image",
-                )
+                mat_file_url = cloudinary.utils.cloudinary_url(
+                    mat_public_id, resource_type=actual_resource_type,
+                    format=None if actual_resource_type == "raw" else "pdf",
+                    sign_url=True, type="upload",
+                )[0]
             except Exception:
                 pass
         materials.append(
@@ -2810,12 +2826,12 @@ def _delete_folder_recursive(c, is_pg: bool, folder_id: int):
     for (sub_id,) in c.fetchall():
         _delete_folder_recursive(c, is_pg, sub_id)
 
-    q_mat = "SELECT id, file_public_id, content_type FROM content_materials WHERE folder_id = %s" if is_pg else "SELECT id, file_public_id, content_type FROM content_materials WHERE folder_id = ?"
+    q_mat = "SELECT id, file_public_id, content_type, resource_type FROM content_materials WHERE folder_id = %s" if is_pg else "SELECT id, file_public_id, content_type, resource_type FROM content_materials WHERE folder_id = ?"
     c.execute(q_mat, (folder_id,))
-    for mat_id, public_id, mat_content_type in c.fetchall():
+    for mat_id, public_id, mat_content_type, mat_resource_type in c.fetchall():
         if public_id and CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY:
             try:
-                resource_type = "video" if mat_content_type == "audio" else "image"
+                resource_type = mat_resource_type or ("video" if mat_content_type == "audio" else "raw")
                 cloudinary.uploader.destroy(public_id, resource_type=resource_type)
             except Exception:
                 pass
@@ -2876,6 +2892,7 @@ async def create_content_material(
         raise HTTPException(status_code=400, detail="اسم المادة مطلوب.")
 
     final_video_url = None
+    resource_type_stored = None
 
     if content_type == "video":
         if not video_url.strip():
@@ -2883,7 +2900,7 @@ async def create_content_material(
         final_video_url = video_url.strip()
     elif file_url:
         # الملف اترفع مباشرة من المتصفح على Cloudinary (المسار الجديد الموصى به، بيدعم ملفات كبيرة)
-        pass
+        resource_type_stored = "video" if content_type == "audio" else "image"
     else:
         # مسار احتياطي قديم: رفع عبر سيرفرنا (يصلح بس للملفات الصغيرة نسبيًا)
         if not file:
@@ -2893,10 +2910,10 @@ async def create_content_material(
         contents = await file.read()
         # الصوت: video، PDF: image (لأن كلاوديناري بيمنع عرض ملفات raw/PDF افتراضيًا لأسباب أمنية،
         # وطريقة العرض الموصى بها رسميًا لملفات PDF العامة هي رفعها كـ resource_type=image)
-        resource_type = "video" if content_type == "audio" else "image"
+        resource_type_stored = "video" if content_type == "audio" else "image"
         try:
             upload_res = cloudinary.uploader.upload(
-                contents, folder="tpm_training_content", resource_type=resource_type,
+                contents, folder="tpm_training_content", resource_type=resource_type_stored,
             )
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"فشل رفع الملف: {e}")
@@ -2906,13 +2923,13 @@ async def create_content_material(
     conn, is_pg = get_db()
     c = conn.cursor()
     q = (
-        """INSERT INTO content_materials (tab, folder_id, name, description, content_type, video_url, file_url, file_public_id)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"""
+        """INSERT INTO content_materials (tab, folder_id, name, description, content_type, video_url, file_url, file_public_id, resource_type)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
         if is_pg
-        else """INSERT INTO content_materials (tab, folder_id, name, description, content_type, video_url, file_url, file_public_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)"""
+        else """INSERT INTO content_materials (tab, folder_id, name, description, content_type, video_url, file_url, file_public_id, resource_type)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"""
     )
-    c.execute(q, (tab, folder_id, name.strip(), description.strip() or None, content_type, final_video_url, file_url, file_public_id))
+    c.execute(q, (tab, folder_id, name.strip(), description.strip() or None, content_type, final_video_url, file_url, file_public_id, resource_type_stored))
     conn.commit()
     conn.close()
     return {"status": "success", "message": f"تم إضافة \"{name.strip()}\"."}
@@ -2924,16 +2941,16 @@ async def delete_content_material(
 ):
     conn, is_pg = get_db()
     c = conn.cursor()
-    q_sel = "SELECT file_public_id, content_type FROM content_materials WHERE id = %s" if is_pg else "SELECT file_public_id, content_type FROM content_materials WHERE id = ?"
+    q_sel = "SELECT file_public_id, content_type, resource_type FROM content_materials WHERE id = %s" if is_pg else "SELECT file_public_id, content_type, resource_type FROM content_materials WHERE id = ?"
     c.execute(q_sel, (material_id,))
     row = c.fetchone()
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail="المادة غير موجودة.")
-    public_id, content_type = row
+    public_id, content_type, stored_resource_type = row
     if public_id and CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY:
         try:
-            resource_type = "video" if content_type == "audio" else "image"
+            resource_type = stored_resource_type or ("video" if content_type == "audio" else "raw")
             cloudinary.uploader.destroy(public_id, resource_type=resource_type)
         except Exception:
             pass
