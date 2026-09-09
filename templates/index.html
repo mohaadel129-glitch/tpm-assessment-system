@@ -1351,12 +1351,17 @@
                     <select id="new-material-type" onchange="onMaterialTypeChange()" class="w-full px-3 py-2.5 border border-slate-200 bg-white rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400 transition-all">
                         <option value="video">🎬 فيديو (رابط يوتيوب)</option>
                         <option value="audio">🎧 ملف صوتي</option>
-                        <option value="pdf">📄 ملف PDF</option>
+                        <option value="pdf">📄 ملف PDF (رابط Google Drive)</option>
                     </select>
                 </div>
                 <div id="new-material-video-field">
                     <label class="block text-xs font-semibold text-slate-600 mb-1">رابط فيديو اليوتيوب</label>
                     <input type="text" id="new-material-video-url" class="w-full px-3 py-2.5 border border-slate-200 bg-slate-50/60 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white transition-all" placeholder="https://www.youtube.com/watch?v=...">
+                </div>
+                <div id="new-material-pdf-field" class="hidden">
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">رابط ملف Google Drive</label>
+                    <input type="text" id="new-material-pdf-url" class="w-full px-3 py-2.5 border border-slate-200 bg-slate-50/60 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white transition-all" placeholder="https://drive.google.com/file/d/....../view">
+                    <p class="text-[10px] text-amber-600 mt-1">⚠️ لازم تضبط مشاركة الملف على Drive على "أي شخص لديه الرابط يمكنه العرض"، وإلا مش هيفتح للأفراد.</p>
                 </div>
                 <div id="new-material-file-field" class="hidden">
                     <label class="block text-xs font-semibold text-slate-600 mb-1">الملف</label>
@@ -2473,7 +2478,8 @@
         function onMaterialTypeChange() {
             const type = document.getElementById('new-material-type').value;
             document.getElementById('new-material-video-field').classList.toggle('hidden', type !== 'video');
-            document.getElementById('new-material-file-field').classList.toggle('hidden', type === 'video');
+            document.getElementById('new-material-pdf-field').classList.toggle('hidden', type !== 'pdf');
+            document.getElementById('new-material-file-field').classList.toggle('hidden', type !== 'audio');
         }
 
         function openCreateMaterialModal() {
@@ -2481,6 +2487,7 @@
             document.getElementById('new-material-description').value = '';
             document.getElementById('new-material-type').value = 'video';
             document.getElementById('new-material-video-url').value = '';
+            document.getElementById('new-material-pdf-url').value = '';
             document.getElementById('new-material-file').value = '';
             onMaterialTypeChange();
             document.getElementById('create-material-modal').classList.remove('hidden');
@@ -2543,6 +2550,10 @@
                     const url = document.getElementById('new-material-video-url').value.trim();
                     if (!url) { alert('اكتب رابط فيديو اليوتيوب.'); return; }
                     fd.append('video_url', url);
+                } else if (type === 'pdf') {
+                    const url = document.getElementById('new-material-pdf-url').value.trim();
+                    if (!url) { alert('اكتب رابط ملف Google Drive.'); return; }
+                    fd.append('video_url', url); // بيتبعت بنفس اسم حقل الفيديو (رابط خارجي عمومًا)
                 } else {
                     const fileInput = document.getElementById('new-material-file');
                     if (!fileInput.files.length) { alert('اختر الملف المطلوب رفعه.'); return; }
@@ -4315,10 +4326,9 @@
                 body.innerHTML = `<audio controls class="w-full" src="${m.file_url}"></audio>`;
             } else if (m.content_type === 'pdf') {
                 body.innerHTML = `
-                    <div class="w-full flex flex-col items-center justify-center gap-4 py-10">
-                        <span class="text-6xl">📄</span>
-                        <p class="text-sm text-slate-500 text-center max-w-xs">هيتفتح الملف في نافذة جديدة عن طريق متصفحك.</p>
-                        <a href="${m.file_url}" target="_blank" class="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold px-6 py-3 rounded-xl text-sm transition-all shadow-md shadow-indigo-200">📄 فتح الملف ⬈</a>
+                    <div class="w-full h-[70vh] flex flex-col gap-2">
+                        <iframe src="${m.file_url}" class="flex-1 w-full rounded-xl border border-slate-200" allow="autoplay"></iframe>
+                        <a href="${m.file_url}" target="_blank" class="text-xs text-center text-indigo-600 hover:underline font-bold">فتح الملف في نافذة جديدة ⬈</a>
                     </div>`;
             }
 
