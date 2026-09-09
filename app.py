@@ -2875,6 +2875,19 @@ async def get_cloudinary_upload_signature(
     }
 
 
+def _drive_embed_url(raw_url: str) -> str:
+    """يحوّل أي رابط مشاركة من Google Drive (بأشكاله المختلفة) لرابط عرض مباشر (Preview)
+    قابل للتضمين جوه iframe، بدل ما يحتاج المستخدم يفتحه في تاب جديد أو ينزّله."""
+    raw_url = raw_url.strip()
+    m = re.search(r"/file/d/([a-zA-Z0-9_-]+)", raw_url)
+    if not m:
+        m = re.search(r"[?&]id=([a-zA-Z0-9_-]+)", raw_url)
+    if m:
+        file_id = m.group(1)
+        return f"https://drive.google.com/file/d/{file_id}/preview"
+    return raw_url  # رابط غير معروف الشكل، نستخدمه زي ما هو كخيار احتياطي
+
+
 @app.post("/api/admin/content/materials")
 async def create_content_material(
     tab: str = Form(...), folder_id: Optional[int] = Form(None),
@@ -2898,8 +2911,15 @@ async def create_content_material(
         if not video_url.strip():
             raise HTTPException(status_code=400, detail="من فضلك أدخل رابط فيديو اليوتيوب.")
         final_video_url = video_url.strip()
+    elif content_type == "pdf":
+        # ملفات PDF بقت تُدار عن طريق رابط Google Drive بدل الرفع المباشر — لأن Cloudinary
+        # بيمنع عرض ملفات PDF افتراضيًا لأسباب أمنية بغض النظر عن طريقة الرفع، بينما جوجل درايف
+        # مصمم أصلًا للسماح بتضمين الملفات جوه المواقع التانية من غير أي قيود من النوع ده.
+        if not video_url.strip():
+            raise HTTPException(status_code=400, detail="من فضلك أدخل رابط ملف Google Drive.")
+        file_url = _drive_embed_url(video_url.strip())
     elif file_url:
-        # الملف اترفع مباشرة من المتصفح على Cloudinary (المسار الجديد الموصى به، بيدعم ملفات كبيرة)
+        # الملف اترفع مباشرة من المتصفح على Cloudinary (يخص الصوت فقط الآن)
         resource_type_stored = "video" if content_type == "audio" else "image"
     else:
         # مسار احتياطي قديم: رفع عبر سيرفرنا (يصلح بس للملفات الصغيرة نسبيًا)
@@ -2908,8 +2928,6 @@ async def create_content_material(
         if not (CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY):
             raise HTTPException(status_code=500, detail="خدمة تخزين الملفات (Cloudinary) غير مُفعّلة على السيرفر.")
         contents = await file.read()
-        # الصوت: video، PDF: image (لأن كلاوديناري بيمنع عرض ملفات raw/PDF افتراضيًا لأسباب أمنية،
-        # وطريقة العرض الموصى بها رسميًا لملفات PDF العامة هي رفعها كـ resource_type=image)
         resource_type_stored = "video" if content_type == "audio" else "image"
         try:
             upload_res = cloudinary.uploader.upload(
