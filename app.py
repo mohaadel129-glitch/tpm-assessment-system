@@ -1577,7 +1577,7 @@ def generate_certificate_pdf(
             c.setStrokeColor(colors.HexColor(GOLD))
             c.setLineWidth(1.2)
             c.line(sig_x, sig_y - 0.15 * cm, sig_x + sig_w, sig_y - 0.15 * cm)
-            draw_center("اعتماد المدير", 10.5, sig_y - 0.62 * cm, MUTED, cx=sig_x + sig_w / 2)
+            draw_center("اعتماد رئيس النشاط", 10.5, sig_y - 0.62 * cm, MUTED, cx=sig_x + sig_w / 2)
         except Exception:
             pass
 
